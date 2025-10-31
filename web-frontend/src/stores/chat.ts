@@ -1,0 +1,201 @@
+/**
+ * Chat Store
+ *
+ * Manages chat state with Pinia
+ */
+
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import type { Conversation, Message } from '@/services/api'
+import { sseService } from '@/services/sse'
+import * as api from '@/services/api'
+import { notification } from '@/composables/useNotification'
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp: Date
+  isStreaming?: boolean
+  metadata?: Record<string, any>
+}
+
+export const useChatStore = defineStore('chat', () => {
+  // State
+  const currentConversation = ref<Conversation | null>(null)
+  const messages = ref<ChatMessage[]>([])
+  const isConnected = ref(false)
+  const isTyping = ref(false)
+  const currentStreamingMessage = ref<ChatMessage | null>(null)
+
+  // Computed
+  const hasMessages = computed(() => messages.value.length > 0)
+
+  // Actions
+
+  /**
+   * Connect to conversation
+   */
+  async function connectToConversation(conversationId: string) {
+    try {
+      console.log('[ChatStore] Connecting to conversation:', conversationId)
+
+      // Clear previous state
+      isTyping.value = false
+      currentStreamingMessage.value = null
+      console.log('[ChatStore] State cleared. isTyping:', isTyping.value)
+
+      // Get conversation details
+      currentConversation.value = await api.getConversation(conversationId)
+      console.log('[ChatStore] Conversation loaded:', currentConversation.value.title)
+
+      // Load message history
+      const history = await api.getConversationMessages(conversationId)
+      messages.value = history.map(msg => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+        metadata: msg.metadata
+      }))
+      console.log('[ChatStore] Loaded', messages.value.length, 'messages')
+
+      // Connect SSE
+      sseService.connect(conversationId)
+      isConnected.value = true
+      console.log('[ChatStore] SSE connected. isConnected:', isConnected.value)
+
+      // Setup message handler
+      sseService.onMessage((chunk) => {
+        console.log('[ChatStore] SSE message received:', chunk.type)
+        handleStreamingChunk(chunk)
+      })
+
+      sseService.onClose(() => {
+        console.log('[ChatStore] SSE closed')
+        isConnected.value = false
+      })
+
+      sseService.onError((error) => {
+        console.error('[ChatStore] SSE error:', error)
+        notification.error('连接错误', 'SSE 连接失败: ' + error.message)
+      })
+
+      console.log('[ChatStore] Connection setup complete')
+    } catch (error) {
+      console.error('[ChatStore] Error connecting to conversation:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Send message
+   */
+  async function sendMessage(content: string) {
+    if (!isConnected.value) {
+      throw new Error('Not connected to conversation')
+    }
+
+    // Add user message to UI
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content,
+      timestamp: new Date()
+    }
+    messages.value.push(userMessage)
+
+    // Send via SSE
+    try {
+      sseService.sendMessage(content)
+      isTyping.value = true
+    } catch (error) {
+      console.error('Error sending message:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Handle streaming chunk from WebSocket
+   */
+  function handleStreamingChunk(chunk: any) {
+    switch (chunk.type) {
+      case 'thinking':
+        // Show thinking indicator
+        isTyping.value = true
+        if (!currentStreamingMessage.value) {
+          currentStreamingMessage.value = {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: chunk.content,
+            timestamp: new Date(),
+            isStreaming: true,
+            metadata: chunk.metadata
+          }
+          messages.value.push(currentStreamingMessage.value)
+        } else {
+          currentStreamingMessage.value.content = chunk.content
+        }
+        break
+
+      case 'chunk':
+        // Append to streaming message
+        if (!currentStreamingMessage.value) {
+          currentStreamingMessage.value = {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: chunk.content,
+            timestamp: new Date(),
+            isStreaming: true,
+            metadata: chunk.metadata
+          }
+          messages.value.push(currentStreamingMessage.value)
+        } else {
+          // Replace thinking message with actual content
+          currentStreamingMessage.value.content = chunk.content
+        }
+        break
+
+      case 'complete':
+        // Finalize message
+        if (currentStreamingMessage.value) {
+          currentStreamingMessage.value.content = chunk.content
+          currentStreamingMessage.value.isStreaming = false
+          currentStreamingMessage.value.metadata = chunk.metadata
+        }
+        currentStreamingMessage.value = null
+        isTyping.value = false
+        break
+
+      case 'error':
+        // Handle error
+        if (currentStreamingMessage.value) {
+          currentStreamingMessage.value.content = `错误: ${chunk.content}`
+          currentStreamingMessage.value.isStreaming = false
+        } else {
+          messages.value.push({
+            id: `error-${Date.now()}`,
+            role: 'system',
+            content: `错误: ${chunk.content}`,
+            timestamp: new Date(),
+            metadata: chunk.metadata
+          })
+        }
+        currentStreamingMessage.value = null
+        isTyping.value = false
+        break
+
+      case 'tool_call':
+        // Show tool call status (optional)
+        console.log('Tool call:', chunk.metadata)
+        break
+    }
+  }
+
+  /**
+   * Create new conversation
+   */
+  async function createNewConversation(projectId: string, title?: string) {
+    const conversation = await api.createConversation({
+      project_id: projectId,
+ 

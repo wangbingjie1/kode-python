@@ -1,0 +1,19 @@
+{
+  "models": {
+    "claude-sonnet-4-5": "claude-sonnet-4-5",
+    "gpt-4": "gpt-4-turbo-preview"
+  },
+  "modelPointers": {
+    "main": "claude-sonnet-4-5",
+    "task": "claude-sonnet-4-5",
+    "quick": "claude-sonnet-4-5",
+    "reasoning": "claude-sonnet-4-5"
+  },
+  "apiKeys": {
+    "anthropic": "your-anthropic-api-key-here",
+    "openai": "your-openai-api-key-here"
+  },
+  "verbose": false,
+  "maxTokens": 4096,
+  "temperature": 0.7
+}
