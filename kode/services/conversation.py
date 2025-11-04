@@ -31,8 +31,33 @@ from kode.tools import (
     TodoWriteTool,
     TaskTool,
 )
+# Import database tools if available
+try:
+    from kode.tools.database_tools import (
+        DatabaseConnectTool,
+        DatabaseTestConnectionTool,
+        DatabaseSchemaExtractorTool,
+        DatabaseListConnectionsTool,
+        DatabaseDisconnectTool,
+    )
+    from kode.tools.ontology_tools import (
+        OntologyBuilderTool,
+        OntologyStorageTool,
+        OntologySearchTool,
+    )
+    HAS_DATABASE_TOOLS = True
+except ImportError:
+    HAS_DATABASE_TOOLS = False
 from kode.utils.config import ConfigManager
 from kode.utils.logger import setup_logger
+
+# Import database manager if available
+try:
+    from kode.services.database_manager import db_manager
+    from kode.database.session import SessionLocal
+    HAS_DB_MANAGER = True
+except ImportError:
+    HAS_DB_MANAGER = False
 
 logger = setup_logger(__name__)
 
@@ -76,6 +101,117 @@ class AsyncConversationService:
             TaskTool(),
         ]
 
+        # Add database tools if available
+        if HAS_DATABASE_TOOLS:
+            self.tools.extend([
+                DatabaseConnectTool(),
+                DatabaseTestConnectionTool(),
+                DatabaseSchemaExtractorTool(),
+                DatabaseListConnectionsTool(),
+                DatabaseDisconnectTool(),
+                OntologyBuilderTool(),
+                OntologyStorageTool(),
+                OntologySearchTool(),
+            ])
+            logger.info("Database and ontology tools loaded")
+
+            # Load existing database connections from persistence
+            self._load_database_connections()
+
+    def _load_database_connections(self):
+        """Load database connections from persistence into memory."""
+        if not HAS_DB_MANAGER:
+            return
+
+        try:
+            db_session = SessionLocal()
+            try:
+                count = db_manager.load_connections_from_db(db_session)
+                if count > 0:
+                    logger.info(f"Loaded {count} database connections from persistence")
+            finally:
+                db_session.close()
+        except Exception as e:
+            logger.warning(f"Failed to load database connections: {e}")
+
+    def _get_database_context(self) -> str:
+        """
+        Generate context information about available database connections.
+
+        Returns:
+            Formatted string with database connection information
+        """
+        if not HAS_DB_MANAGER:
+            return ""
+
+        try:
+            connection_names = db_manager.list_connections()
+            if not connection_names:
+                return ""
+
+            context_parts = ["\n## 可用的数据库连接\n"]
+            context_parts.append("用户已经配置了以下数据库连接,你可以直接使用这些连接进行查询和本体构建:\n")
+
+            for name in connection_names:
+                conn = db_manager.get_connection(name)
+                if conn:
+                    context_parts.append(f"\n- **{conn.name}**")
+                    context_parts.append(f"  - 类型: {conn.db_type}")
+                    context_parts.append(f"  - 主机: {conn.host}:{conn.port}")
+                    context_parts.append(f"  - 数据库: {conn.database}")
+                    if conn.db_schema:
+                        context_parts.append(f"  - Schema: {conn.db_schema}")
+
+            context_parts.append("\n使用 `DatabaseTestConnectionTool` 来测试连接。")
+            context_parts.append("使用 `DatabaseSchemaExtractorTool` 来提取数据库结构。")
+            context_parts.append("使用 `OntologyBuilderTool` 来构建业务本体。\n")
+
+            return "\n".join(context_parts)
+
+        except Exception as e:
+            logger.warning(f"Failed to generate database context: {e}")
+            return ""
+
+    def _get_database_context_for_name(self, database_name: str) -> str:
+        """
+        Generate context information for a specific database connection.
+
+        Args:
+            database_name: Name of the database connection
+
+        Returns:
+            Formatted string with database connection information
+        """
+        if not HAS_DB_MANAGER:
+            return ""
+
+        try:
+            conn = db_manager.get_connection(database_name)
+            if not conn:
+                logger.warning(f"Database connection '{database_name}' not found")
+                return ""
+
+            context_parts = ["\n## 当前数据库连接\n"]
+            context_parts.append(f"用户选择了数据库连接 **{conn.name}**,请基于此数据库回答问题:\n")
+            context_parts.append(f"\n- **连接名称**: {conn.name}")
+            context_parts.append(f"- **数据库类型**: {conn.db_type}")
+            context_parts.append(f"- **主机地址**: {conn.host}:{conn.port}")
+            context_parts.append(f"- **数据库名**: {conn.database}")
+            if conn.db_schema:
+                context_parts.append(f"- **默认Schema**: {conn.db_schema}")
+
+            context_parts.append("\n**重要提示**:")
+            context_parts.append("1. 使用 `DatabaseTestConnectionTool` 测试连接健康状态")
+            context_parts.append("2. 使用 `DatabaseSchemaExtractorTool` 提取完整的数据库结构(表、字段、关系等)")
+            context_parts.append("3. 使用 `OntologyBuilderTool` 构建业务本体模型")
+            context_parts.append("4. 回答问题时请结合提取的数据库结构信息\n")
+
+            return "\n".join(context_parts)
+
+        except Exception as e:
+            logger.warning(f"Failed to generate database context for '{database_name}': {e}")
+            return ""
+
     async def execute_task_streaming(
         self,
         task: str,
@@ -83,6 +219,7 @@ class AsyncConversationService:
         user_id: str,
         agent_name: str = "general-purpose",
         chat_history: Optional[List[Dict]] = None,
+        database_name: Optional[str] = None,
     ) -> AsyncGenerator[Dict, None]:
         """
         Execute a task and stream results in real-time.
@@ -100,6 +237,7 @@ class AsyncConversationService:
             user_id: User identifier
             agent_name: Agent to use (default: "general-purpose")
             chat_history: Previous conversation history
+            database_name: Optional database connection name for context
 
         Yields:
             Dict: Streaming response chunks
@@ -139,17 +277,49 @@ class AsyncConversationService:
                 "metadata": {"agent_config": agent_config.name},
             }
 
-            # Create agent instance
+            # Track tool calls for streaming
+            tool_calls = []
+
+            def on_tool_start(tool_name: str, tool_args: dict):
+                """Callback when tool execution starts."""
+                tool_calls.append({
+                    "name": tool_name,
+                    "args": tool_args,
+                    "status": "started"
+                })
+
+            def on_tool_end(tool_name: str, tool_args: dict, result: str):
+                """Callback when tool execution ends."""
+                # Find and update the tool call
+                for tc in tool_calls:
+                    if tc["name"] == tool_name and tc.get("status") == "started":
+                        tc["status"] = "completed"
+                        tc["result"] = str(result)[:200]  # Truncate
+                        break
+
+            # Create agent instance with callbacks
             agent = KodeAgent(
                 config=agent_config,
                 model=model,
                 tools=self.tools,
                 verbose=self.config.get("verbose", False),
+                on_tool_start=on_tool_start,
+                on_tool_end=on_tool_end,
             )
 
+            # Add database context if specified
+            enhanced_task = task
+            if database_name:
+                db_context = self._get_database_context_for_name(database_name)
+                if db_context:
+                    enhanced_task = f"{db_context}\n\n用户问题: {task}"
+                    yield {
+                        "type": "thinking",
+                        "content": f"Using database context: {database_name}",
+                        "metadata": {"database": database_name},
+                    }
+
             # Execute task with streaming
-            # Note: Current KodeAgent.arun() returns full response
-            # TODO: Implement token-level streaming in future iteration
             yield {
                 "type": "thinking",
                 "content": "Executing task...",
@@ -157,10 +327,23 @@ class AsyncConversationService:
             }
 
             # Run agent (async)
-            result = await agent.arun(task=task, chat_history=chat_history)
+            result = await agent.arun(task=enhanced_task, chat_history=chat_history)
 
-            # For now, send complete response as single chunk
-            # In future, integrate with LangChain streaming callbacks
+            # Send tool calls info
+            if result.get("tool_calls"):
+                for tool_call in result["tool_calls"]:
+                    yield {
+                        "type": "tool_call",
+                        "content": f"Tool: {tool_call['name']}",
+                        "metadata": {
+                            "tool_name": tool_call["name"],
+                            "tool_args": tool_call.get("args", {}),
+                            "result": tool_call.get("result", "")[:200] if "result" in tool_call else None,
+                            "error": tool_call.get("error"),
+                        },
+                    }
+
+            # Send final output
             output = result.get("output", "")
 
             yield {
@@ -169,6 +352,7 @@ class AsyncConversationService:
                 "metadata": {
                     "agent": agent_name,
                     "model": model_name,
+                    "iterations": result.get("iterations", 0),
                 },
             }
 
@@ -178,10 +362,14 @@ class AsyncConversationService:
             for msg in messages:
                 if hasattr(msg, "type") and hasattr(msg, "content"):
                     # LangChain message object
-                    serializable_messages.append({
+                    msg_dict = {
                         "role": msg.type if hasattr(msg, "type") else "unknown",
                         "content": str(msg.content)
-                    })
+                    }
+                    # Add tool_calls if present
+                    if hasattr(msg, "tool_calls") and msg.tool_calls:
+                        msg_dict["tool_calls"] = msg.tool_calls
+                    serializable_messages.append(msg_dict)
                 elif isinstance(msg, dict):
                     # Already a dict
                     serializable_messages.append(msg)
@@ -195,6 +383,8 @@ class AsyncConversationService:
                     "model": model_name,
                     "conversation_id": conversation_id,
                     "messages": serializable_messages,
+                    "tool_calls": result.get("tool_calls", []),
+                    "iterations": result.get("iterations", 0),
                 },
             }
 

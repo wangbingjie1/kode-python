@@ -1,0 +1,574 @@
+<template>
+  <div class="ontology-viewer">
+    <div class="ontology-header">
+      <h2>业务本体</h2>
+      <div class="search-box">
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="搜索实体、属性..."
+          @input="onSearchInput"
+        />
+        <button @click="search" class="btn-search">搜索</button>
+      </div>
+    </div>
+
+    <div class="ontology-content">
+      <!-- Ontology list sidebar -->
+      <div class="ontology-list">
+        <h3>已保存的本体</h3>
+        <div
+          v-for="ontology in ontologies"
+          :key="ontology.name"
+          :class="['ontology-item', { active: selectedOntology?.name === ontology.name }]"
+          @click="selectOntology(ontology.name)"
+        >
+          <div class="ontology-name">{{ ontology.name }}</div>
+          <div class="ontology-meta">
+            {{ ontology.entity_count }} 个实体 · {{ ontology.relationship_count }} 个关系
+          </div>
+          <div class="ontology-date">{{ formatDate(ontology.created_at) }}</div>
+        </div>
+        <div v-if="ontologies.length === 0" class="empty-state">
+          暂无保存的本体
+        </div>
+      </div>
+
+      <!-- Ontology details -->
+      <div class="ontology-details">
+        <div v-if="!selectedOntology" class="empty-selection">
+          <p>请选择一个本体查看详情</p>
+        </div>
+
+        <div v-else>
+          <div class="ontology-info">
+            <h3>{{ selectedOntology.name }}</h3>
+            <p>版本: {{ selectedOntology.version }}</p>
+            <p>创建时间: {{ formatDate(selectedOntology.created_at) }}</p>
+          </div>
+
+          <!-- Search results -->
+          <div v-if="searchResults.length > 0" class="search-results">
+            <h4>搜索结果 ({{ searchResults.length }})</h4>
+            <div
+              v-for="(result, idx) in searchResults"
+              :key="idx"
+              class="search-result-item"
+            >
+              <div class="result-header">
+                <span class="entity-type">{{ result.entity.type }}</span>
+                <span class="entity-name">{{ result.entity.name }}</span>
+                <span class="result-score">相关度: {{ result.score.toFixed(2) }}</span>
+              </div>
+              <div v-if="result.entity.description" class="result-description">
+                {{ result.entity.description }}
+              </div>
+              <div class="result-meta">
+                <span v-if="result.entity.source_table"
+                  >来源表: {{ result.entity.source_table }}</span
+                >
+                <span v-if="result.entity.source_column"
+                  >来源列: {{ result.entity.source_column }}</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- Entities view -->
+          <div v-else class="entities-section">
+            <div class="section-tabs">
+              <button
+                :class="['tab', { active: currentTab === 'entities' }]"
+                @click="currentTab = 'entities'"
+              >
+                实体 ({{ selectedOntology.entities?.length || 0 }})
+              </button>
+              <button
+                :class="['tab', { active: currentTab === 'relationships' }]"
+                @click="currentTab = 'relationships'"
+              >
+                关系 ({{ selectedOntology.relationships?.length || 0 }})
+              </button>
+              <button
+                :class="['tab', { active: currentTab === 'graph' }]"
+                @click="currentTab = 'graph'"
+              >
+                关系图
+              </button>
+            </div>
+
+            <div class="tab-content">
+              <!-- Entities tab -->
+              <div v-if="currentTab === 'entities'" class="entities-list">
+                <div
+                  v-for="entity in filteredEntities"
+                  :key="entity.name"
+                  class="entity-card"
+                >
+                  <div class="entity-header">
+                    <span class="entity-type-badge">{{ entity.type }}</span>
+                    <h4>{{ entity.name }}</h4>
+                  </div>
+                  <p v-if="entity.description" class="entity-description">
+                    {{ entity.description }}
+                  </p>
+                  <div class="entity-source">
+                    <span v-if="entity.source_table">表: {{ entity.source_table }}</span>
+                    <span v-if="entity.source_column">列: {{ entity.source_column }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Relationships tab -->
+              <div v-if="currentTab === 'relationships'" class="relationships-list">
+                <div
+                  v-for="(rel, idx) in selectedOntology.relationships"
+                  :key="idx"
+                  class="relationship-card"
+                >
+                  <div class="relationship-flow">
+                    <span class="entity-node">{{ rel.from_entity }}</span>
+                    <span class="relationship-arrow">
+                      <span class="relationship-type">{{ rel.relationship_type }}</span>
+                      →
+                    </span>
+                    <span class="entity-node">{{ rel.to_entity }}</span>
+                  </div>
+                  <div v-if="rel.cardinality" class="relationship-meta">
+                    基数: {{ rel.cardinality }}
+                  </div>
+                  <p v-if="rel.description" class="relationship-description">
+                    {{ rel.description }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Graph tab -->
+              <div v-if="currentTab === 'graph'" class="graph-view">
+                <div class="graph-placeholder">
+                  <p>本体关系图可视化</p>
+                  <p class="graph-hint">
+                    (可以集成 D3.js 或 ECharts 来展示实体关系图)
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, computed } from 'vue'
+import { listOntologies, getOntology, searchOntology } from '@/services/api'
+import { notification } from '@/composables/useNotification'
+
+const ontologies = ref<any[]>([])
+const selectedOntology = ref<any | null>(null)
+const searchQuery = ref('')
+const searchResults = ref<any[]>([])
+const currentTab = ref<'entities' | 'relationships' | 'graph'>('entities')
+
+onMounted(async () => {
+  await loadOntologies()
+})
+
+async function loadOntologies() {
+  try {
+    ontologies.value = await listOntologies()
+  } catch (error: any) {
+    notification.error('加载失败', error.message)
+  }
+}
+
+async function selectOntology(name: string) {
+  try {
+    selectedOntology.value = await getOntology(name)
+    searchResults.value = []
+    searchQuery.value = ''
+    currentTab.value = 'entities'
+  } catch (error: any) {
+    notification.error('加载失败', error.message)
+  }
+}
+
+async function search() {
+  if (!selectedOntology.value || !searchQuery.value.trim()) {
+    searchResults.value = []
+    return
+  }
+
+  try {
+    const results = await searchOntology(selectedOntology.value.name, {
+      query: searchQuery.value,
+      limit: 20
+    })
+    searchResults.value = results
+  } catch (error: any) {
+    notification.error('搜索失败', error.message)
+  }
+}
+
+function onSearchInput() {
+  if (!searchQuery.value.trim()) {
+    searchResults.value = []
+  }
+}
+
+const filteredEntities = computed(() => {
+  if (!selectedOntology.value?.entities) return []
+  return selectedOntology.value.entities
+})
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN')
+}
+</script>
+
+<style scoped>
+.ontology-viewer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+}
+
+.ontology-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.ontology-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #333;
+}
+
+.search-box {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.search-box input {
+  padding: 0.5rem 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  width: 300px;
+  font-size: 0.875rem;
+}
+
+.btn-search {
+  padding: 0.5rem 1rem;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.btn-search:hover {
+  background: #1976d2;
+}
+
+.ontology-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.ontology-list {
+  width: 300px;
+  background: white;
+  border-right: 1px solid #e0e0e0;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.ontology-list h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: #666;
+}
+
+.ontology-item {
+  padding: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ontology-item:hover {
+  background: #f8f8f8;
+  border-color: #2196f3;
+}
+
+.ontology-item.active {
+  background: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.ontology-name {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.ontology-meta {
+  font-size: 0.75rem;
+  color: #666;
+  margin-bottom: 0.25rem;
+}
+
+.ontology-date {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.ontology-details {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+}
+
+.empty-selection,
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: #999;
+}
+
+.ontology-info {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.ontology-info h3 {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+}
+
+.ontology-info p {
+  margin: 0.25rem 0;
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.search-results {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.search-results h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.search-result-item {
+  padding: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.entity-type {
+  padding: 0.25rem 0.5rem;
+  background: #e3f2fd;
+  color: #2196f3;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.entity-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.result-score {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.result-description {
+  color: #666;
+  font-size: 0.875rem;
+  margin: 0.5rem 0;
+}
+
+.result-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.section-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  border-color: #2196f3;
+  color: #2196f3;
+}
+
+.tab.active {
+  background: #2196f3;
+  color: white;
+  border-color: #2196f3;
+}
+
+.tab-content {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.entities-list,
+.relationships-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.entity-card,
+.relationship-card {
+  padding: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.entity-card:hover,
+.relationship-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.entity-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.entity-type-badge {
+  padding: 0.25rem 0.5rem;
+  background: #e8f5e9;
+  color: #4caf50;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.entity-card h4 {
+  margin: 0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.entity-description,
+.relationship-description {
+  color: #666;
+  font-size: 0.875rem;
+  margin: 0.5rem 0;
+}
+
+.entity-source {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: #999;
+  margin-top: 0.5rem;
+}
+
+.relationship-flow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.entity-node {
+  padding: 0.25rem 0.5rem;
+  background: #f5f5f5;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.relationship-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #999;
+}
+
+.relationship-type {
+  font-size: 0.75rem;
+  color: #666;
+  margin-bottom: 0.25rem;
+}
+
+.relationship-meta {
+  font-size: 0.75rem;
+  color: #999;
+  margin-bottom: 0.5rem;
+}
+
+.graph-view {
+  min-height: 500px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.graph-placeholder {
+  text-align: center;
+  color: #999;
+}
+
+.graph-placeholder p {
+  margin: 0.5rem 0;
+}
+
+.graph-hint {
+  font-size: 0.875rem;
+}
+</style>

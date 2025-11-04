@@ -45,6 +45,20 @@ async def startup_event():
     await create_default_data()
     logger.info("Default data initialized")
 
+    # Load persisted database connections
+    from kode.services.database_manager import db_manager
+    from kode.database.session import SessionLocal
+
+    db_session = SessionLocal()
+    try:
+        count = db_manager.load_connections_from_db(db_session)
+        if count > 0:
+            logger.info(f"Loaded {count} persisted database connections")
+    except Exception as e:
+        logger.warning(f"Could not load database connections: {e}")
+    finally:
+        db_session.close()
+
     # Load configuration
     config_manager = ConfigManager()
     config = config_manager.get_all()
@@ -93,7 +107,7 @@ async def get_config():
 
 
 # Import routers
-from kode.web.api import chat, project, sse
+from kode.web.api import chat, project, sse, database
 from kode.database.session import init_db, async_session_maker
 from kode.models import User, Project
 from sqlalchemy import select
@@ -102,6 +116,7 @@ from sqlalchemy import select
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(project.router, prefix="/api", tags=["projects"])
 app.include_router(sse.router, prefix="/api/sse", tags=["sse"])
+app.include_router(database.router, prefix="/api/database", tags=["database"])
 
 
 async def create_default_data():

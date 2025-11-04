@@ -1,5 +1,5 @@
 # CLAUDE.md
-
+必须中文回复和思考
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
@@ -23,6 +23,8 @@ The codebase follows a modular architecture with clear separation of concerns:
    - `bash_tool.py`: Shell command execution
    - `grep_tool.py`: Code search functionality
    - `glob_tool.py`: File pattern matching
+   - `database_tools.py`: **[NEW]** Database connection and schema extraction (PostgreSQL, MySQL, SQLite, etc.)
+   - `ontology_tools.py`: **[NEW]** Ontology building and semantic search for database schemas
    - All tools inherit from KodeTool with permission management
 
 3. **Agents Layer** ([kode/agents/](kode/agents/))
@@ -39,8 +41,9 @@ The codebase follows a modular architecture with clear separation of concerns:
    - `manager.py`: Conversation history, file caching, project structure tracking
    - Token limit management and context trimming
 
-5. **Services Layer** ([kode/services/](kode/services/)) **[NEW]**
+5. **Services Layer** ([kode/services/](kode/services/))
    - `conversation.py`: Async conversation service with streaming support
+   - `database_manager.py`: **[NEW]** Database connection pool management and multi-database support
    - Wraps REPL logic for web consumption
    - Provides business logic for web API
 
@@ -375,8 +378,99 @@ kode-python/
 └── stop-web.ps1        # Windows stop script
 ```
 
+## Database & Ontology Tools **[NEW]**
+
+Kode now supports connecting to databases and building business ontologies for intelligent data analysis.
+
+### Supported Databases
+- **PostgreSQL** (asyncpg driver)
+- **MySQL** (aiomysql driver)
+- **SQL Server** (pyodbc driver)
+- **Oracle** (cx_oracle driver)
+- **SQLite** (aiosqlite driver)
+
+### Available Tools
+
+**Database Tools** ([kode/tools/database_tools.py](kode/tools/database_tools.py)):
+- `DatabaseConnectTool`: Connect to databases with connection pooling
+- `DatabaseTestConnectionTool`: Verify connection health
+- `DatabaseSchemaExtractorTool`: Extract complete schema metadata (tables, columns, constraints, relationships)
+- `DatabaseListConnectionsTool`: List all configured connections
+- `DatabaseDisconnectTool`: Safely disconnect from databases
+
+**Ontology Tools** ([kode/tools/ontology_tools.py](kode/tools/ontology_tools.py)):
+- `OntologyBuilderTool`: Convert database schema to business ontology
+  - Transforms technical table/column names to business terms
+  - Infers implicit relationships beyond FK constraints
+  - Extracts hierarchical structures
+- `OntologyStorageTool`: Persist ontology with versioning
+- `OntologySearchTool`: Semantic search in ontologies
+
+### Quick Start
+
+```bash
+# Install database dependencies
+poetry install
+
+# Use the ontology-builder agent
+poetry run kode
+> 使用 ontology-builder 智能体连接我的数据库并构建本体
+```
+
+### Example Agent
+
+The `ontology-builder` agent ([examples/agents/ontology-builder.md](examples/agents/ontology-builder.md)) automates:
+1. Database connection and validation
+2. Schema extraction (tables, columns, constraints, relationships)
+3. Business ontology construction
+4. Ontology persistence for future queries
+
+### Configuration
+
+Add to `.kode.json`:
+```json
+{
+  "databases": {
+    "connections": [
+      {
+        "name": "erp_production",
+        "type": "postgresql",
+        "host": "localhost",
+        "port": 5432,
+        "database": "erp_db",
+        "username": "user",
+        "password": "${DB_PASSWORD}",
+        "ssl": true
+      }
+    ]
+  },
+  "ontology": {
+    "storage_path": "./ontology_store",
+    "enrichment": {
+      "use_llm": true,
+      "llm_model": "quick"
+    }
+  }
+}
+```
+
+### Documentation
+
+- **[Database Tools Guide](docs/DATABASE_TOOLS_GUIDE.md)**: Complete usage guide with examples
+- **[Database Tools Design](docs/database_tools_design.md)**: Architecture and design decisions
+- **[Test Suite](tests/test_database_tools.py)**: Comprehensive tests for all database tools
+
+### Use Cases
+
+1. **Data Discovery**: Quickly understand customer database structures
+2. **Intelligent Q&A**: Natural language queries based on ontology
+3. **Impact Analysis**: Understand dependencies and relationships
+4. **Documentation**: Auto-generate data dictionaries and ER diagrams
+5. **Data Governance**: Identify quality issues and normalization opportunities
+
 ## Test Files
 
 - [test_run.py](test_run.py): Quick component verification without API calls
 - [test_real_api.py](test_real_api.py): Full integration test with LLM API
+- [test_database_tools.py](tests/test_database_tools.py): **[NEW]** Database and ontology tools tests
 - [verify_project.py](verify_project.py): Project structure and dependency verification

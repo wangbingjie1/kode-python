@@ -5,7 +5,8 @@ Provides async SQLAlchemy session for database operations.
 """
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 from typing import AsyncGenerator
 import os
 
@@ -13,6 +14,12 @@ import os
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "sqlite+aiosqlite:///./kode.db"  # Async SQLite
+)
+
+# Sync database URL for sync operations (like connection persistence)
+SYNC_DATABASE_URL = os.getenv(
+    "SYNC_DATABASE_URL",
+    "sqlite:///./kode.db"  # Sync SQLite
 )
 
 # For PostgreSQL, use: postgresql+asyncpg://user:password@localhost/dbname
@@ -24,11 +31,24 @@ engine = create_async_engine(
     future=True,
 )
 
+# Create sync engine for sync operations
+sync_engine = create_engine(
+    SYNC_DATABASE_URL,
+    echo=False,
+)
+
 # Create async session maker
 async_session_maker = async_sessionmaker(
     engine,
     class_=AsyncSession,
     expire_on_commit=False,
+)
+
+# Create sync session maker
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=sync_engine,
 )
 
 # Base class for ORM models
@@ -59,6 +79,9 @@ async def init_db():
     """Initialize database tables"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Also create tables for sync engine
+    Base.metadata.create_all(bind=sync_engine)
 
 
 async def drop_db():

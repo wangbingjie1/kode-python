@@ -25,6 +25,7 @@ async def event_generator(
     conversation_id: str,
     task_content: str,
     conversation_service: AsyncConversationService,
+    database_name: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Generate SSE events for streaming AI responses.
@@ -42,6 +43,7 @@ async def event_generator(
             task=task_content,
             conversation_id=conversation_id,
             user_id="default",  # TODO: Get from auth
+            database_name=database_name,
         ):
             # Format as SSE event
             event_data = json.dumps(chunk, ensure_ascii=False)
@@ -64,6 +66,7 @@ async def event_generator(
 async def stream_chat(
     conversation_id: str,
     task: str,
+    database_name: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -71,11 +74,12 @@ async def stream_chat(
 
     Query Parameters:
         task: The user's message/task to execute
+        database_name: Optional database connection name for context
 
     Response: text/event-stream with JSON data events
 
     Example usage:
-        GET /api/sse/chat/{conversation_id}/stream?task=Hello
+        GET /api/sse/chat/{conversation_id}/stream?task=Hello&database_name=share_ai
 
     Client receives:
         data: {"type": "thinking", "content": "Processing...", "metadata": {}}
@@ -109,7 +113,7 @@ async def stream_chat(
 
     # Return SSE stream
     return StreamingResponse(
-        event_generator(conversation_id, task, conversation_service),
+        event_generator(conversation_id, task, conversation_service, database_name),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

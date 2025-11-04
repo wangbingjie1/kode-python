@@ -37,7 +37,7 @@ export class SSEService {
   /**
    * Send message and start receiving SSE stream
    */
-  sendMessage(content: string): void {
+  sendMessage(content: string, databaseName?: string): void {
     if (!this.conversationId) {
       throw new Error('No conversation ID set')
     }
@@ -48,8 +48,13 @@ export class SSEService {
     // Encode task parameter
     const encodedTask = encodeURIComponent(content)
 
+    // Build SSE URL with optional database parameter
+    let sseUrl = `/api/sse/chat/${this.conversationId}/stream?task=${encodedTask}`
+    if (databaseName) {
+      sseUrl += `&database_name=${encodeURIComponent(databaseName)}`
+    }
+
     // Create SSE connection
-    const sseUrl = `/api/sse/chat/${this.conversationId}/stream?task=${encodedTask}`
     this.eventSource = new EventSource(sseUrl)
 
     // Handle incoming messages

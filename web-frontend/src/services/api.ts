@@ -8,7 +8,7 @@ import axios from 'axios'
 
 const apiClient = axios.create({
   baseURL: '/api',
-  timeout: 30000,
+  timeout: 180000,  // 3 minutes for long-running operations like schema extraction
   headers: {
     'Content-Type': 'application/json'
   }
@@ -117,6 +117,161 @@ export async function listProjectConversations(projectId: string): Promise<Conve
  */
 export async function getConfig(): Promise<any> {
   const response = await apiClient.get('/config')
+  return response.data
+}
+
+// Database Management Types
+export interface DatabaseConnection {
+  name: string
+  db_type: string
+  host: string
+  port: number
+  database: string
+  username: string
+  schema?: string
+  ssl: boolean
+}
+
+export interface CreateDatabaseConnectionRequest {
+  name: string
+  db_type: string
+  host: string
+  port: number
+  database: string
+  username: string
+  password: string
+  db_schema?: string | null
+  ssl?: boolean
+}
+
+export interface UpdateDatabaseConnectionRequest {
+  host?: string
+  port?: number
+  database?: string
+  username?: string
+  password?: string
+  db_schema?: string | null
+  ssl?: boolean
+}
+
+export interface DatabaseTestResult {
+  status: string
+  message: string
+  connection?: DatabaseConnection
+  error?: string
+}
+
+export interface TableSchema {
+  name: string
+  columns: any[]
+  primary_keys: string[]
+  foreign_keys: any[]
+  indexes: any[]
+}
+
+export interface DatabaseSchema {
+  connection_name: string
+  tables: TableSchema[]
+  table_count: number
+}
+
+export interface OntologySearchQuery {
+  query: string
+  entity_types?: string[]
+  limit?: number
+}
+
+// Database API Functions
+
+/**
+ * Create a database connection
+ */
+export async function createDatabaseConnection(
+  data: CreateDatabaseConnectionRequest
+): Promise<DatabaseConnection> {
+  const response = await apiClient.post<DatabaseConnection>('/database/connections', data)
+  return response.data
+}
+
+/**
+ * List all database connections
+ */
+export async function listDatabaseConnections(): Promise<DatabaseConnection[]> {
+  const response = await apiClient.get<DatabaseConnection[]>('/database/connections')
+  return response.data
+}
+
+/**
+ * Get a specific database connection
+ */
+export async function getDatabaseConnection(name: string): Promise<DatabaseConnection> {
+  const response = await apiClient.get<DatabaseConnection>(`/database/connections/${name}`)
+  return response.data
+}
+
+/**
+ * Update a database connection
+ */
+export async function updateDatabaseConnection(
+  name: string,
+  data: UpdateDatabaseConnectionRequest
+): Promise<DatabaseConnection> {
+  const response = await apiClient.put<DatabaseConnection>(
+    `/database/connections/${name}`,
+    data
+  )
+  return response.data
+}
+
+/**
+ * Delete a database connection
+ */
+export async function deleteDatabaseConnection(name: string): Promise<void> {
+  await apiClient.delete(`/database/connections/${name}`)
+}
+
+/**
+ * Test a database connection
+ */
+export async function testDatabaseConnection(name: string): Promise<DatabaseTestResult> {
+  const response = await apiClient.post<DatabaseTestResult>(
+    `/database/connections/${name}/test`
+  )
+  return response.data
+}
+
+/**
+ * Get database schema
+ */
+export async function getDatabaseSchema(name: string): Promise<DatabaseSchema> {
+  const response = await apiClient.get<DatabaseSchema>(`/database/connections/${name}/schema`)
+  return response.data
+}
+
+/**
+ * List all ontologies
+ */
+export async function listOntologies(): Promise<any[]> {
+  const response = await apiClient.get<any[]>('/database/ontologies')
+  return response.data
+}
+
+/**
+ * Get a specific ontology
+ */
+export async function getOntology(name: string): Promise<any> {
+  const response = await apiClient.get<any>(`/database/ontologies/${name}`)
+  return response.data
+}
+
+/**
+ * Search within an ontology
+ */
+export async function searchOntology(
+  name: string,
+  query: OntologySearchQuery
+): Promise<any[]> {
+  const response = await apiClient.post<any[]>(`/database/ontologies/${name}/search`, query)
   return response.data
 }
 

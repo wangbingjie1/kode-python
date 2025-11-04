@@ -66,5 +66,24 @@ logs/
 .backend.pid
 .frontend.pid
 
+# Ontology storage
+ontology_store/
+
 # Distribution
 *.whl
+
+# Windows reserved files
+nul
+*/nul
+
+# Database files
+*.db
+!schema.db
+
+# Test files
+test_*.py
+!tests/
+
+# Node modules (should be in frontend .gitignore but added here for safety)
+node_modules/
+web-frontend/node_modules/

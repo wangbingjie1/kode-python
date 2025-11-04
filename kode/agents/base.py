@@ -1,11 +1,11 @@
 """Simplified base classes for Kode agents - compatible with LangChain 1.0+."""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 import yaml
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import BaseTool
 
@@ -73,10 +73,9 @@ class AgentConfig:
 
 class KodeAgent:
     """
-    A simplified Kode agent for direct LLM interaction.
+    A simplified Kode agent with tool calling support.
 
-    This is a simplified version that doesn't use AgentExecutor,
-    which may not be available in all LangChain versions.
+    Supports tool binding and execution in a multi-turn conversation loop.
     """
 
     def __init__(
@@ -85,6 +84,8 @@ class KodeAgent:
         model: BaseChatModel,
         tools: List[BaseTool],
         verbose: bool = False,
+        on_tool_start: Optional[Callable] = None,
+        on_tool_end: Optional[Callable] = None,
     ):
         """
         Initialize Kode agent.
@@ -94,14 +95,35 @@ class KodeAgent:
             model: LangChain chat model
             tools: List of available tools
             verbose: Whether to print verbose output
+            on_tool_start: Callback when tool execution starts
+            on_tool_end: Callback when tool execution ends
         """
         self.config = config
         self.model = model
         self.tools = tools
         self.verbose = verbose
+        self.on_tool_start = on_tool_start
+        self.on_tool_end = on_tool_end
+
+        # Filter tools based on config
+        self.available_tools = self._filter_tools()
+
+        # Bind tools to model
+        self.model_with_tools = self.model.bind_tools(self.available_tools)
+
+        # Create tool map for execution
+        self.tool_map = {tool.name: tool for tool in self.available_tools}
 
         # Create agent prompt
         self.prompt = self._create_prompt()
+
+    def _filter_tools(self) -> List[BaseTool]:
+        """Filter tools based on agent configuration."""
+        if "*" in self.config.tools:
+            return self.tools
+
+        # Filter by name
+        return [tool for tool in self.tools if tool.name in self.config.tools]
 
     def _create_prompt(self) -> ChatPromptTemplate:
         """Create chat prompt template for the agent."""
@@ -115,46 +137,253 @@ class KodeAgent:
 
     def run(self, task: str, chat_history: Optional[List[Any]] = None) -> Dict[str, Any]:
         """
-        Execute a task using the agent (simple version).
+        Execute a task using the agent with tool calling support.
 
         Args:
             task: Task description
             chat_history: Optional chat history
 
         Returns:
-            Dictionary with 'output' and other execution details
+            Dictionary with 'output', 'messages', and tool execution details
         """
-        # Format prompt
-        messages = self.prompt.format_messages(
-            input=task, chat_history=chat_history or []
-        )
+        # Initialize messages
+        messages = [SystemMessage(content=self.config.system_prompt)]
 
-        # Call model
-        response = self.model.invoke(messages)
+        if chat_history:
+            messages.extend(chat_history)
 
-        # Return result
-        return {"output": response.content, "messages": messages, "response": response}
+        messages.append(HumanMessage(content=task))
+
+        # Execution loop
+        iteration = 0
+        tool_calls_history = []
+
+        while iteration < self.config.max_iterations:
+            iteration += 1
+
+            if self.verbose:
+                print(f"\n=== Iteration {iteration} ===")
+
+            # Call model with tools
+            response = self.model_with_tools.invoke(messages)
+            messages.append(response)
+
+            # Check if there are tool calls
+            if not response.tool_calls:
+                # No more tool calls, return final response
+                return {
+                    "output": response.content,
+                    "messages": messages,
+                    "tool_calls": tool_calls_history,
+                    "iterations": iteration,
+                }
+
+            # Execute tool calls
+            for tool_call in response.tool_calls:
+                tool_name = tool_call["name"]
+                tool_args = tool_call["args"]
+                tool_call_id = tool_call.get("id", "")
+
+                if self.verbose:
+                    print(f"\nTool Call: {tool_name}")
+                    print(f"Arguments: {tool_args}")
+
+                # Callback: tool start
+                if self.on_tool_start:
+                    self.on_tool_start(tool_name, tool_args)
+
+                # Execute tool
+                if tool_name in self.tool_map:
+                    try:
+                        tool = self.tool_map[tool_name]
+                        result = tool.invoke(tool_args)
+
+                        if self.verbose:
+                            print(f"Result: {result[:200]}..." if len(str(result)) > 200 else f"Result: {result}")
+
+                        # Callback: tool end
+                        if self.on_tool_end:
+                            self.on_tool_end(tool_name, tool_args, result)
+
+                        # Add tool result to messages
+                        tool_message = ToolMessage(
+                            content=str(result),
+                            tool_call_id=tool_call_id,
+                            name=tool_name,
+                        )
+                        messages.append(tool_message)
+
+                        # Track tool call
+                        tool_calls_history.append({
+                            "name": tool_name,
+                            "args": tool_args,
+                            "result": result,
+                        })
+
+                    except Exception as e:
+                        error_msg = f"Error executing tool {tool_name}: {str(e)}"
+                        if self.verbose:
+                            print(f"Error: {error_msg}")
+
+                        # Add error message
+                        tool_message = ToolMessage(
+                            content=error_msg,
+                            tool_call_id=tool_call_id,
+                            name=tool_name,
+                        )
+                        messages.append(tool_message)
+
+                        tool_calls_history.append({
+                            "name": tool_name,
+                            "args": tool_args,
+                            "error": str(e),
+                        })
+                else:
+                    error_msg = f"Tool '{tool_name}' not found"
+                    if self.verbose:
+                        print(f"Error: {error_msg}")
+
+                    tool_message = ToolMessage(
+                        content=error_msg,
+                        tool_call_id=tool_call_id,
+                        name=tool_name,
+                    )
+                    messages.append(tool_message)
+
+        # Max iterations reached
+        return {
+            "output": "Maximum iterations reached without completion",
+            "messages": messages,
+            "tool_calls": tool_calls_history,
+            "iterations": iteration,
+        }
 
     async def arun(
         self, task: str, chat_history: Optional[List[Any]] = None
     ) -> Dict[str, Any]:
         """
-        Execute a task asynchronously (simple version).
+        Execute a task asynchronously with tool calling support.
 
         Args:
             task: Task description
             chat_history: Optional chat history
 
         Returns:
-            Dictionary with 'output' and other execution details
+            Dictionary with 'output', 'messages', and tool execution details
         """
-        # Format prompt
-        messages = self.prompt.format_messages(
-            input=task, chat_history=chat_history or []
-        )
+        # Initialize messages
+        messages = [SystemMessage(content=self.config.system_prompt)]
 
-        # Call model
-        response = await self.model.ainvoke(messages)
+        if chat_history:
+            messages.extend(chat_history)
 
-        # Return result
-        return {"output": response.content, "messages": messages, "response": response}
+        messages.append(HumanMessage(content=task))
+
+        # Execution loop
+        iteration = 0
+        tool_calls_history = []
+
+        while iteration < self.config.max_iterations:
+            iteration += 1
+
+            if self.verbose:
+                print(f"\n=== Iteration {iteration} ===")
+
+            # Call model with tools
+            response = await self.model_with_tools.ainvoke(messages)
+            messages.append(response)
+
+            # Check if there are tool calls
+            if not response.tool_calls:
+                # No more tool calls, return final response
+                return {
+                    "output": response.content,
+                    "messages": messages,
+                    "tool_calls": tool_calls_history,
+                    "iterations": iteration,
+                }
+
+            # Execute tool calls
+            for tool_call in response.tool_calls:
+                tool_name = tool_call["name"]
+                tool_args = tool_call["args"]
+                tool_call_id = tool_call.get("id", "")
+
+                if self.verbose:
+                    print(f"\nTool Call: {tool_name}")
+                    print(f"Arguments: {tool_args}")
+
+                # Callback: tool start
+                if self.on_tool_start:
+                    self.on_tool_start(tool_name, tool_args)
+
+                # Execute tool (async if available, otherwise sync)
+                if tool_name in self.tool_map:
+                    try:
+                        tool = self.tool_map[tool_name]
+
+                        # Try async invoke first
+                        if hasattr(tool, "ainvoke"):
+                            result = await tool.ainvoke(tool_args)
+                        else:
+                            result = tool.invoke(tool_args)
+
+                        if self.verbose:
+                            print(f"Result: {result[:200]}..." if len(str(result)) > 200 else f"Result: {result}")
+
+                        # Callback: tool end
+                        if self.on_tool_end:
+                            self.on_tool_end(tool_name, tool_args, result)
+
+                        # Add tool result to messages
+                        tool_message = ToolMessage(
+                            content=str(result),
+                            tool_call_id=tool_call_id,
+                            name=tool_name,
+                        )
+                        messages.append(tool_message)
+
+                        # Track tool call
+                        tool_calls_history.append({
+                            "name": tool_name,
+                            "args": tool_args,
+                            "result": str(result)[:500],  # Truncate for history
+                        })
+
+                    except Exception as e:
+                        error_msg = f"Error executing tool {tool_name}: {str(e)}"
+                        if self.verbose:
+                            print(f"Error: {error_msg}")
+
+                        # Add error message
+                        tool_message = ToolMessage(
+                            content=error_msg,
+                            tool_call_id=tool_call_id,
+                            name=tool_name,
+                        )
+                        messages.append(tool_message)
+
+                        tool_calls_history.append({
+                            "name": tool_name,
+                            "args": tool_args,
+                            "error": str(e),
+                        })
+                else:
+                    error_msg = f"Tool '{tool_name}' not found"
+                    if self.verbose:
+                        print(f"Error: {error_msg}")
+
+                    tool_message = ToolMessage(
+                        content=error_msg,
+                        tool_call_id=tool_call_id,
+                        name=tool_name,
+                    )
+                    messages.append(tool_message)
+
+        # Max iterations reached
+        return {
+            "output": "Maximum iterations reached without completion",
+            "messages": messages,
+            "tool_calls": tool_calls_history,
+            "iterations": iteration,
+        }

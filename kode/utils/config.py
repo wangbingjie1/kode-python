@@ -38,6 +38,22 @@ class ConfigManager:
         "maxTokens": 4096,
         "temperature": 0.7,
         "theme": "dark",
+        "databases": {
+            "connections": [],
+            "default_connection": None,
+        },
+        "ontology": {
+            "storage_backend": "file",
+            "storage_path": "./ontology_store",
+            "vector_db": {
+                "type": "chroma",
+                "persist_directory": "./ontology_store/vectors",
+            },
+            "enrichment": {
+                "use_llm": True,
+                "llm_model": "quick",
+            },
+        },
     }
 
     def __init__(self, project_root: Optional[str] = None, cli_params: Optional[Dict] = None):

@@ -9,6 +9,18 @@ from .memory_tools import MemoryReadTool, MemoryWriteTool
 from .web_tools import URLFetcherTool, WebSearchTool
 from .notebook_tools import NotebookReadTool, NotebookEditTool
 from .advanced_tools import MultiEditTool, ThinkTool, TodoWriteTool, TaskTool
+from .database_tools import (
+    DatabaseConnectTool,
+    DatabaseTestConnectionTool,
+    DatabaseDisconnectTool,
+    DatabaseListConnectionsTool,
+    DatabaseSchemaExtractorTool,
+)
+from .ontology_tools import (
+    OntologyBuilderTool,
+    OntologyStorageTool,
+    OntologySearchTool,
+)
 
 __all__ = [
     # Base
@@ -35,4 +47,14 @@ __all__ = [
     "ThinkTool",
     "TodoWriteTool",
     "TaskTool",
+    # Database
+    "DatabaseConnectTool",
+    "DatabaseTestConnectionTool",
+    "DatabaseDisconnectTool",
+    "DatabaseListConnectionsTool",
+    "DatabaseSchemaExtractorTool",
+    # Ontology
+    "OntologyBuilderTool",
+    "OntologyStorageTool",
+    "OntologySearchTool",
 ]

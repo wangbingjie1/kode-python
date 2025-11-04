@@ -9,11 +9,18 @@ from pydantic import BaseModel, Field
 from .base import KodeTool
 
 
+class EditItem(BaseModel):
+    """A single edit operation."""
+    file_path: str = Field(description="Path to the file to edit")
+    old_string: str = Field(description="String to find and replace")
+    new_string: str = Field(description="Replacement string")
+
+
 class MultiEditInput(BaseModel):
     """Input for MultiEditTool."""
 
-    edits: str = Field(
-        description="JSON array of edits: [{file_path, old_string, new_string}]"
+    edits: List[EditItem] = Field(
+        description="List of edit operations, each with file_path, old_string, and new_string"
     )
 
 
@@ -33,25 +40,22 @@ class MultiEditTool(KodeTool):
     args_schema: Type[BaseModel] = MultiEditInput
     requires_permission: bool = True
 
-    def _run(self, edits: str) -> str:
+    def _run(self, edits: List[EditItem]) -> str:
         """Perform multiple edits."""
         try:
-            # Parse edits
-            edit_list = json.loads(edits)
-            if not isinstance(edit_list, list):
-                return "Error: edits must be a JSON array"
-
             results = []
             failed = []
 
-            for i, edit in enumerate(edit_list):
-                file_path = edit.get("file_path")
-                old_string = edit.get("old_string")
-                new_string = edit.get("new_string")
+            for i, edit in enumerate(edits):
+                # Convert EditItem to dict if needed
+                if hasattr(edit, 'model_dump'):
+                    edit_dict = edit.model_dump()
+                else:
+                    edit_dict = edit
 
-                if not all([file_path, old_string is not None, new_string is not None]):
-                    failed.append(f"Edit {i}: Missing required fields")
-                    continue
+                file_path = edit_dict.get("file_path")
+                old_string = edit_dict.get("old_string")
+                new_string = edit_dict.get("new_string")
 
                 try:
                     path = Path(file_path)
@@ -76,7 +80,7 @@ class MultiEditTool(KodeTool):
                 except Exception as e:
                     failed.append(f"Edit {i}: {str(e)}")
 
-            summary = f"Completed {len(results)}/{len(edit_list)} edits"
+            summary = f"Completed {len(results)}/{len(edits)} edits"
             if failed:
                 summary += f"\nFailed:\n" + "\n".join(failed)
             if results:
@@ -84,8 +88,6 @@ class MultiEditTool(KodeTool):
 
             return summary
 
-        except json.JSONDecodeError as e:
-            return f"Error: Invalid JSON: {str(e)}"
         except Exception as e:
             return f"Error: {str(e)}"
 
@@ -117,11 +119,18 @@ class ThinkTool(KodeTool):
         return f"💭 Thinking: {thought}"
 
 
+class TodoItem(BaseModel):
+    """A single todo item."""
+    content: str = Field(description="Task description (imperative form)")
+    status: str = Field(description="Task status: pending, in_progress, or completed")
+    activeForm: str = Field(description="Present continuous form of the task")
+
+
 class TodoWriteInput(BaseModel):
     """Input for TodoWriteTool."""
 
-    todos: str = Field(
-        description="JSON array of todos: [{content, status, activeForm}]"
+    todos: List[TodoItem] = Field(
+        description="List of todo items, each with content, status, and activeForm"
     )
 
 
@@ -146,22 +155,16 @@ class TodoWriteTool(KodeTool):
         """Get the todo file path."""
         return Path.cwd() / ".kode" / "todos.json"
 
-    def _run(self, todos: str) -> str:
+    def _run(self, todos: List[TodoItem]) -> str:
         """Update todos."""
         try:
             todo_path = self._get_todo_path()
 
-            # Parse todos
-            todo_list = json.loads(todos)
-            if not isinstance(todo_list, list):
-                return "Error: todos must be a JSON array"
+            # Convert TodoItem objects to dicts
+            todo_list = [todo.model_dump() if hasattr(todo, 'model_dump') else todo for todo in todos]
 
             # Validate todos
             for todo in todo_list:
-                required = ["content", "status", "activeForm"]
-                if not all(field in todo for field in required):
-                    return f"Error: Each todo must have: {', '.join(required)}"
-
                 if todo["status"] not in ["pending", "in_progress", "completed"]:
                     return f"Error: Invalid status: {todo['status']}"
 
@@ -182,8 +185,6 @@ class TodoWriteTool(KodeTool):
 
             return summary
 
-        except json.JSONDecodeError as e:
-            return f"Error: Invalid JSON: {str(e)}"
         except Exception as e:
             return f"Error: {str(e)}"
 

@@ -72,13 +72,15 @@ export const useChatStore = defineStore('chat', () => {
       })
 
       sseService.onClose(() => {
-        console.log('[ChatStore] SSE closed')
-        isConnected.value = false
+        console.log('[ChatStore] SSE stream closed (message complete)')
+        // Don't set isConnected to false - we're still connected to the conversation
+        // SSE closes after each message completion, but we remain ready to send new messages
       })
 
       sseService.onError((error) => {
         console.error('[ChatStore] SSE error:', error)
         notification.error('连接错误', 'SSE 连接失败: ' + error.message)
+        isConnected.value = false // Only disconnect on error
       })
 
       console.log('[ChatStore] Connection setup complete')
@@ -91,7 +93,7 @@ export const useChatStore = defineStore('chat', () => {
   /**
    * Send message
    */
-  async function sendMessage(content: string) {
+  async function sendMessage(content: string, databaseName?: string) {
     if (!isConnected.value) {
       throw new Error('Not connected to conversation')
     }
@@ -101,13 +103,14 @@ export const useChatStore = defineStore('chat', () => {
       id: `user-${Date.now()}`,
       role: 'user',
       content,
-      timestamp: new Date()
+      timestamp: new Date(),
+      metadata: databaseName ? { database_name: databaseName } : undefined
     }
     messages.value.push(userMessage)
 
     // Send via SSE
     try {
-      sseService.sendMessage(content)
+      sseService.sendMessage(content, databaseName)
       isTyping.value = true
     } catch (error) {
       console.error('Error sending message:', error)
@@ -198,4 +201,38 @@ export const useChatStore = defineStore('chat', () => {
   async function createNewConversation(projectId: string, title?: string) {
     const conversation = await api.createConversation({
       project_id: projectId,
- 
+      title
+    })
+    return conversation
+  }
+
+  /**
+   * Clear current conversation
+   */
+  function clearConversation() {
+    if (isConnected.value) {
+      sseService.disconnect()
+    }
+    sseService.clearCallbacks()
+    currentConversation.value = null
+    messages.value = []
+    isConnected.value = false
+    isTyping.value = false
+    currentStreamingMessage.value = null
+  }
+
+  return {
+    // State
+    currentConversation,
+    messages,
+    isConnected,
+    isTyping,
+    hasMessages,
+
+    // Actions
+    connectToConversation,
+    sendMessage,
+    createNewConversation,
+    clearConversation
+  }
+})
