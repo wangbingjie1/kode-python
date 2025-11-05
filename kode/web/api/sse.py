@@ -4,27 +4,75 @@ SSE (Server-Sent Events) API Routes
 Provides real-time streaming of AI responses using SSE instead of WebSocket.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 import json
 import logging
 
 from kode.database.session import get_db
-from kode.models import Conversation, Message
+from kode.models import Conversation, Message, User
 from kode.services.conversation import AsyncConversationService
 from kode.utils.logger import setup_logger
+from kode.web.dependencies import get_current_user
+from kode.core.security import verify_token
 
 logger = setup_logger(__name__)
 router = APIRouter()
+
+
+async def get_user_from_token_or_header(
+    token: Optional[str] = Query(None, description="JWT access token (for SSE)"),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    从token参数或Authorization头获取当前用户
+    用于SSE接口,因为EventSource不支持自定义HTTP头
+    """
+    # 优先使用token参数
+    if token:
+        payload = verify_token(token, token_type="access")
+        if payload is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的认证令牌",
+            )
+
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的令牌格式",
+            )
+
+        # 从数据库获取用户
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户不存在或已被禁用",
+            )
+
+        return user
+
+    # 如果没有token参数,使用标准的get_current_user(从Authorization头获取)
+    # 注意: EventSource不支持自定义头,所以这里不会被触发
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="需要提供token参数进行认证",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 async def event_generator(
     conversation_id: str,
     task_content: str,
     conversation_service: AsyncConversationService,
+    user_id: str,
     database_name: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """
@@ -42,7 +90,7 @@ async def event_generator(
         async for chunk in conversation_service.execute_task_streaming(
             task=task_content,
             conversation_id=conversation_id,
-            user_id="default",  # TODO: Get from auth
+            user_id=user_id,
             database_name=database_name,
         ):
             # Format as SSE event
@@ -80,6 +128,7 @@ async def stream_chat(
     conversation_id: str,
     task: str,
     database_name: str | None = None,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -126,7 +175,7 @@ async def stream_chat(
 
     # Return SSE stream
     return StreamingResponse(
-        event_generator(conversation_id, task, conversation_service, database_name),
+        event_generator(conversation_id, task, conversation_service, current_user.id, database_name),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -140,6 +189,7 @@ async def stream_chat(
 async def send_message_sse(
     conversation_id: str,
     task: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """

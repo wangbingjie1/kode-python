@@ -7,11 +7,8 @@ JWT token generation, password hashing, and authentication utilities.
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import hashlib
 import os
-
-# 密码加密上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT配置
 SECRET_KEY = os.getenv("SECRET_KEY", "kode-secret-key-change-in-production")
@@ -21,13 +18,15 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """验证密码"""
-    return pwd_context.verify(plain_password, hashed_password)
+    """验证密码（使用SHA256）"""
+    return hash_password(plain_password) == hashed_password
 
 
 def hash_password(password: str) -> str:
-    """加密密码"""
-    return pwd_context.hash(password)
+    """加密密码（使用SHA256 + salt）"""
+    # 使用SECRET_KEY作为盐值
+    salted_password = f"{password}{SECRET_KEY}"
+    return hashlib.sha256(salted_password.encode('utf-8')).hexdigest()
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

@@ -7,6 +7,7 @@
 export const DEFAULT_PROJECT_ID = 'default'
 
 // API Configuration
+export const API_BASE_URL = '/api'
 export const API_CONFIG = {
   baseURL: '/api',
   timeout: 30000,

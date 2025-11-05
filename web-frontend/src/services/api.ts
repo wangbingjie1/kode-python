@@ -17,11 +17,10 @@ const apiClient = axios.create({
 // Request interceptor for adding auth token
 apiClient.interceptors.request.use(
   (config) => {
-    // TODO: Add auth token if available
-    // const token = localStorage.getItem('token')
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`
-    // }
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   (error) => {
@@ -29,10 +28,50 @@ apiClient.interceptors.request.use(
   }
 )
 
-// Response interceptor for error handling
+// Response interceptor for error handling and token refresh
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config
+
+    // 如果是401错误且不是刷新token的请求,尝试刷新token
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url.includes('/auth/refresh') &&
+      !originalRequest.url.includes('/auth/login')
+    ) {
+      originalRequest._retry = true
+
+      try {
+        // 动态导入useAuthStore避免循环依赖
+        const { useAuthStore } = await import('@/stores/auth')
+        const authStore = useAuthStore()
+
+        // 尝试刷新token
+        const refreshed = await authStore.refreshAccessToken()
+
+        if (refreshed) {
+          // 重新设置Authorization头
+          const newToken = localStorage.getItem('access_token')
+          originalRequest.headers.Authorization = `Bearer ${newToken}`
+          // 重试原请求
+          return apiClient(originalRequest)
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError)
+        // 刷新失败,跳转到登录页
+        const { useAuthStore } = await import('@/stores/auth')
+        const authStore = useAuthStore()
+        authStore.logout()
+
+        // 重定向到登录页
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login'
+        }
+      }
+    }
+
     console.error('API Error:', error.response?.data || error.message)
     return Promise.reject(error)
   }

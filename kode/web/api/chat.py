@@ -57,6 +57,7 @@ async def create_conversation(
 @router.get("/conversations/{conversation_id}", response_model=ConversationResponse)
 async def get_conversation(
     conversation_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get conversation by ID"""
@@ -78,6 +79,7 @@ async def get_conversation(
 async def get_conversation_messages(
     conversation_id: str,
     limit: int = 100,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get messages for a conversation"""
@@ -108,6 +110,7 @@ async def get_conversation_messages(
 @router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_conversation(
     conversation_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a conversation"""
@@ -129,6 +132,7 @@ async def delete_conversation(
 @router.get("/projects/{project_id}/conversations", response_model=List[ConversationResponse])
 async def list_project_conversations(
     project_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """List all conversations for a project"""
