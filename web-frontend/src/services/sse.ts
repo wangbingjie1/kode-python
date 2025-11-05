@@ -48,8 +48,17 @@ export class SSEService {
     // Encode task parameter
     const encodedTask = encodeURIComponent(content)
 
-    // Build SSE URL with optional database parameter
+    // Get access token for authentication
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      console.error('No access token found, SSE authentication will fail')
+    }
+
+    // Build SSE URL with token parameter (EventSource doesn't support custom headers)
     let sseUrl = `/api/sse/chat/${this.conversationId}/stream?task=${encodedTask}`
+    if (token) {
+      sseUrl += `&token=${encodeURIComponent(token)}`
+    }
     if (databaseName) {
       sseUrl += `&database_name=${encodeURIComponent(databaseName)}`
     }

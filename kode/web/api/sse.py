@@ -128,7 +128,7 @@ async def stream_chat(
     conversation_id: str,
     task: str,
     database_name: str | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_user_from_token_or_header),
     db: AsyncSession = Depends(get_db),
 ):
     """
