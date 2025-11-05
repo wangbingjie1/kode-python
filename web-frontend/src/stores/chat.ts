@@ -151,6 +151,13 @@ export const useChatStore = defineStore('chat', () => {
 
       case 'tool_call': {
         isTyping.value = true
+
+        // Finalize any streaming assistant message before tool call
+        if (currentStreamingMessage.value) {
+          currentStreamingMessage.value.isStreaming = false
+          currentStreamingMessage.value = null
+        }
+
         const toolName = chunk.metadata?.tool_name || 'Unknown tool'
         const toolStatus = chunk.metadata?.status || 'executing'
         const toolArgs = chunk.metadata?.args || {}
@@ -228,6 +235,14 @@ export const useChatStore = defineStore('chat', () => {
         }
         break
       }
+
+      case 'text_complete':
+        // Text portion complete (before tool calls in same iteration)
+        if (currentStreamingMessage.value) {
+          currentStreamingMessage.value.isStreaming = false
+          currentStreamingMessage.value = null
+        }
+        break
 
       case 'chunk':
         // Real LLM output

@@ -359,6 +359,8 @@ Kode now supports connecting to databases and building business ontologies for i
 - `DatabaseConnectTool`: Connect to databases with connection pooling
 - `DatabaseTestConnectionTool`: Verify connection health
 - `DatabaseSchemaExtractorTool`: Extract complete schema metadata (tables, columns, constraints, relationships)
+  - **✨ NEW**: Extracts table and column COMMENT/备注 information (critical for ontology building)
+  - Supports PostgreSQL, MySQL, Oracle, SQL Server (not SQLite)
 - `DatabaseListConnectionsTool`: List all configured connections
 - `DatabaseDisconnectTool`: Safely disconnect from databases
 
@@ -422,6 +424,7 @@ Add to `.kode.json`:
 
 - **[Database Tools Guide](docs/DATABASE_TOOLS_GUIDE.md)**: Complete usage guide with examples
 - **[Database Tools Design](docs/database_tools_design.md)**: Architecture and design decisions
+- **[COMMENT Extraction Guide](docs/COMMENT_EXTRACTION.md)**: ✨ NEW - How to extract and use database field comments
 - **[Test Suite](tests/test_database_tools.py)**: Comprehensive tests for all database tools
 
 ### Use Cases

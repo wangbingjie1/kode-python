@@ -2,91 +2,73 @@
   <div class="min-w-0">
     <form
       @submit.prevent="handleSubmit"
-      class="relative w-full min-w-0 rounded-2xl bg-white/90 px-5 py-4 shadow-[0_12px_28px_rgba(214,189,160,0.18)] sm:px-6 sm:py-5"
+      class="relative w-full min-w-0 rounded-xl border border-gray-300 bg-white px-4 py-3 shadow-sm transition focus-within:border-gray-400 focus-within:shadow-md"
     >
-      <div class="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div class="relative flex-1 min-w-0">
           <textarea
             ref="textareaRef"
             v-model="message"
             @keydown="handleKeyDown"
-            @input="autoResize"
-            placeholder="写下你此刻的灵感或问题..."
-            class="w-full resize-none overflow-hidden bg-transparent text-sm leading-relaxed text-[#2f2720] placeholder:text-[#b39f8f] focus:outline-none disabled:cursor-not-allowed disabled:text-[#b9ada1]"
+            @input="handleInput"
+            placeholder="发送消息..."
+            class="w-full resize-none overflow-hidden bg-transparent text-[15px] leading-[1.5] text-gray-900 placeholder:text-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:text-gray-400"
             :disabled="disabled"
-            :rows="rows"
+            :style="{ height: textareaHeight }"
           ></textarea>
-          <span
-            v-if="message.length"
-            class="pointer-events-none absolute bottom-0 right-0 translate-y-full text-xs text-[#b39f8f]"
-          >
-            {{ message.length }} 字
-          </span>
         </div>
 
-        <div class="flex items-center justify-end gap-2 sm:gap-3">
+        <div class="flex items-center justify-end gap-2 flex-shrink-0">
           <button
             v-if="databases.length > 0 || loadingDatabases"
             type="button"
-            class="database-trigger inline-flex items-center gap-2 rounded-full border border-[#eadfd3] bg-white px-3 py-1.5 text-xs font-semibold text-[#6d5f52] shadow-sm transition hover:bg-[#f7efe4]"
+            class="database-trigger inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
             @click="toggleDatabaseDropdown"
           >
-            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
             </svg>
-            <span>{{ selectedDatabase || '通用模式' }}</span>
-            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <span>{{ selectedDatabase || '通用' }}</span>
+            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
-            </svg>
-          </button>
-
-          <button
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-[#a38b75] shadow-inner transition hover:bg-white"
-            :class="{ 'opacity-40 cursor-not-allowed': message.length === 0 }"
-            :disabled="message.length === 0"
-            title="清空输入"
-            @click="clearMessage"
-          >
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M6 18L18 6" />
             </svg>
           </button>
 
           <button
             type="submit"
             :disabled="!canSend"
-            class="inline-flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#d88a5d] to-[#c06d3f] text-white shadow-[0_18px_40px_rgba(206,132,78,0.28)] transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d88a5d] disabled:cursor-not-allowed disabled:opacity-60"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900 text-white transition hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
             :title="isSending ? '发送中...' : '发送 (Enter)'"
           >
             <svg
               v-if="!isSending"
-              class="h-5 w-5"
+              class="h-4 w-4"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="1.8"
+              stroke-width="2"
             >
               <path stroke-linecap="round" stroke-linejoin="round" d="M7 17L17 7m0 0H9m8 0v8" />
             </svg>
             <svg
               v-else
-              class="h-5 w-5 animate-spin"
+              class="h-4 w-4 animate-spin"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="1.8"
+              stroke-width="2"
             >
-              <circle class="opacity-30" cx="12" cy="12" r="9" />
+              <circle class="opacity-25" cx="12" cy="12" r="9" />
               <path d="M21 12a9 9 0 00-9-9" stroke-linecap="round" />
             </svg>
           </button>
         </div>
       </div>
 
+      <!-- Database dropdown - positioned above -->
       <div
         v-if="showDatabaseDropdown"
-        class="database-menu absolute inset-x-0 top-full z-30 mt-3"
+        class="database-menu absolute inset-x-0 bottom-full z-30 mb-2"
       >
         <div class="menu-inner">
           <button
@@ -99,7 +81,7 @@
               <p class="title">通用对话</p>
               <p class="desc">不连接数据库</p>
             </div>
-            <svg v-if="!selectedDatabase" class="h-4 w-4 text-[#c47a4d]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <svg v-if="!selectedDatabase" class="h-4 w-4 text-gray-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </button>
@@ -118,7 +100,7 @@
               <p class="title">{{ db.name }}</p>
               <p class="desc">{{ db.db_type }}</p>
             </div>
-            <svg v-if="selectedDatabase === db.name" class="h-4 w-4 text-[#c47a4d]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <svg v-if="selectedDatabase === db.name" class="h-4 w-4 text-gray-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </button>
@@ -143,7 +125,7 @@ const emit = defineEmits<{
 
 const message = ref('')
 const textareaRef = ref<HTMLTextAreaElement>()
-const rows = ref(1)
+const textareaHeight = ref('48px')
 const selectedDatabase = ref('')
 const databases = ref<any[]>([])
 const loadingDatabases = ref(false)
@@ -192,28 +174,25 @@ function handleSubmit() {
   if (msg) {
     emit('send', msg, selectedDatabase.value || undefined)
     message.value = ''
-    rows.value = 1
-    autoResize()
+    textareaHeight.value = '48px'
   }
 }
 
-function autoResize() {
-  nextTick(() => {
-    if (!textareaRef.value) return
-    textareaRef.value.style.height = 'auto'
-    const scrollHeight = textareaRef.value.scrollHeight
-    const lineHeight = 24
-    const newRows = Math.min(Math.max(Math.ceil(scrollHeight / lineHeight), 1), 8)
-    rows.value = newRows
-  })
-}
+function handleInput() {
+  if (!textareaRef.value) return
 
-function clearMessage() {
-  if (message.value.length === 0) return
-  message.value = ''
-  rows.value = 1
-  autoResize()
-  nextTick(() => textareaRef.value?.focus())
+  // Reset height to get accurate scrollHeight
+  textareaRef.value.style.height = '48px'
+
+  const scrollHeight = textareaRef.value.scrollHeight
+  const maxHeight = 200 // 最大高度 200px
+
+  if (scrollHeight > 48) {
+    const newHeight = Math.min(scrollHeight, maxHeight)
+    textareaHeight.value = `${newHeight}px`
+  } else {
+    textareaHeight.value = '48px'
+  }
 }
 
 function toggleDatabaseDropdown() {
@@ -223,12 +202,6 @@ function toggleDatabaseDropdown() {
 function selectDatabase(dbName: string) {
   selectedDatabase.value = dbName
   showDatabaseDropdown.value = false
-  nextTick(() => textareaRef.value?.focus())
-}
-
-function applyQuickPrompt(template: string) {
-  message.value = template
-  autoResize()
   nextTick(() => textareaRef.value?.focus())
 }
 
@@ -242,8 +215,9 @@ function handleClickOutside(event: MouseEvent) {
 
 <style scoped>
 textarea {
-  min-height: 72px;
-  max-height: 260px;
+  min-height: 48px;
+  max-height: 200px;
+  line-height: 1.5;
 }
 
 .database-menu {
@@ -251,12 +225,11 @@ textarea {
 }
 
 .menu-inner {
-  border-radius: 20px;
-  border: 1px solid #eadfd3;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 26px 60px rgba(184, 159, 133, 0.22);
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: white;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   overflow: hidden;
-  backdrop-filter: blur(12px);
 }
 
 .menu-item {
@@ -264,36 +237,36 @@ textarea {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 14px 18px;
+  padding: 0.75rem 1rem;
   border: none;
   background: transparent;
-  color: #6d5f52;
-  font-size: 13px;
+  color: #374151;
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .menu-item:hover {
-  background: rgba(250, 243, 233, 0.82);
+  background: #f9fafb;
 }
 
 .menu-item .title {
   font-weight: 600;
-  color: #4f443a;
+  color: #111827;
 }
 
 .menu-item .desc {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #9a8b7c;
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: #6b7280;
 }
 
 .menu-item.active {
-  background: rgba(237, 223, 206, 0.9);
+  background: #f3f4f6;
 }
 
 .divider {
   height: 1px;
-  background: linear-gradient(90deg, rgba(237, 224, 210, 0), rgba(237, 224, 210, 0.85), rgba(237, 224, 210, 0));
+  background: #e5e7eb;
 }
 </style>

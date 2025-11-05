@@ -1,47 +1,45 @@
 <template>
-  <div class="h-screen bg-[#fcf8f4] text-[#2f2720] antialiased">
+  <div class="h-screen bg-white text-gray-900 antialiased">
     <div
       class="relative flex h-full flex-col overflow-hidden lg:grid min-h-0"
       :class="layoutClass"
     >
       <!-- Navigation rail -->
-      <aside class="hidden h-full flex-col items-center gap-4 border-r border-[#eadfd3] bg-[#fcf1e4] px-3 py-6 lg:flex">
+      <aside class="hidden h-full flex-col items-center gap-3 border-r border-gray-200 bg-white px-2 py-4 lg:flex">
         <button
           type="button"
-          class="flex h-10 w-10 items-center justify-center rounded-2xl border border-transparent text-[#a38b75] transition hover:border-[#e7d8c9] hover:bg-white/80 hover:text-[#7c6551]"
-          :class="isSidebarCollapsed ? 'bg-white text-[#7c6551] shadow-inner' : ''"
+          class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 transition hover:bg-gray-100"
+          :class="isSidebarCollapsed ? 'bg-gray-100' : ''"
           aria-label="切换侧边栏"
           @click="handleSidebarToggle"
         >
-          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
 
         <button
           type="button"
-          class="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#d88a5d] shadow-inner"
+          class="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900 text-white transition hover:bg-gray-800"
           aria-label="新建对话"
           @click="handleNewConversation"
         >
-          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
           </svg>
         </button>
 
-        <div class="mt-3 flex flex-1 flex-col items-center gap-3">
+        <div class="mt-2 flex flex-1 flex-col items-center gap-2">
           <button
             v-for="section in sidebarSections"
             :key="section.id"
             type="button"
-            class="rounded-full p-2 transition hover:bg-white/80 hover:text-[#7c6551]"
-            :class="activeSidebarSection === section.id
-              ? (isSidebarCollapsed ? 'bg-white/60 text-[#9b7558]' : 'bg-white text-[#7c6551] shadow-inner')
-              : 'text-[#b7a594]'"
+            class="rounded-lg p-2 transition hover:bg-gray-100"
+            :class="activeSidebarSection === section.id ? 'bg-gray-100 text-gray-900' : 'text-gray-500'"
             :aria-label="section.label"
             @click="handleSidebarSectionSelect(section.id)"
           >
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" :d="section.icon" />
             </svg>
           </button>
@@ -51,7 +49,7 @@
       <!-- Conversation list (desktop) -->
       <aside
         v-show="!isSidebarCollapsed"
-        class="hidden h-full border-r border-[#eadfd3] bg-[#fefaf4] lg:flex lg:w-[220px]"
+        class="hidden h-full border-r border-gray-200 bg-white lg:flex lg:w-[240px]"
       >
         <ConversationSidebar
           class="w-full"
@@ -68,12 +66,12 @@
 
       <!-- Main conversation area -->
       <main class="relative grid h-full min-w-0 grid-rows-[auto,1fr,auto] overflow-visible min-h-0">
-        <header class="px-4 py-3 sm:px-6">
+        <header class="border-b border-gray-200 px-4 py-3 sm:px-6">
           <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-3 text-sm text-[#6e6255]">
+            <div class="flex items-center gap-3">
               <button
                 @click="sidebarOpen = true"
-                class="flex h-10 w-10 items-center justify-center rounded-full border border-[#eadfd3]/60 bg-white/80 text-[#7c6c5d] shadow-sm transition hover:bg-white hover:text-[#5c4f43] lg:hidden"
+                class="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-50 lg:hidden"
                 aria-label="打开对话列表"
                 type="button"
               >
@@ -83,13 +81,13 @@
               </button>
 
               <div class="flex flex-col">
-                <p class="text-sm font-semibold text-[#2f2720]">{{ conversationTitle }}</p>
-                <div class="flex items-center gap-2 text-xs">
-                  <span class="inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5">
-                    <span class="inline-block h-2 w-2 rounded-full shadow-[0_0_0_3px_rgba(16,166,104,0.1)]" :class="isConnected ? 'bg-emerald-400' : 'bg-rose-300'"></span>
+                <p class="text-sm font-medium text-gray-900">{{ conversationTitle }}</p>
+                <div class="flex items-center gap-2 text-xs text-gray-500">
+                  <span class="inline-flex items-center gap-1">
+                    <span class="inline-block h-1.5 w-1.5 rounded-full" :class="isConnected ? 'bg-green-500' : 'bg-red-400'"></span>
                     {{ isConnected ? '已连接' : '已断开' }}
                   </span>
-                  <span v-if="lastUpdatedText" class="text-[#b4a496]">{{ lastUpdatedText }}</span>
+                  <span v-if="lastUpdatedText">{{ lastUpdatedText }}</span>
                 </div>
               </div>
             </div>
@@ -97,10 +95,10 @@
             <div class="flex items-center gap-2">
               <button
                 type="button"
-                class="hidden items-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2 text-xs font-medium text-[#6d5f52] shadow-sm transition hover:bg-white sm:flex"
+                class="hidden items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:flex"
                 @click="scrollToBottom(true)"
               >
-                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" />
                 </svg>
                 最新
@@ -108,12 +106,11 @@
 
               <button
                 type="button"
-                class="flex items-center gap-1 rounded-full border border-transparent bg-[#f4e7da] px-3 py-2 text-xs font-semibold text-[#6d5f52] shadow-sm transition hover:bg-[#f0ddcc]"
+                class="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
                 @click="handleContextPanelToggle"
               >
-                <span class="inline-flex h-2 w-2 rounded-full" :class="isConnected ? 'bg-emerald-400' : 'bg-rose-400'"></span>
-                <span class="hidden sm:inline">上下文</span>
-                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                <span>上下文</span>
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
               </button>
@@ -121,34 +118,34 @@
           </div>
         </header>
 
-        <section ref="messageContainer" class="relative min-w-0 overflow-y-auto px-4 pb-32 pt-6 sm:px-8 min-h-0">
+        <section ref="messageContainer" class="relative min-w-0 overflow-y-auto px-4 pb-32 pt-6 sm:px-8 min-h-0 bg-white">
           <div class="mx-auto w-full max-w-3xl min-w-0 pb-12">
             <template v-if="timelineMessages.length">
               <MessageItem
                 v-for="item in timelineMessages"
                 :key="item.message.id"
-                class="w-full py-6"
+                class="w-full py-4"
                 :message="item.message"
                 :group-behavior="item.groupBehavior"
               />
             </template>
 
-            <div v-else class="flex h-full flex-col items-center justify-center gap-4 py-20 text-center text-[#8d7d6c]">
-              <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#d88a5d] to-[#c47a4d] text-white shadow-lg">
-                <svg class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <div v-else class="flex h-full flex-col items-center justify-center gap-4 py-20 text-center">
+              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-900 text-white">
+                <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2h-5l-5 5v-4z" />
                 </svg>
               </div>
               <div>
-                <h3 class="text-lg font-semibold text-[#3d3430]">开始新的对话</h3>
-                <p class="mt-1 text-sm">在下方输入框中输入消息开始聊天</p>
+                <h3 class="text-base font-semibold text-gray-900">开始新的对话</h3>
+                <p class="mt-1 text-sm text-gray-500">在下方输入框中输入消息开始聊天</p>
               </div>
               <button
                 type="button"
-                class="inline-flex items-center gap-2 rounded-full bg-[#f26b3a] px-4 py-2 text-sm font-semibold text-white shadow-[0_18px_36px_rgba(242,107,58,0.24)] transition hover:-translate-y-0.5 hover:bg-[#dc5d2f]"
+                class="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
                 @click="handleNewConversation"
               >
-                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
                 </svg>
                 新建会话
@@ -159,17 +156,17 @@
           <button
             v-if="showScrollToLatest"
             type="button"
-            class="fixed bottom-32 right-6 z-30 flex items-center gap-2 rounded-full bg-[#f4e7da] px-4 py-2 text-xs font-medium text-[#6d5f52] shadow-lg backdrop-blur transition hover:bg-[#f0ddcc]"
+            class="fixed bottom-32 right-6 z-30 flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition hover:bg-gray-50"
             @click="scrollToBottom(true)"
           >
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" />
             </svg>
             回到最新
           </button>
         </section>
 
-        <footer class="px-4 pb-4 pt-2 sm:px-6">
+        <footer class="px-4 pb-6 pt-4 sm:px-6">
           <div class="mx-auto w-full max-w-3xl min-w-0">
             <ChatInput
               :disabled="!isConnected"
@@ -183,7 +180,7 @@
       <!-- Desktop context panel -->
       <ContextPanel
         v-if="contextPanelOpen && isDesktopViewport"
-        class="hidden h-full border-l border-[#eadfd3] bg-[#fdfaf4] lg:flex lg:w-[280px]"
+        class="hidden h-full border-l border-gray-200 bg-white lg:flex lg:w-[300px]"
         :conversation="chatStore.currentConversation"
         :is-connected="isConnected"
         :message-count="chatStore.messages.length"
@@ -193,11 +190,11 @@
       <!-- Mobile overlays -->
       <div
         v-if="sidebarOpen"
-        class="fixed inset-0 z-40 flex bg-black/35 backdrop-blur-sm transition lg:hidden"
+        class="fixed inset-0 z-40 flex bg-black/20 backdrop-blur-sm transition lg:hidden"
         @click="sidebarOpen = false"
       >
         <div
-          class="h-full w-72 bg-[#fefaf4] shadow-2xl ring-1 ring-black/5"
+          class="h-full w-72 bg-white shadow-xl"
           @click.stop
         >
           <ConversationSidebar
@@ -215,7 +212,7 @@
 
       <div
         v-if="contextPanelSheet && !isDesktopViewport"
-        class="fixed inset-0 z-40 flex bg-black/35 backdrop-blur-sm lg:hidden"
+        class="fixed inset-0 z-40 flex bg-black/20 backdrop-blur-sm lg:hidden"
         @click="handleContextPanelClose"
       >
         <div class="ml-auto flex h-full w-full max-w-md" @click.stop>
@@ -315,15 +312,15 @@ const layoutClass = computed(() => {
   const hasContext = contextPanelOpen.value && isDesktopViewport.value
 
   if (hasSidebar && hasContext) {
-    return 'lg:grid-cols-[60px_220px_minmax(0,1fr)_320px]'
+    return 'lg:grid-cols-[48px_240px_minmax(0,1fr)_300px]'
   }
   if (hasSidebar) {
-    return 'lg:grid-cols-[60px_220px_minmax(0,1fr)]'
+    return 'lg:grid-cols-[48px_240px_minmax(0,1fr)]'
   }
   if (hasContext) {
-    return 'lg:grid-cols-[60px_minmax(0,1fr)_320px]'
+    return 'lg:grid-cols-[48px_minmax(0,1fr)_300px]'
   }
-  return 'lg:grid-cols-[60px_minmax(0,1fr)]'
+  return 'lg:grid-cols-[48px_minmax(0,1fr)]'
 })
 
 const timelineMessages = computed<TimelineMessage[]>(() => {
