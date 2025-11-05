@@ -1,7 +1,7 @@
 <template>
   <div class="h-screen bg-[#fcf8f4] text-[#2f2720] antialiased">
     <div
-      class="relative flex h-full flex-col overflow-hidden lg:grid"
+      class="relative flex h-full flex-col overflow-hidden lg:grid min-h-0"
       :class="layoutClass"
     >
       <!-- Navigation rail -->
@@ -67,7 +67,7 @@
       </aside>
 
       <!-- Main conversation area -->
-      <main class="relative grid h-full min-w-0 grid-rows-[auto,1fr,auto] overflow-visible">
+      <main class="relative grid h-full min-w-0 grid-rows-[auto,1fr,auto] overflow-visible min-h-0">
         <header class="px-4 py-3 sm:px-6">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-3 text-sm text-[#6e6255]">
@@ -121,7 +121,7 @@
           </div>
         </header>
 
-        <section ref="messageContainer" class="relative min-w-0 overflow-y-auto px-4 pb-32 pt-6 sm:px-8">
+        <section ref="messageContainer" class="relative min-w-0 overflow-y-auto px-4 pb-32 pt-6 sm:px-8 min-h-0">
           <div class="mx-auto w-full max-w-3xl min-w-0 pb-12">
             <template v-if="timelineMessages.length">
               <MessageItem
