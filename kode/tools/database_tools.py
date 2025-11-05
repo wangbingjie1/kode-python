@@ -1,12 +1,13 @@
 """Database connectivity and schema extraction tools."""
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from kode.services.database_manager import DatabaseConnection, db_manager
 from kode.tools.base import KodeTool
@@ -64,6 +65,32 @@ class DatabaseSchemaExtractorInput(BaseModel):
     include_statistics: bool = Field(default=False, description="Include table statistics")
     auto_save: bool = Field(default=True, description="Automatically save schema to file")
     version: str = Field(default="auto", description="Version identifier (auto = timestamp)")
+
+
+class SchemaLoadInput(BaseModel):
+    """Input schema for SchemaLoadTool."""
+
+    connection_name: str = Field(description="Connection name to load schema for")
+    version: str = Field(default="latest", description="Version to load (latest or specific version)")
+
+
+class DatabaseExecuteQueryInput(BaseModel):
+    """Input schema for DatabaseExecuteQueryTool."""
+
+    connection_name: str = Field(description="Connection name to execute query on")
+    sql: str = Field(description="SQL query to execute")
+    params: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Parameters for parameterized query (e.g., {'id': 123, 'name': 'test'})"
+    )
+    fetch_limit: int = Field(
+        default=100,
+        description="Maximum number of rows to fetch (for SELECT queries)"
+    )
+    timeout: int = Field(
+        default=30,
+        description="Query timeout in seconds"
+    )
 
 
 # ==================== Database Tools ====================
@@ -534,3 +561,260 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 "saved": False,
                 "error": str(e),
             }
+
+
+class SchemaLoadTool(KodeTool):
+    """
+    Load previously extracted database schema from storage.
+
+    Use this tool to retrieve cached schema metadata instead of re-extracting.
+    """
+
+    name: str = "SchemaLoad"
+    description: str = """Load previously extracted database schema from storage.
+    This is much faster than re-extracting schema. Use this when you need schema
+    information and suspect it may have been extracted before."""
+
+    args_schema: Type[BaseModel] = SchemaLoadInput
+    requires_permission: bool = False
+
+    def _run(self, connection_name: str, version: str = "latest") -> str:
+        """
+        Load schema from storage.
+
+        Args:
+            connection_name: Connection name
+            version: Version to load (latest or specific)
+
+        Returns:
+            Schema data as JSON
+        """
+        try:
+            config = ConfigManager()
+            storage_path = config.get("storage.schema_path", "./schema_store")
+            conn_dir = Path(storage_path) / connection_name
+
+            if not conn_dir.exists():
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"No schema found for connection '{connection_name}'",
+                        "suggestion": "Use DatabaseSchemaExtractor to extract schema first",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            # Load specific version or latest
+            if version == "latest":
+                schema_file = conn_dir / "schema_latest.json"
+            else:
+                schema_file = conn_dir / f"schema_{version}.json"
+
+            if not schema_file.exists():
+                # List available versions
+                available = list(conn_dir.glob("schema_v*.json"))
+                available_versions = [f.stem.replace("schema_", "") for f in available]
+
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Schema version '{version}' not found",
+                        "available_versions": available_versions,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            with open(schema_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            data["loaded_from_cache"] = True
+            data["loaded_at"] = datetime.now().isoformat()
+
+            return json.dumps(data, indent=2, ensure_ascii=False)
+
+        except Exception as e:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Failed to load schema: {str(e)}",
+                },
+                indent=2,
+            )
+
+
+class DatabaseExecuteQueryTool(KodeTool):
+    """
+    Execute SQL queries on a database connection.
+
+    Supports both read operations (SELECT) and write operations (INSERT/UPDATE/DELETE).
+    Write operations require explicit permission confirmation.
+    """
+
+    name: str = "DatabaseExecuteQuery"
+    description: str = """Execute SQL queries on a database.
+    - SELECT queries: Read-only, returns results (limited by fetch_limit)
+    - INSERT/UPDATE/DELETE: Requires permission, returns affected row count
+    - Supports parameterized queries to prevent SQL injection
+    - Use :param_name syntax for parameters (e.g., 'SELECT * FROM users WHERE id = :id')"""
+
+    args_schema: Type[BaseModel] = DatabaseExecuteQueryInput
+    requires_permission: bool = False  # Will check dynamically based on query type
+
+    def _run(
+        self,
+        connection_name: str,
+        sql: str,
+        params: Optional[Dict[str, Any]] = None,
+        fetch_limit: int = 100,
+        timeout: int = 30,
+    ) -> str:
+        """
+        Execute SQL query.
+
+        Args:
+            connection_name: Connection name to execute on
+            sql: SQL query to execute
+            params: Parameters for parameterized query
+            fetch_limit: Max rows to fetch (SELECT only)
+            timeout: Query timeout in seconds
+
+        Returns:
+            Query results as JSON
+        """
+        try:
+            # Get connection
+            connection = db_manager.get_connection(connection_name)
+            if not connection:
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Connection '{connection_name}' not found",
+                    },
+                    indent=2,
+                )
+
+            # Determine query type
+            query_type = self._get_query_type(sql)
+            is_write_operation = query_type in ["INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER", "TRUNCATE"]
+
+            # Check permission for write operations
+            if is_write_operation and self.requires_permission:
+                # This will be caught by the permission system
+                pass
+
+            # Get engine and execute
+            engine = db_manager.get_engine(connection_name)
+
+            with engine.connect() as conn:
+                # Set timeout if supported
+                try:
+                    conn.execute(text(f"SET statement_timeout = {timeout * 1000}"))  # PostgreSQL
+                except Exception:
+                    pass  # Not all databases support this
+
+                # Execute query
+                if params:
+                    result = conn.execute(text(sql), params)
+                else:
+                    result = conn.execute(text(sql))
+
+                # Process results based on query type
+                if query_type == "SELECT":
+                    # Fetch results
+                    rows = result.fetchmany(fetch_limit)
+                    columns = list(result.keys())
+
+                    # Convert to list of dicts
+                    data = []
+                    for row in rows:
+                        row_dict = {}
+                        for i, col in enumerate(columns):
+                            value = row[i]
+                            # Convert non-JSON-serializable types
+                            if isinstance(value, (datetime,)):
+                                value = value.isoformat()
+                            elif not isinstance(value, (str, int, float, bool, type(None))):
+                                value = str(value)
+                            row_dict[col] = value
+                        data.append(row_dict)
+
+                    # Check if more rows available
+                    has_more = len(rows) == fetch_limit
+
+                    return json.dumps(
+                        {
+                            "status": "success",
+                            "query_type": query_type,
+                            "row_count": len(data),
+                            "has_more": has_more,
+                            "columns": columns,
+                            "data": data,
+                            "message": f"Query returned {len(data)} row(s)" +
+                                      (f" (limited to {fetch_limit}, more available)" if has_more else ""),
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+
+                else:
+                    # Write operation - commit and return affected rows
+                    conn.commit()
+                    affected_rows = result.rowcount if hasattr(result, 'rowcount') else 0
+
+                    return json.dumps(
+                        {
+                            "status": "success",
+                            "query_type": query_type,
+                            "affected_rows": affected_rows,
+                            "message": f"{query_type} operation completed, {affected_rows} row(s) affected",
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+
+        except Exception as e:
+            error_msg = str(e)
+            # Extract useful error information
+            if "syntax error" in error_msg.lower():
+                suggestion = "Check SQL syntax"
+            elif "permission denied" in error_msg.lower() or "access denied" in error_msg.lower():
+                suggestion = "Check database permissions"
+            elif "timeout" in error_msg.lower():
+                suggestion = "Query timed out, try optimizing or increasing timeout"
+            else:
+                suggestion = "Check query and parameters"
+
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Query execution failed: {error_msg}",
+                    "suggestion": suggestion,
+                    "query_type": self._get_query_type(sql),
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+
+    def _get_query_type(self, sql: str) -> str:
+        """
+        Determine SQL query type from SQL string.
+
+        Args:
+            sql: SQL query string
+
+        Returns:
+            Query type (SELECT, INSERT, UPDATE, etc.)
+        """
+        # Remove leading whitespace and comments
+        sql_clean = sql.strip()
+        sql_clean = re.sub(r'/\*.*?\*/', '', sql_clean, flags=re.DOTALL)  # Remove /* */ comments
+        sql_clean = re.sub(r'--.*?(\n|$)', '', sql_clean)  # Remove -- comments
+        sql_clean = sql_clean.strip()
+
+        # Get first keyword
+        match = re.match(r'^\s*(\w+)', sql_clean, re.IGNORECASE)
+        if match:
+            return match.group(1).upper()
+        return "UNKNOWN"

@@ -361,6 +361,12 @@ Kode now supports connecting to databases and building business ontologies for i
 - `DatabaseSchemaExtractorTool`: Extract complete schema metadata (tables, columns, constraints, relationships)
   - **✨ NEW**: Extracts table and column COMMENT/备注 information (critical for ontology building)
   - Supports PostgreSQL, MySQL, Oracle, SQL Server (not SQLite)
+- `DatabaseExecuteQueryTool`: **✨ NEW** Execute SQL queries on connected databases
+  - SELECT queries: Read-only, returns results with configurable row limit
+  - INSERT/UPDATE/DELETE: Write operations with affected row count
+  - Supports parameterized queries (`:param_name` syntax) to prevent SQL injection
+  - Automatic query type detection and error handling
+  - Example: `SELECT * FROM users WHERE age > :min_age` with `params={"min_age": 25}`
 - `DatabaseListConnectionsTool`: List all configured connections
 - `DatabaseDisconnectTool`: Safely disconnect from databases
 

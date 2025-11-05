@@ -37,13 +37,16 @@ try:
         DatabaseConnectTool,
         DatabaseTestConnectionTool,
         DatabaseSchemaExtractorTool,
+        DatabaseExecuteQueryTool,
         DatabaseListConnectionsTool,
         DatabaseDisconnectTool,
+        SchemaLoadTool,
     )
     from kode.tools.ontology_tools import (
         OntologyBuilderTool,
         OntologyStorageTool,
         OntologySearchTool,
+        OntologyLoadTool,
     )
     HAS_DATABASE_TOOLS = True
 except ImportError:
@@ -109,11 +112,14 @@ class AsyncConversationService:
                 DatabaseConnectTool(),
                 DatabaseTestConnectionTool(),
                 DatabaseSchemaExtractorTool(),
+                DatabaseExecuteQueryTool(),
                 DatabaseListConnectionsTool(),
                 DatabaseDisconnectTool(),
+                SchemaLoadTool(),
                 OntologyBuilderTool(),
                 OntologyStorageTool(),
                 OntologySearchTool(),
+                OntologyLoadTool(),
             ])
             logger.info("Database and ontology tools loaded")
 
@@ -122,21 +128,28 @@ class AsyncConversationService:
 
     def _create_data_analyst_agent(self) -> AgentConfig:
         """创建唯一的数据分析 agent 配置。"""
+
+        # 获取缓存资源信息
+        cached_resources = self._get_cached_resources_context()
+        cache_section = f"\n\n## 可用的缓存资源\n\n{cached_resources}\n\n**重要**: 优先使用缓存!如果有缓存的schema或ontology\n" if cached_resources else ""
+
         return AgentConfig(
             name="data-analyst",
             description="专业数据分析 Agent，专注于 ERP 数据库分析和业务洞察",
-            system_prompt="""你是一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
-
+            system_prompt=f"""你是一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
+{cache_section}
 ## 核心能力
 
 ### 1. 数据库连接和理解
 - 使用 DatabaseConnect 连接数据库（PostgreSQL, MySQL, Oracle, SQL Server, SQLite）
-- 使用 DatabaseSchemaExtractor 提取表结构和字段注释
+- **优先使用 SchemaLoad** 加载已缓存的schema（如果有）
+- 使用 DatabaseSchemaExtractor 提取表结构和字段注释（仅当无缓存时）
 - 理解 ERP 业务模块：财务、供应链、生产、销售、人力资源
 
 ### 2. 业务本体构建
-- 使用 OntologyBuilder 将技术表结构转换为业务语义
-- 识别隐含关系（如：订单→客户→地区）
+- **优先使用 OntologyLoad** 加载已缓存的ontology（如果有）
+- 使用 OntologyBuilder 将技术表结构转换为业务语义（仅当无缓存时）
+- 识别隐含关系（如:订单→客户→地区）
 - 构建业务实体映射
 
 ### 3. SQL 查询和数据分析
@@ -151,15 +164,17 @@ class AsyncConversationService:
 
 ## 标准工作流程
 
-1. **连接数据库** → DatabaseConnect
-2. **提取 Schema** → DatabaseSchemaExtractor（含字段注释）
-3. **构建本体** → OntologyBuilder（业务语义映射）
-4. **数据探索** → ExecSQL（查询样本数据）
-5. **指标计算** → 计算 KPI，识别趋势
-6. **洞察呈现** → 用业务语言解释发现
+1. **检查缓存** → 使用 SchemaLoad/OntologyLoad 尝试加载已有资源
+2. **连接数据库** → DatabaseConnect（如需要）
+3. **提取 Schema** → DatabaseSchemaExtractor（仅当缓存不存在）
+4. **构建本体** → OntologyBuilder（仅当缓存不存在）
+5. **数据探索** → ExecSQL（查询样本数据）
+6. **指标计算** → 计算 KPI，识别趋势
+7. **洞察呈现** → 用业务语言解释发现
 
 ## 重要原则
 
+- **缓存优先**：永远先尝试加载缓存,避免重复工作
 - **业务优先**：所有分析服务于业务决策
 - **数据驱动**：结论必须基于实际数据
 - **质量意识**：明确说明数据质量和置信度
@@ -185,6 +200,47 @@ class AsyncConversationService:
                 db_session.close()
         except Exception as e:
             logger.warning(f"Failed to load database connections: {e}")
+
+    def _get_cached_resources_context(self) -> str:
+        """
+        Generate context about available cached schema and ontology files.
+
+        Returns:
+            Formatted string with cache information
+        """
+        from pathlib import Path
+
+        config = self.config_manager
+        schema_path = config.get("storage.schema_path", "./schema_store")
+        ontology_path = config.get("storage.ontology_path", "./ontology_store")
+
+        context_parts = []
+
+        # Check schema cache
+        schema_dir = Path(schema_path)
+        if schema_dir.exists():
+            cached_schemas = list(schema_dir.glob("*/schema_latest.json"))
+            if cached_schemas:
+                context_parts.append("## 已缓存的数据库Schema")
+                context_parts.append(f"缓存路径: {schema_path}")
+                for schema_file in cached_schemas:
+                    conn_name = schema_file.parent.name
+                    context_parts.append(f"  - {conn_name}: 使用 SchemaLoad 加载")
+
+        # Check ontology cache
+        ontology_dir = Path(ontology_path)
+        if ontology_dir.exists():
+            cached_ontologies = list(ontology_dir.glob("*/ontology_latest.json"))
+            if cached_ontologies:
+                context_parts.append("\n## 已缓存的业务本体(Ontology)")
+                context_parts.append(f"缓存路径: {ontology_path}")
+                for ontology_file in cached_ontologies:
+                    conn_name = ontology_file.parent.name
+                    context_parts.append(f"  - {conn_name}: 使用 OntologyLoad 加载")
+
+        if context_parts:
+            return "\n".join(context_parts)
+        return ""
 
     def _get_database_context(self) -> str:
         """

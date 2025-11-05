@@ -59,6 +59,13 @@ class OntologySearchInput(BaseModel):
     top_k: int = Field(default=5, description="Number of results to return")
 
 
+class OntologyLoadInput(BaseModel):
+    """Input schema for OntologyLoadTool."""
+
+    connection_name: str = Field(description="Connection name to load ontology for")
+    version: str = Field(default="latest", description="Version to load (latest or specific version)")
+
+
 # ==================== Ontology Tools ====================
 
 
@@ -868,3 +875,84 @@ class OntologySearchTool(KodeTool):
                 score += overlap * 2.0
 
         return score
+
+
+class OntologyLoadTool(KodeTool):
+    """
+    Load previously built ontology from storage.
+
+    Use this tool to retrieve cached ontology instead of rebuilding.
+    """
+
+    name: str = "OntologyLoad"
+    description: str = """Load previously built business ontology from storage.
+    This is much faster than rebuilding ontology. Use this when you need ontology
+    information and suspect it may have been built before."""
+
+    args_schema: Type[BaseModel] = OntologyLoadInput
+    requires_permission: bool = False
+
+    def _run(self, connection_name: str, version: str = "latest") -> str:
+        """
+        Load ontology from storage.
+
+        Args:
+            connection_name: Connection name
+            version: Version to load (latest or specific)
+
+        Returns:
+            Ontology data as JSON
+        """
+        try:
+            config = ConfigManager()
+            storage_path = config.get("storage.ontology_path", "./ontology_store")
+            conn_dir = Path(storage_path) / connection_name
+
+            if not conn_dir.exists():
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"No ontology found for connection '{connection_name}'",
+                        "suggestion": "Use OntologyBuilder to build ontology first",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            # Load specific version or latest
+            if version == "latest":
+                ontology_file = conn_dir / "ontology_latest.json"
+            else:
+                ontology_file = conn_dir / f"ontology_{version}.json"
+
+            if not ontology_file.exists():
+                # List available versions
+                available = list(conn_dir.glob("ontology_v*.json"))
+                available_versions = [f.stem.replace("ontology_", "") for f in available]
+
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Ontology version '{version}' not found",
+                        "available_versions": available_versions,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            with open(ontology_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            data["loaded_from_cache"] = True
+            data["loaded_at"] = datetime.now().isoformat()
+
+            return json.dumps(data, indent=2, ensure_ascii=False)
+
+        except Exception as e:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Failed to load ontology: {str(e)}",
+                },
+                indent=2,
+            )
