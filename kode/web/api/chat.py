@@ -150,4 +150,6 @@ async def list_project_conversations(
         .where(Conversation.project_id == project_id)
         .order_by(Conversation.updated_at.desc())
     )
-    conversations =
+    conversations = result.scalars().all()
+
+    return conversations
