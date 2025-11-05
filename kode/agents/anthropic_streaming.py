@@ -14,6 +14,8 @@ from anthropic.types import (
     ContentBlock,
     TextBlock,
     ToolUseBlock,
+    ThinkingBlock,
+    ThinkingDelta,
 )
 
 from kode.utils.logger import setup_logger
@@ -233,24 +235,64 @@ class AnthropicStreamingAgent:
             content_blocks = []
 
             try:
+                # Enable Extended Thinking if supported by the model
+                # Note: temperature must be 1.0 when thinking is enabled
+                # Note: max_tokens must be greater than thinking.budget_tokens
+                thinking_budget = 5000  # Budget for thinking tokens
+                output_tokens = max(self.max_tokens, thinking_budget + 4096)  # Ensure enough for output
+
                 async with self.client.messages.stream(
                     model=self.model,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
+                    max_tokens=output_tokens,
+                    temperature=1.0,  # Required for Extended Thinking
                     system=self.system_prompt,
                     messages=messages,
                     tools=self.anthropic_tools if self.anthropic_tools else anthropic.NOT_GIVEN,
+                    thinking={
+                        "type": "enabled",
+                        "budget_tokens": thinking_budget
+                    }
                 ) as stream:
-                    # Stream text chunks
-                    async for text in stream.text_stream:
-                        if text:
-                            full_text += text
-                            # Yield chunk immediately
-                            yield {
-                                "type": "chunk",
-                                "content": text,
-                                "metadata": {"iteration": iteration}
-                            }
+                    thinking_content = ""
+                    is_thinking = False
+
+                    # Process streaming events
+                    async for event in stream:
+                        # Handle thinking blocks (Extended Thinking feature)
+                        if hasattr(event, 'type'):
+                            if event.type == 'content_block_start':
+                                block = getattr(event, 'content_block', None)
+                                if block and isinstance(block, ThinkingBlock):
+                                    is_thinking = True
+                                    thinking_content = ""
+                                    logger.info("[Thinking] Extended thinking started")
+                            elif event.type == 'content_block_delta':
+                                delta = getattr(event, 'delta', None)
+                                if delta and isinstance(delta, ThinkingDelta):
+                                    # Accumulate thinking content
+                                    thinking_text = getattr(delta, 'thinking', '')
+                                    thinking_content += thinking_text
+                                    # Yield thinking chunks
+                                    yield {
+                                        "type": "thinking",
+                                        "content": thinking_text,
+                                        "metadata": {"iteration": iteration, "is_delta": True}
+                                    }
+                                elif delta and hasattr(delta, 'type') and delta.type == 'text_delta':
+                                    # Regular text content
+                                    text = getattr(delta, 'text', '')
+                                    if text:
+                                        full_text += text
+                                        yield {
+                                            "type": "chunk",
+                                            "content": text,
+                                            "metadata": {"iteration": iteration}
+                                        }
+                            elif event.type == 'content_block_stop':
+                                if is_thinking:
+                                    # Thinking block completed
+                                    is_thinking = False
+                                    logger.info(f"[Thinking] Completed: {len(thinking_content)} chars")
 
                     # Get final message
                     final_message = await stream.get_final_message()

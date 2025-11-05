@@ -8,7 +8,7 @@ from .glob_tool import GlobTool
 from .memory_tools import MemoryReadTool, MemoryWriteTool
 from .web_tools import URLFetcherTool, WebSearchTool
 from .notebook_tools import NotebookReadTool, NotebookEditTool
-from .advanced_tools import MultiEditTool, ThinkTool, TodoWriteTool, TaskTool
+from .advanced_tools import MultiEditTool, TodoWriteTool, TaskTool
 from .database_tools import (
     DatabaseConnectTool,
     DatabaseTestConnectionTool,
@@ -44,7 +44,6 @@ __all__ = [
     "NotebookReadTool",
     "NotebookEditTool",
     # Advanced
-    "ThinkTool",
     "TodoWriteTool",
     "TaskTool",
     # Database

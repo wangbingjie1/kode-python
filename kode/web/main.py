@@ -107,12 +107,13 @@ async def get_config():
 
 
 # Import routers
-from kode.web.api import chat, project, sse, database
+from kode.web.api import chat, project, sse, database, auth
 from kode.database.session import init_db, async_session_maker
 from kode.models import User, Project
 from sqlalchemy import select
 
 # Register routers
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(project.router, prefix="/api", tags=["projects"])
 app.include_router(sse.router, prefix="/api/sse", tags=["sse"])

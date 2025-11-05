@@ -92,33 +92,6 @@ class MultiEditTool(KodeTool):
             return f"Error: {str(e)}"
 
 
-class ThinkInput(BaseModel):
-    """Input for ThinkTool."""
-
-    thought: str = Field(description="Your reasoning or thought process")
-
-
-class ThinkTool(KodeTool):
-    """
-    Record reasoning and thought process.
-
-    Equivalent to TypeScript's ThinkTool
-    """
-
-    name: str = "Think"
-    description: str = """Record your reasoning and thought process.
-- Use this to show your thinking before taking action
-- Helps explain complex decisions
-- Makes your reasoning transparent
-- Not executed, just recorded for context"""
-    args_schema: Type[BaseModel] = ThinkInput
-    requires_permission: bool = False
-
-    def _run(self, thought: str) -> str:
-        """Record thought."""
-        return f"💭 Thinking: {thought}"
-
-
 class TodoItem(BaseModel):
     """A single todo item."""
     content: str = Field(description="Task description (imperative form)")

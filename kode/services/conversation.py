@@ -27,7 +27,6 @@ from kode.tools import (
     NotebookReadTool,
     NotebookEditTool,
     MultiEditTool,
-    ThinkTool,
     TodoWriteTool,
     TaskTool,
 )
@@ -101,7 +100,6 @@ class AsyncConversationService:
             NotebookReadTool(),
             NotebookEditTool(),
             # Advanced
-            ThinkTool(),
             TodoWriteTool(),
             TaskTool(),
         ]
@@ -354,34 +352,20 @@ class AsyncConversationService:
             chat_history = []
 
         try:
-            # Yield initial thinking status
-            yield {
-                "type": "thinking",
-                "content": "Loading agent and preparing to execute task...",
-                "metadata": {"agent": agent_name},
-            }
+            # Log system info (不发送到前端，避免与真正的思考内容混淆)
+            logger.info(f"Loading agent and preparing to execute task for {agent_name}")
 
             # Get current model
             model_pointer = self.config.get("modelPointers", {}).get("main", "main")
             model_name = self.config.get("models", {}).get(model_pointer, "claude-sonnet-4-5")
-
-            yield {
-                "type": "thinking",
-                "content": f"Using model: {model_name}",
-                "metadata": {"model": model_name},
-            }
+            logger.info(f"Using model: {model_name}")
 
             # Get current model
             model = self.model_manager.get_model()
 
             # 使用内置的 agent 配置（忽略 agent_name 参数）
             agent_config = self.agent_config
-
-            yield {
-                "type": "thinking",
-                "content": f"Agent loaded: {agent_config.name}",
-                "metadata": {"agent_config": agent_config.name},
-            }
+            logger.info(f"Agent loaded: {agent_config.name}")
 
             # Setup progress tracking
             progress_queue = asyncio.Queue()
@@ -418,12 +402,8 @@ class AsyncConversationService:
 
             async def on_iteration(iteration: int):
                 """Callback at the start of each iteration."""
+                # 只记录日志，不发送到前端（Extended Thinking 已提供真正的思考内容）
                 logger.info(f"[PROGRESS] Iteration {iteration} starting")
-                await progress_queue.put({
-                    "type": "thinking",
-                    "content": f"思考中... (第 {iteration} 轮)",
-                    "metadata": {"iteration": iteration, "status": "thinking"}
-                })
 
             # Add database context if specified
             enhanced_task = task
@@ -431,18 +411,10 @@ class AsyncConversationService:
                 db_context = self._get_database_context_for_name(database_name)
                 if db_context:
                     enhanced_task = f"{db_context}\n\n用户问题: {task}"
-                    yield {
-                        "type": "thinking",
-                        "content": f"Using database context: {database_name}",
-                        "metadata": {"database": database_name},
-                    }
+                    logger.info(f"Using database context: {database_name}")
 
             # Execute task with streaming using native Anthropic API
-            yield {
-                "type": "thinking",
-                "content": "开始执行任务...",
-                "metadata": {"status": "executing"},
-            }
+            logger.info("开始执行任务...")
 
             # Create Anthropic streaming agent
             logger.info(f"[DEBUG] Creating AnthropicStreamingAgent with model={model_name}")

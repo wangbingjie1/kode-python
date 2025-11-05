@@ -124,7 +124,7 @@
               <MessageItem
                 v-for="item in timelineMessages"
                 :key="item.message.id"
-                class="w-full py-4"
+                class="w-full"
                 :message="item.message"
                 :group-behavior="item.groupBehavior"
               />
@@ -430,10 +430,12 @@ function resolveGroupBehavior(
   currentRole: string,
   nextRole: string | null,
 ): TimelineMessage['groupBehavior'] {
-  if (currentRole !== 'assistant' && currentRole !== 'user') {
+  // 系统消息独立显示
+  if (currentRole === 'system') {
     return 'standalone'
   }
 
+  // 工具调用和 assistant/user 消息都参与紧凑分组
   const isSameAsPrevious = previousRole === currentRole
   const isSameAsNext = nextRole === currentRole
 
@@ -567,6 +569,8 @@ function handleSidebarSectionSelect(section: SidebarSection) {
 
   if (section === 'chats') {
     void loadConversations()
+  } else if (section === 'database') {
+    void router.push('/database')
   }
 }
 

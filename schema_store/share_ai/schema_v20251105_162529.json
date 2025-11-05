@@ -1,6 +1,6 @@
 {
-  "version": "v20251105_114927",
-  "created_at": "2025-11-05T11:49:27.454215",
+  "version": "v20251105_162529",
+  "created_at": "2025-11-05T16:25:29.549947",
   "connection_name": "share_ai",
   "schema": {
     "status": "success",
@@ -20,132 +20,151 @@
     "tables": {
       "bill": {
         "name": "bill",
+        "comment": "费用表",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户 id"
           },
           {
             "name": "robot_id",
             "type": "INTEGER",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "使用的智能体id"
           },
           {
             "name": "model",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "使用的模型，由智能体背后的模型决定"
           },
           {
             "name": "task_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "task id"
           },
           {
             "name": "message_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "message_id"
           },
           {
             "name": "input_token",
             "type": "INTEGER",
             "nullable": false,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "提示词token"
           },
           {
             "name": "output_token",
             "type": "INTEGER",
             "nullable": false,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "输出token"
           },
           {
             "name": "cost",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "产生的费用"
           },
           {
             "name": "original_cost",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "原价"
           },
           {
             "name": "is_actually_consumed",
             "type": "TINYINT",
             "nullable": false,
             "default": "'1'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "是否实际消耗:1是，0否"
           },
           {
             "name": "account_type",
             "type": "ENUM",
             "nullable": false,
             "default": "'top_up'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "对应的账户"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "device_type",
             "type": "VARCHAR(10) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "设备类型：pc|mobile"
           },
           {
             "name": "agent_id",
             "type": "BIGINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "新系统场景ID；platform_agent_id"
           },
           {
             "name": "discount_cost",
             "type": "DECIMAL(12, 4)",
             "nullable": true,
             "default": "'0.0000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "折扣金额"
           },
           {
             "name": "flag",
             "type": "INTEGER",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "1为正常消耗，2位订阅消耗完毕，但没有充值的情形，3为订阅消耗完毕，但有充值余额的情形，4为订阅消耗完毕，但有额外每日N次免费次数"
           }
         ],
         "column_count": 18,
@@ -209,83 +228,95 @@
       },
       "commission": {
         "name": "commission",
+        "comment": "佣金表",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户id"
           },
           {
             "name": "reward_reason",
             "type": "VARCHAR(32) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "奖励的原因"
           },
           {
             "name": "source_user_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "消费来源的用户id"
           },
           {
             "name": "order_id",
             "type": "BIGINT",
             "nullable": false,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "佣金对应的订单id"
           },
           {
             "name": "order_price",
             "type": "DECIMAL(12, 2)",
             "nullable": false,
             "default": "'0.00'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "消费额"
           },
           {
             "name": "commission",
             "type": "DECIMAL(12, 2)",
             "nullable": false,
             "default": "'0.00'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "佣金"
           },
           {
             "name": "receive_address",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": "''",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "接收佣金的地址"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "free_times",
             "type": "INTEGER",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "获得的免费使用次数"
           }
         ],
         "column_count": 11,
@@ -327,14 +358,16 @@
             "type": "TIMESTAMP",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           }
         ],
         "column_count": 2,
@@ -363,14 +396,16 @@
             "type": "DATE",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "uuid",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           }
         ],
         "column_count": 2,
@@ -399,14 +434,16 @@
             "type": "TIMESTAMP",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "uuid",
             "type": "VARCHAR(36) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           }
         ],
         "column_count": 2,
@@ -435,147 +472,168 @@
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "uuid",
             "type": "VARCHAR(36) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "匿名用户uuid"
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户id"
           },
           {
             "name": "page_name",
             "type": "VARCHAR(320) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "页面元素名称"
           },
           {
             "name": "event_name",
             "type": "VARCHAR(320) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "页面元素名称"
           },
           {
             "name": "event_type",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "事件类型:page_view-页面浏览, click-点击, submit-提交, scroll-滚动等"
           },
           {
             "name": "event_category",
             "type": "VARCHAR(100) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "事件分类:用户行为、业务操作、系统事件等"
           },
           {
             "name": "event_properties",
             "type": "JSON",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "事件属性:存储事件相关的自定义数据"
           },
           {
             "name": "session_id",
             "type": "VARCHAR(100) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "会话ID:用于追踪用户会话"
           },
           {
             "name": "user_agent",
             "type": "TEXT COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户代理信息"
           },
           {
             "name": "ip_address",
             "type": "VARCHAR(45) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "IP地址:支持IPv4和IPv6"
           },
           {
             "name": "referrer",
             "type": "VARCHAR(500) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "来源页面URL"
           },
           {
             "name": "device_type",
             "type": "VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "设备类型:desktop-桌面, mobile-手机, tablet-平板"
           },
           {
             "name": "os",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "操作系统"
           },
           {
             "name": "browser",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "浏览器"
           },
           {
             "name": "screen_resolution",
             "type": "VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "屏幕分辨率"
           },
           {
             "name": "duration",
             "type": "INTEGER",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "事件持续时间(毫秒)"
           },
           {
             "name": "dom_name",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "页面元素名称"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "channel",
             "type": "VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户渠道"
           }
         ],
         "column_count": 21,
@@ -667,56 +725,64 @@
             "type": "INTEGER",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "test_name",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_0900_ai_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "实验名称"
           },
           {
             "name": "group_num",
             "type": "INTEGER",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "分组数"
           },
           {
             "name": "test_desc",
             "type": "TEXT COLLATE \"utf8mb4_0900_ai_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "实验描述"
           },
           {
             "name": "start_time",
             "type": "DATETIME",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "开始时间"
           },
           {
             "name": "end_time",
             "type": "DATETIME",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "结束时间"
           },
           {
             "name": "status",
             "type": "BIT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "状态"
           },
           {
             "name": "Range",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_0900_ai_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "生效范围"
           }
         ],
         "column_count": 8,
@@ -729,69 +795,79 @@
       },
       "license_coupon": {
         "name": "license_coupon",
+        "comment": "许可证优惠券",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "coupon",
             "type": "VARCHAR(128) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "优惠券码"
           },
           {
             "name": "status",
             "type": "TINYINT",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "0未使用 1 已使用 "
           },
           {
             "name": "sku_id",
             "type": "INTEGER",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "对应的skuid"
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "使用用户 id"
           },
           {
             "name": "order_id",
             "type": "BIGINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "使用的订单id"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "coupon_channel",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "核销码渠道"
           }
         ],
         "column_count": 9,
@@ -813,62 +889,71 @@
       },
       "message": {
         "name": "message",
+        "comment": "case历史对话信息",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "task_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "task id"
           },
           {
             "name": "role",
             "type": "ENUM",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "消息对应的角色"
           },
           {
             "name": "message",
             "type": "LONGTEXT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "消息内容"
           },
           {
             "name": "type",
             "type": "TINYINT",
             "nullable": false,
             "default": "'1'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "消息类型：1、为纯文本内容；2为文件"
           },
           {
             "name": "file",
             "type": "VARCHAR(256) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户上传的文件"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           }
         ],
         "column_count": 8,
@@ -896,21 +981,24 @@
             "type": "INTEGER",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "migration",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "batch",
             "type": "INTEGER",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           }
         ],
         "column_count": 3,
@@ -923,216 +1011,247 @@
       },
       "order": {
         "name": "order",
+        "comment": "订单表",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户 id"
           },
           {
             "name": "ga_client_id",
             "type": "VARCHAR(32) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": "''",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户ga id"
           },
           {
             "name": "fb_client_id",
             "type": "VARCHAR(32) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": "''",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户fb id"
           },
           {
             "name": "is_report",
             "type": "TINYINT",
             "nullable": false,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "是否上报：0、未上报，1、已上报"
           },
           {
             "name": "order_source",
             "type": "VARCHAR(16) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": "'unknown'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "订单来源渠道"
           },
           {
             "name": "order_type",
             "type": "TINYINT",
             "nullable": false,
             "default": "'1'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "订单类型：1、充值订单；2、订阅订单"
           },
           {
             "name": "order_uid",
             "type": "CHAR(36) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "订单唯一id"
           },
           {
             "name": "sku_id",
             "type": "INTEGER",
             "nullable": false,
             "default": "'1'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "sku_id"
           },
           {
             "name": "amount",
             "type": "INTEGER",
             "nullable": false,
             "default": "'1'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "message_id"
           },
           {
             "name": "original_price",
             "type": "DECIMAL(12, 2)",
             "nullable": false,
             "default": "'0.00'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "应付金额"
           },
           {
             "name": "discount",
             "type": "DECIMAL(12, 2)",
             "nullable": false,
             "default": "'0.00'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "折扣金额"
           },
           {
             "name": "discount_proof",
             "type": "VARCHAR(32) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "折扣凭据"
           },
           {
             "name": "service_fee",
             "type": "DECIMAL(12, 2)",
             "nullable": false,
             "default": "'0.00'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "服务费"
           },
           {
             "name": "payment_price",
             "type": "DECIMAL(12, 2)",
             "nullable": false,
             "default": "'0.00'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "实付金额"
           },
           {
             "name": "payment_channel",
             "type": "VARCHAR(32) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": "''",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "支付渠道"
           },
           {
             "name": "payment_type",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "支付方式"
           },
           {
             "name": "payment_account",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "支付账户"
           },
           {
             "name": "platform_order_id",
             "type": "VARCHAR(256) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": "''",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "支付平台订单id"
           },
           {
             "name": "payment_at",
             "type": "TIMESTAMP",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "支付时间"
           },
           {
             "name": "status",
             "type": "TINYINT",
             "nullable": false,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "订单状态：0、待支付;1、支付成功;2、支付失败;"
           },
           {
             "name": "fulfill_status",
             "type": "TINYINT",
             "nullable": false,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "履约状态：0、未履约;1、已履约;"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "trial_subscription",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": "'non_trial'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "non_trial 非试用订阅， 试用订阅 trial "
           },
           {
             "name": "trial_period_days",
             "type": "INTEGER",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "试用订阅天数"
           },
           {
             "name": "amount_discount",
             "type": "DECIMAL(12, 2)",
             "nullable": true,
             "default": "'0.00'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "总优惠金额(单位：分） stripe checkout.session.completed 中的 total_details.amount_discount 字段"
           },
           {
             "name": "order_channel",
             "type": "VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "订单渠道"
           },
           {
             "name": "fold_up_promotion",
             "type": "TINYINT",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "是否订阅挽留折上折订单"
           },
           {
             "name": "sub_order_channel",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           }
         ],
         "column_count": 30,
@@ -1188,70 +1307,80 @@
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "tokenable_type",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "tokenable_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "name",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "token",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "abilities",
             "type": "TEXT COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "last_used_at",
             "type": "TIMESTAMP",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "expires_at",
             "type": "TIMESTAMP",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           }
         ],
         "column_count": 10,
@@ -1281,223 +1410,255 @@
       },
       "platform_ai_agent": {
         "name": "platform_ai_agent",
+        "comment": "AI agent ",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "name",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "app name"
           },
           {
             "name": "sort",
             "type": "INTEGER",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "排序 asc"
           },
           {
             "name": "agent_source",
             "type": "VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": "'dify'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "agent来源：dify | dify-with-file"
           },
           {
             "name": "agent_type",
             "type": "VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": "'conversation'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "agent类型（用来区分app点击后不同的agent交互）: conversation|OCR|file|image|link|youtubelink"
           },
           {
             "name": "upload_type",
             "type": "VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "chat类模型上传文件类型\n- image_file：原both字段（可上传图片和文件）更名\n- file：仅支持上传文件字段为file，基本都是走dify来的，其他非dify场景上传统一标准\n- image：仅支持图片上传（可多张，如Midjourney）\n- one_image：仅支持上传一张图片（如i2v的模型生成、4o image、sora image\n- none：不支持上传任何类型"
           },
           {
             "name": "is_enable",
             "type": "TINYINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "是否启用：1，启用；0，未启用"
           },
           {
             "name": "agent_api_key",
             "type": "VARCHAR(128) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "openai key | dify API-Key"
           },
           {
             "name": "agent_api_base_url",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "desc",
             "type": "VARCHAR(512) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "描述"
           },
           {
             "name": "icon",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "图标文件地址"
           },
           {
             "name": "prompt_type",
             "type": "VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "提示词类型(引导文案|代入文本框提示词（不提交）｜代入文本框提示词（直接提交）) ：guide_prompt|input_prompt|submit_prompt"
           },
           {
             "name": "prompt",
             "type": "VARCHAR(1024) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "初始化的prompt提示词"
           },
           {
             "name": "i18n_config",
             "type": "TEXT COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }"
           },
           {
             "name": "model",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "模型名称"
           },
           {
             "name": "create_at",
             "type": "BIGINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "is_del",
             "type": "TINYINT",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "是否删除 0否 1是"
           },
           {
             "name": "create_name",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建人名"
           },
           {
             "name": "update_at",
             "type": "BIGINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "update_by",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新人id"
           },
           {
             "name": "update_name",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新人名"
           },
           {
             "name": "create_by",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建人id"
           },
           {
             "name": "product_no",
             "type": "VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "for_free",
             "type": "SMALLINT",
             "nullable": false,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "是否免费：0付费 1免费"
           },
           {
             "name": "bg_pic",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "背景图标地址"
           },
           {
             "name": "enhancement_agent_id",
             "type": "BIGINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "关联 增强型 AgentId"
           },
           {
             "name": "display_type",
             "type": "VARCHAR(50) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "显示类型：root｜relation"
           },
           {
             "name": "scheme_url",
             "type": "VARCHAR(128) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "跳转路由"
           },
           {
             "name": "lowest_version",
             "type": "VARCHAR(10) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "最低版本要求，默认空，不区分版本"
           },
           {
             "name": "tag_ids",
             "type": "VARCHAR(1024) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "标签列表，逗号分隔"
           },
           {
             "name": "scores",
             "type": "VARCHAR(512) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "模型6个纬度评分，逗号分隔：Context Length,Math & Reasoning\n,Multilingual Translation,Response Speed\n,Coding,Text Writing"
           }
         ],
         "column_count": 31,
@@ -1510,41 +1671,47 @@
       },
       "platform_email_domain_blacklist": {
         "name": "platform_email_domain_blacklist",
+        "comment": "邮箱域名黑名单表",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "domain",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_0900_ai_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "邮箱域名"
           },
           {
             "name": "reason",
             "type": "VARCHAR(500) COLLATE \"utf8mb4_0900_ai_ci\"",
             "nullable": true,
             "default": "'临时邮箱域名'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "拉黑原因"
           },
           {
             "name": "create_at",
             "type": "BIGINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "status",
             "type": "TINYINT",
             "nullable": true,
             "default": "'1'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "状态：1=启用，0=禁用"
           }
         ],
         "column_count": 5,
@@ -1573,174 +1740,199 @@
       },
       "robot": {
         "name": "robot",
+        "comment": "智能体",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "model",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "使用的模型"
           },
           {
             "name": "is_enable",
             "type": "TINYINT",
             "nullable": false,
             "default": "'1'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "是否启用：1，启用；0，未启用"
           },
           {
             "name": "name",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "case id"
           },
           {
             "name": "desc",
             "type": "VARCHAR(512) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "描述"
           },
           {
             "name": "icon",
             "type": "VARCHAR(128) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "图标文件地址"
           },
           {
             "name": "owner_id",
             "type": "BIGINT",
             "nullable": false,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "0表示平台所有"
           },
           {
             "name": "sort",
             "type": "INTEGER",
             "nullable": false,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "排序"
           },
           {
             "name": "is_del",
             "type": "INTEGER",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "catalog",
             "type": "TINYINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "分类信息（取字典表配置 robot-catalog）"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "available_plan_package",
             "type": "VARCHAR(128) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "可用套餐 basic,pro,unlimited"
           },
           {
             "name": "include_share_free_times",
             "type": "SMALLINT",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "参与共享免费使用次数（一共3次）"
           },
           {
             "name": "free_times",
             "type": "INTEGER",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "单模型免费使用次数"
           },
           {
             "name": "price",
             "type": "TEXT COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "价格 json"
           },
           {
             "name": "unlimited_plan_limited",
             "type": "SMALLINT",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "Unlimited套餐是否限量 1限量 0是不限量"
           },
           {
             "name": "lifetime_plan_unlimited",
             "type": "SMALLINT",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "lifetime 套餐是否不限量，不受余额为0限制 1不限量 0限量"
           },
           {
             "name": "type",
             "type": "VARCHAR(10) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "brand",
             "type": "TINYINT",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "分类信息（取字典表配置 robot-brand）"
           },
           {
             "name": "file_type",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "可上传文件类型（取字典表配置 robot-filetype）"
           },
           {
             "name": "tag_ids",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "标签列表，逗号分隔"
           },
           {
             "name": "i18n_config",
             "type": "TEXT COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }"
           },
           {
             "name": "scores",
             "type": "VARCHAR(512) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "'模型6个纬度评分，逗号分隔：Context Length,Math & Reasoning"
           }
         ],
         "column_count": 24,
@@ -1753,90 +1945,103 @@
       },
       "subscription": {
         "name": "subscription",
+        "comment": "订阅表",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户id"
           },
           {
             "name": "order_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "订阅产生的初始订单id"
           },
           {
             "name": "platform_subscription_id",
             "type": "VARCHAR(300) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "平台订阅id"
           },
           {
             "name": "plan_type",
             "type": "ENUM",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "订阅计划类型"
           },
           {
             "name": "status",
             "type": "ENUM",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "订阅状态"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "plan_package",
             "type": "VARCHAR(128) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": "'old'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "套餐：old,basic,pro,unlimited"
           },
           {
             "name": "cancel_reason_id",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "取消订阅原因ID"
           },
           {
             "name": "cancel_reason",
             "type": "VARCHAR(2048) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "取消订阅原因"
           },
           {
             "name": "rel_platform_subscription_id",
             "type": "VARCHAR(256) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "从旧stripe迁移过来的订阅关联的新账号订阅ID"
           }
         ],
         "column_count": 12,
@@ -1872,48 +2077,55 @@
       },
       "subscription_log": {
         "name": "subscription_log",
+        "comment": "订阅表",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "subscription_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "订阅id"
           },
           {
             "name": "order_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "当次订阅产生的订单id"
           },
           {
             "name": "status",
             "type": "ENUM",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "扣费结果"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           }
         ],
         "column_count": 6,
@@ -1942,104 +2154,119 @@
       },
       "subscription_plan": {
         "name": "subscription_plan",
+        "comment": "订阅计划表",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户id"
           },
           {
             "name": "subscription_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "所属订阅"
           },
           {
             "name": "start_date",
             "type": "DATE",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "开始日期"
           },
           {
             "name": "end_date",
             "type": "DATE",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "结束日期"
           },
           {
             "name": "beginning_balance",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "期初余额"
           },
           {
             "name": "ending_balance",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "期末余额"
           },
           {
             "name": "present_beginning_balance",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "赠送期初余额"
           },
           {
             "name": "present_ending_balance",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "赠送期末余额"
           },
           {
             "name": "block_amount",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "冻结金额"
           },
           {
             "name": "status",
             "type": "ENUM",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "plan_package",
             "type": "VARCHAR(128) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": "'old'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "套餐：old,basic,pro,unlimited"
           }
         ],
         "column_count": 14,
@@ -2082,76 +2309,87 @@
       },
       "task": {
         "name": "task",
+        "comment": "对话任务表",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "uuid",
             "type": "CHAR(36) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "task唯一标识"
           },
           {
             "name": "robot_id",
             "type": "INTEGER",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "使用的智能体id"
           },
           {
             "name": "model",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "使用的模型"
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户id"
           },
           {
             "name": "name",
             "type": "VARCHAR(32) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "任务名称"
           },
           {
             "name": "deleted_at",
             "type": "TIMESTAMP",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": null
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "device_type",
             "type": "VARCHAR(32) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "终端类型 pc|mobile"
           }
         ],
         "column_count": 10,
@@ -2187,69 +2425,79 @@
       },
       "top_up_record": {
         "name": "top_up_record",
+        "comment": "充值记录",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户 id"
           },
           {
             "name": "amount",
             "type": "DECIMAL(12, 2)",
             "nullable": false,
             "default": "'0.00'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "充值的金额"
           },
           {
             "name": "gift_amount",
             "type": "DECIMAL(12, 2)",
             "nullable": false,
             "default": "'0.00'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "随单赠送金额"
           },
           {
             "name": "opening_balance",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "充值前余额"
           },
           {
             "name": "ending_balance",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "充值后余额"
           },
           {
             "name": "order_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "订单id，为0为系统赠送"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           }
         ],
         "column_count": 9,
@@ -2278,167 +2526,191 @@
       },
       "user": {
         "name": "user",
+        "comment": "用户表",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "name",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户名称"
           },
           {
             "name": "email",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户email"
           },
           {
             "name": "password",
             "type": "VARCHAR(32) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户密码"
           },
           {
             "name": "balance",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "充值余额"
           },
           {
             "name": "block_amount",
             "type": "DECIMAL(12, 6)",
             "nullable": false,
             "default": "'0.000000'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "冻结金额"
           },
           {
             "name": "chain_account",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户链上地址"
           },
           {
             "name": "source",
             "type": "VARCHAR(16) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户来源"
           },
           {
             "name": "assign_chain_account",
             "type": "VARCHAR(64) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "分配给用户的地址"
           },
           {
             "name": "private_key",
             "type": "VARCHAR(5120) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户链上地址"
           },
           {
             "name": "inviter_account",
             "type": "VARCHAR(255) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "邀请人的平台的地址"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           },
           {
             "name": "telegram_id",
             "type": "VARCHAR(128) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "telegram user id"
           },
           {
             "name": "nal_protocol_wallet_address",
             "type": "VARCHAR(128) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "nal_protocol_wallet_address"
           },
           {
             "name": "channel",
             "type": "VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": "'direct'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户推广渠道"
           },
           {
             "name": "top_up_tag",
             "type": "SMALLINT",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户充值标签，如果充值过为1，否则为0"
           },
           {
             "name": "subscription_tag",
             "type": "SMALLINT",
             "nullable": true,
             "default": "'0'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户订阅标签，如果订阅过为1，否则为0"
           },
           {
             "name": "device_type",
             "type": "VARCHAR(10) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "设备类型：pc|mobile"
           },
           {
             "name": "status",
             "type": "INTEGER",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "1 启用 0 是禁用"
           },
           {
             "name": "paddle_customer_id",
             "type": "VARCHAR(32) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "paddle_customer_id"
           },
           {
             "name": "airwallex_customer_id",
             "type": "VARCHAR(32) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "airwallex_customer_id"
           },
           {
             "name": "jumppath",
             "type": "VARCHAR(1000) COLLATE \"utf8mb4_unicode_ci\"",
             "nullable": true,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "seo跳转路由"
           }
         ],
         "column_count": 23,
@@ -2503,41 +2775,47 @@
       },
       "user_option": {
         "name": "user_option",
+        "comment": "用户配置表",
         "columns": [
           {
             "name": "id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": true
+            "autoincrement": true,
+            "comment": null
           },
           {
             "name": "user_id",
             "type": "BIGINT",
             "nullable": false,
             "default": null,
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "用户名称"
           },
           {
             "name": "web_switch",
             "type": "TINYINT",
             "nullable": false,
             "default": "'1'",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "是否联网开关，0：关闭;1：打开"
           },
           {
             "name": "created_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "创建时间"
           },
           {
             "name": "updated_at",
             "type": "TIMESTAMP",
             "nullable": false,
             "default": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            "autoincrement": false
+            "autoincrement": false,
+            "comment": "更新时间"
           }
         ],
         "column_count": 5,

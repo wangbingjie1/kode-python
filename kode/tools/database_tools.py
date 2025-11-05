@@ -396,6 +396,15 @@ class DatabaseSchemaExtractorTool(KodeTool):
             for table_name in table_names:
                 table_data: Dict[str, Any] = {"name": table_name}
 
+                # Table comment
+                try:
+                    table_comment_info = inspector.get_table_comment(table_name)
+                    if table_comment_info and table_comment_info.get("text"):
+                        table_data["comment"] = table_comment_info["text"]
+                except NotImplementedError:
+                    # Some databases don't support table comments
+                    pass
+
                 # Columns
                 if include_columns:
                     columns = inspector.get_columns(table_name)
@@ -406,6 +415,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
                             "nullable": col.get("nullable", True),
                             "default": str(col.get("default")) if col.get("default") else None,
                             "autoincrement": col.get("autoincrement", False),
+                            "comment": col.get("comment"),  # 添加字段注释
                         }
                         for col in columns
                     ]

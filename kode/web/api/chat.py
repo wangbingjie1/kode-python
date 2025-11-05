@@ -11,12 +11,13 @@ from typing import List
 from datetime import datetime
 
 from kode.database.session import get_db
-from kode.models import Conversation, Message, Project
+from kode.models import Conversation, Message, Project, User
 from kode.schemas.chat import (
     ConversationCreate,
     ConversationResponse,
     MessageResponse,
 )
+from kode.web.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ router = APIRouter()
 @router.post("/conversations", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
 async def create_conversation(
     conversation: ConversationCreate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new conversation"""
@@ -148,6 +150,4 @@ async def list_project_conversations(
         .where(Conversation.project_id == project_id)
         .order_by(Conversation.updated_at.desc())
     )
-    conversations = result.scalars().all()
-
-    return conversations
+    conversations =

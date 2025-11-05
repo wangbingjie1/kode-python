@@ -58,23 +58,49 @@
       <div v-else-if="isTool" class="w-full">
         <ToolCallItem
           v-if="message.toolCall"
-          :tool-name="message.toolCall.toolName"
-          :tool-args="message.toolCall.toolArgs"
-          :tool-result="message.toolCall.toolResult"
+          :tool-name="message.toolCall.toolName || '未知工具'"
+          :tool-args="message.toolCall.toolArgs || {}"
+          :tool-result="message.toolCall.toolResult || ''"
           :tool-error="message.toolCall.toolError"
-          :status="message.toolCall.status"
+          :status="message.toolCall.status || 'unknown'"
         />
       </div>
 
-      <!-- Assistant thinking -->
+      <!-- Assistant thinking (Extended Thinking) -->
       <div v-else-if="isThinkingMessage" class="w-full">
-        <div class="flex items-center gap-2 text-sm text-gray-500">
-          <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v4m0 8v4m8-8h-4M8 12H4m12.364-7.364l-2.828 2.828M8.464 15.536l-2.828 2.828m0-12.728l2.828 2.828m8.485 8.485l2.828 2.828" />
-          </svg>
-          <span>思考中...</span>
-        </div>
-        <p class="mt-2 text-gray-700">{{ message.content }}</p>
+        <details class="thinking-block group/details" :open="message.isStreaming">
+          <summary class="cursor-pointer select-none">
+            <div class="flex items-center gap-2 text-sm font-medium text-indigo-600">
+              <svg
+                v-if="message.isStreaming"
+                class="h-4 w-4 animate-spin"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v4m0 8v4m8-8h-4M8 12H4m12.364-7.364l-2.828 2.828M8.464 15.536l-2.828 2.828m0-12.728l2.828 2.828m8.485 8.485l2.828 2.828" />
+              </svg>
+              <svg
+                v-else
+                class="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              <span>{{ message.isStreaming ? '思考中...' : '思考过程' }}</span>
+              <span class="text-xs text-gray-400">
+                ({{ message.content.length }} 字)
+              </span>
+            </div>
+          </summary>
+          <div class="thinking-content mt-3 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-gray-700">
+            <pre class="whitespace-pre-wrap font-sans">{{ message.content }}</pre>
+          </div>
+        </details>
       </div>
 
       <!-- Assistant / User message (no bubble, just text) -->
@@ -147,11 +173,13 @@ const messageClass = computed(() => {
 
 const spacingClass = computed(() => {
   switch (props.groupBehavior) {
+    case 'compact-start':
+      return 'mt-6'  // 新分组开始，稍大间距
     case 'compact-middle':
     case 'compact-end':
-      return 'mt-2'
+      return 'mt-1.5'  // 同角色连续消息，紧凑间距
     default:
-      return 'mt-8'
+      return 'mt-6'  // 独立消息，标准间距
   }
 })
 
@@ -356,5 +384,44 @@ async function copyMessage() {
   100% {
     transform: rotate(360deg);
   }
+}
+
+/* Thinking block styles */
+.thinking-block summary {
+  list-style: none;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.15s ease;
+}
+
+.thinking-block summary::-webkit-details-marker {
+  display: none;
+}
+
+.thinking-block summary:hover {
+  background-color: #f3f4f6;
+}
+
+.thinking-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.thinking-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.thinking-content::-webkit-scrollbar-track {
+  background: #e0e7ff;
+  border-radius: 3px;
+}
+
+.thinking-content::-webkit-scrollbar-thumb {
+  background: #a5b4fc;
+  border-radius: 3px;
+}
+
+.thinking-content::-webkit-scrollbar-thumb:hover {
+  background: #818cf8;
 }
 </style>

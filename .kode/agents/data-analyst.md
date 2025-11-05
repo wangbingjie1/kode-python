@@ -11,7 +11,6 @@ tools:
   - FileRead
   - FileWrite
   - Bash
-  - ThinkTool
 max_iterations: 20
 ---
 
@@ -150,7 +149,6 @@ max_iterations: 20
 1. **OntologySearchTool** - 直接搜索本体，快速理解业务语义
 2. **Bash + SQL** - 基于本体理解执行查询
 3. **FileWrite** - 保存分析结果、SQL 脚本
-4. **ThinkTool** - 复杂场景梳理分析思路
 
 ### 重要原则
 

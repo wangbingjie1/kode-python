@@ -144,10 +144,28 @@ export const useChatStore = defineStore('chat', () => {
     console.log('[ChatStore] Received chunk:', chunk.type, chunk)
 
     switch (chunk.type) {
-      case 'thinking':
-        // Just set typing indicator, don't create message
+      case 'thinking': {
+        // Create or update thinking message
         isTyping.value = true
+
+        // Check if we already have a thinking message
+        if (currentStreamingMessage.value && currentStreamingMessage.value.metadata?.isThinking) {
+          // Append to existing thinking message
+          currentStreamingMessage.value.content += chunk.content
+        } else {
+          // Create new thinking message
+          currentStreamingMessage.value = {
+            id: `thinking-${Date.now()}`,
+            role: 'assistant',
+            content: chunk.content,
+            timestamp: new Date(),
+            isStreaming: true,
+            metadata: { isThinking: true, iteration: chunk.metadata?.iteration }
+          }
+          messages.value.push(currentStreamingMessage.value)
+        }
         break
+      }
 
       case 'tool_call': {
         isTyping.value = true
@@ -161,15 +179,23 @@ export const useChatStore = defineStore('chat', () => {
         const toolName = chunk.metadata?.tool_name || 'Unknown tool'
         const toolStatus = chunk.metadata?.status || 'executing'
         const toolArgs = chunk.metadata?.args || {}
+
+        console.log('[ChatStore] Processing tool_call:', {
+          toolName,
+          toolStatus,
+          toolArgs,
+          fullMetadata: chunk.metadata
+        })
+
         const latestToolMessage = findLatestToolMessage(toolName)
         const shouldCreateNewMessage =
           !latestToolMessage || (toolStatus === 'started' && latestToolMessage.toolCall?.status === 'completed')
 
         if (shouldCreateNewMessage) {
           // Create new tool message
-          messages.value.push({
+          const newMessage = {
             id: `tool-${Date.now()}-${Math.random()}`,
-            role: 'tool',
+            role: 'tool' as const,
             content: '',
             timestamp: new Date(),
             metadata: chunk.metadata,
@@ -179,7 +205,9 @@ export const useChatStore = defineStore('chat', () => {
               toolArgs,
               status: toolStatus
             }
-          })
+          }
+          console.log('[ChatStore] Creating new tool message:', newMessage)
+          messages.value.push(newMessage)
         } else if (latestToolMessage?.toolCall) {
           // Update existing tool message
           const previousToolCall = latestToolMessage.toolCall
@@ -192,6 +220,7 @@ export const useChatStore = defineStore('chat', () => {
             toolError: previousToolCall.toolError,
             status: toolStatus
           }
+          console.log('[ChatStore] Updated existing tool message:', latestToolMessage)
         }
         break
       }
@@ -201,6 +230,15 @@ export const useChatStore = defineStore('chat', () => {
         const toolResult = chunk.metadata?.result ?? chunk.content
         const toolError = chunk.metadata?.error
         const toolStatus = chunk.metadata?.status || (toolError ? 'error' : 'completed')
+
+        console.log('[ChatStore] Processing tool_result:', {
+          toolName,
+          toolResult: typeof toolResult === 'string' ? toolResult.substring(0, 100) : toolResult,
+          toolError,
+          toolStatus,
+          fullMetadata: chunk.metadata
+        })
+
         const toolMessage = findLatestToolMessage(toolName)
 
         if (toolMessage?.toolCall) {
@@ -215,11 +253,12 @@ export const useChatStore = defineStore('chat', () => {
             toolError,
             status: toolStatus
           }
+          console.log('[ChatStore] Updated tool message with result:', toolMessage.toolCall)
         } else {
           // Create new tool result message
-          messages.value.push({
+          const newMessage = {
             id: `tool-result-${Date.now()}-${Math.random()}`,
-            role: 'tool',
+            role: 'tool' as const,
             content: '',
             timestamp: new Date(),
             metadata: chunk.metadata,
@@ -231,7 +270,9 @@ export const useChatStore = defineStore('chat', () => {
               toolError,
               status: toolStatus
             }
-          })
+          }
+          console.log('[ChatStore] Creating new tool result message:', newMessage)
+          messages.value.push(newMessage)
         }
         break
       }
@@ -246,8 +287,13 @@ export const useChatStore = defineStore('chat', () => {
 
       case 'chunk':
         // Real LLM output
-        if (!currentStreamingMessage.value) {
-          // Create new assistant message
+        if (!currentStreamingMessage.value || currentStreamingMessage.value.metadata?.isThinking) {
+          // Finalize thinking message if exists
+          if (currentStreamingMessage.value?.metadata?.isThinking) {
+            currentStreamingMessage.value.isStreaming = false
+          }
+
+          // Create new assistant message for real content
           currentStreamingMessage.value = {
             id: `assistant-${Date.now()}`,
             role: 'assistant',
