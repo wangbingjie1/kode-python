@@ -42,6 +42,14 @@ class ConfigManager:
             "connections": [],
             "default_connection": None,
         },
+        "storage": {
+            "schema_path": "./schema_store",
+            "ontology_path": "./ontology_store",
+            "versioning": {
+                "enabled": True,
+                "format": "timestamp",  # timestamp or semantic
+            },
+        },
         "ontology": {
             "storage_backend": "file",
             "storage_path": "./ontology_store",

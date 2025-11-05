@@ -1,6 +1,5 @@
-"""Agent system for dynamic task delegation."""
+"""Agent system for single data analyst agent."""
 
 from .base import AgentConfig, KodeAgent
-from .loader import AgentLoader
 
-__all__ = ["AgentConfig", "KodeAgent", "AgentLoader"]
+__all__ = ["AgentConfig", "KodeAgent"]

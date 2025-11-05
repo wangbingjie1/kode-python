@@ -1,6 +1,8 @@
 """Database connectivity and schema extraction tools."""
 
 import json
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
@@ -8,6 +10,7 @@ from sqlalchemy import inspect
 
 from kode.services.database_manager import DatabaseConnection, db_manager
 from kode.tools.base import KodeTool
+from kode.utils.config import ConfigManager
 
 
 # ==================== Tool Input Schemas ====================
@@ -59,6 +62,8 @@ class DatabaseSchemaExtractorInput(BaseModel):
     include_indexes: bool = Field(default=True, description="Include index information")
     include_relationships: bool = Field(default=True, description="Include foreign key relationships")
     include_statistics: bool = Field(default=False, description="Include table statistics")
+    auto_save: bool = Field(default=True, description="Automatically save schema to file")
+    version: str = Field(default="auto", description="Version identifier (auto = timestamp)")
 
 
 # ==================== Database Tools ====================
@@ -316,6 +321,8 @@ class DatabaseSchemaExtractorTool(KodeTool):
         include_indexes: bool = True,
         include_relationships: bool = True,
         include_statistics: bool = False,
+        auto_save: bool = True,
+        version: str = "auto",
     ) -> str:
         """
         Extract database schema.
@@ -435,7 +442,12 @@ class DatabaseSchemaExtractorTool(KodeTool):
             if include_statistics:
                 schema_data["statistics"] = self._get_statistics(connection_name, table_names)
 
-            return json.dumps(schema_data, indent=2)
+            # Auto-save schema to file
+            if auto_save:
+                save_result = self._save_schema(schema_data, connection_name, version)
+                schema_data["storage"] = save_result
+
+            return json.dumps(schema_data, indent=2, ensure_ascii=False)
 
         except Exception as e:
             return json.dumps(
@@ -463,3 +475,62 @@ class DatabaseSchemaExtractorTool(KodeTool):
             pass
 
         return stats
+
+    def _save_schema(
+        self, schema_data: Dict[str, Any], connection_name: str, version: str
+    ) -> Dict[str, Any]:
+        """
+        Save schema to file with version control.
+
+        Args:
+            schema_data: Schema metadata to save
+            connection_name: Database connection name
+            version: Version identifier
+
+        Returns:
+            Storage metadata
+        """
+        try:
+            # Get storage path from config
+            config = ConfigManager()
+            storage_path = config.get("storage.schema_path", "./schema_store")
+
+            # Create storage directory
+            base_dir = Path(storage_path)
+            conn_dir = base_dir / connection_name
+            conn_dir.mkdir(parents=True, exist_ok=True)
+
+            # Generate version
+            if version == "auto":
+                version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+            # Prepare schema with metadata
+            schema_with_meta = {
+                "version": version,
+                "created_at": datetime.now().isoformat(),
+                "connection_name": connection_name,
+                "schema": schema_data,
+            }
+
+            # Save versioned file
+            version_file = conn_dir / f"schema_{version}.json"
+            with open(version_file, "w", encoding="utf-8") as f:
+                json.dump(schema_with_meta, f, indent=2, ensure_ascii=False)
+
+            # Update latest pointer
+            latest_file = conn_dir / "schema_latest.json"
+            with open(latest_file, "w", encoding="utf-8") as f:
+                json.dump(schema_with_meta, f, indent=2, ensure_ascii=False)
+
+            return {
+                "saved": True,
+                "version": version,
+                "version_file": str(version_file),
+                "latest_file": str(latest_file),
+            }
+
+        except Exception as e:
+            return {
+                "saved": False,
+                "error": str(e),
+            }

@@ -10,8 +10,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from kode.agents.base import KodeAgent
-from kode.agents.loader import AgentLoader
+from kode.agents.base import KodeAgent, AgentConfig
 from kode.agents.anthropic_streaming import AnthropicStreamingAgent
 from kode.core.model_manager import ModelManager
 from kode.tools import (
@@ -74,7 +73,9 @@ class AsyncConversationService:
         self.config_manager = ConfigManager()
         self.config = self.config_manager.get_all()
         self.model_manager = ModelManager(self.config)
-        self.agent_loader = AgentLoader(project_root=str(Path.cwd()))
+
+        # 单 agent 系统：直接创建内置的数据分析 agent 配置
+        self.agent_config = self._create_data_analyst_agent()
 
         # Setup tools (matching CLI's tool setup)
         self.tools = [
@@ -118,6 +119,56 @@ class AsyncConversationService:
 
             # Load existing database connections from persistence
             self._load_database_connections()
+
+    def _create_data_analyst_agent(self) -> AgentConfig:
+        """创建唯一的数据分析 agent 配置。"""
+        return AgentConfig(
+            name="data-analyst",
+            description="专业数据分析 Agent，专注于 ERP 数据库分析和业务洞察",
+            system_prompt="""你是一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
+
+## 核心能力
+
+### 1. 数据库连接和理解
+- 使用 DatabaseConnect 连接数据库（PostgreSQL, MySQL, Oracle, SQL Server, SQLite）
+- 使用 DatabaseSchemaExtractor 提取表结构和字段注释
+- 理解 ERP 业务模块：财务、供应链、生产、销售、人力资源
+
+### 2. 业务本体构建
+- 使用 OntologyBuilder 将技术表结构转换为业务语义
+- 识别隐含关系（如：订单→客户→地区）
+- 构建业务实体映射
+
+### 3. SQL 查询和数据分析
+- 使用 ExecSQL 执行 SQL 查询（复杂 JOIN、聚合、分组）
+- 计算关键业务指标（KPI）：销售额、库存周转率、客户留存率等
+- 识别数据质量问题
+
+### 4. 数据洞察和建议
+- 发现业务趋势和模式
+- 识别异常和风险点
+- 提供可操作的业务建议
+
+## 标准工作流程
+
+1. **连接数据库** → DatabaseConnect
+2. **提取 Schema** → DatabaseSchemaExtractor（含字段注释）
+3. **构建本体** → OntologyBuilder（业务语义映射）
+4. **数据探索** → ExecSQL（查询样本数据）
+5. **指标计算** → 计算 KPI，识别趋势
+6. **洞察呈现** → 用业务语言解释发现
+
+## 重要原则
+
+- **业务优先**：所有分析服务于业务决策
+- **数据驱动**：结论必须基于实际数据
+- **质量意识**：明确说明数据质量和置信度
+- **清晰表达**：用中文回复，用业务语言解释
+- **保护隐私**：不泄露敏感数据
+
+必须用中文回复和思考。""",
+            tools=["*"],  # 所有工具都可用
+        )
 
     def _load_database_connections(self):
         """Load database connections from persistence into memory."""
@@ -267,10 +318,8 @@ class AsyncConversationService:
             # Get current model
             model = self.model_manager.get_model()
 
-            # Load agent configuration
-            agent_config = self.agent_loader.load_agent(agent_name)
-            if not agent_config:
-                raise ValueError(f"Agent '{agent_name}' not found")
+            # 使用内置的 agent 配置（忽略 agent_name 参数）
+            agent_config = self.agent_config
 
             yield {
                 "type": "thinking",

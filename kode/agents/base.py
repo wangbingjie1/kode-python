@@ -28,7 +28,7 @@ class AgentConfig:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_markdown(cls, content: str) -> "AgentConfig":
+    def from_markdown(cls, content: str, config_vars: Optional[Dict[str, Any]] = None) -> "AgentConfig":
         """
         Parse agent configuration from markdown file.
 
@@ -41,9 +41,11 @@ class AgentConfig:
         ---
 
         System prompt content here...
+        Support variable injection: {schema_path}, {ontology_path}, etc.
 
         Args:
             content: Markdown file content
+            config_vars: Configuration variables for injection
 
         Returns:
             AgentConfig instance
@@ -59,6 +61,10 @@ class AgentConfig:
         else:
             raise ValueError("Invalid markdown format: missing frontmatter")
 
+        # Inject configuration variables into system prompt
+        if config_vars:
+            system_prompt = cls._inject_variables(system_prompt, config_vars)
+
         return cls(
             name=frontmatter.get("name", "unknown"),
             description=frontmatter.get("description", ""),
@@ -69,6 +75,31 @@ class AgentConfig:
             max_execution_time=frontmatter.get("max_execution_time"),
             metadata=frontmatter.get("metadata", {}),
         )
+
+    @staticmethod
+    def _inject_variables(prompt: str, config_vars: Dict[str, Any]) -> str:
+        """
+        Inject configuration variables into prompt template.
+
+        Supports placeholders like: {schema_path}, {ontology_path}, {connection_name}
+
+        Args:
+            prompt: Prompt template with placeholders
+            config_vars: Variable values to inject
+
+        Returns:
+            Prompt with variables injected
+        """
+        try:
+            return prompt.format(**config_vars)
+        except KeyError as e:
+            # If a placeholder is not provided, leave it as-is
+            import re
+            # Replace only available variables
+            for key, value in config_vars.items():
+                placeholder = "{" + key + "}"
+                prompt = prompt.replace(placeholder, str(value))
+            return prompt
 
 
 class KodeAgent:

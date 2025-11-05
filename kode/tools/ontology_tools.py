@@ -33,6 +33,8 @@ class OntologyBuilderInput(BaseModel):
     extract_hierarchies: bool = Field(
         default=True, description="Extract hierarchical relationships"
     )
+    auto_save: bool = Field(default=True, description="Automatically save ontology to file")
+    version: str = Field(default="auto", description="Version identifier (auto = timestamp)")
 
 
 class OntologyStorageInput(BaseModel):
@@ -83,6 +85,8 @@ class OntologyBuilderTool(KodeTool):
         add_business_terms: bool = True,
         infer_relationships: bool = True,
         extract_hierarchies: bool = True,
+        auto_save: bool = True,
+        version: str = "auto",
     ) -> str:
         """
         Build ontology from schema.
@@ -159,8 +163,14 @@ class OntologyBuilderTool(KodeTool):
                 "hierarchy_count": len(ontology["hierarchies"]),
             }
 
+            # Auto-save ontology to file
+            if auto_save:
+                connection_name = schema_metadata.get("connection", {}).get("name", "unknown")
+                save_result = self._save_ontology(ontology, connection_name, version)
+                ontology["storage"] = save_result
+
             return json.dumps(
-                {"status": "success", "ontology": ontology}, indent=2
+                {"status": "success", "ontology": ontology}, indent=2, ensure_ascii=False
             )
 
         except Exception as e:
@@ -531,6 +541,65 @@ class OntologyBuilderTool(KodeTool):
                 continue
 
         return None
+
+    def _save_ontology(
+        self, ontology: Dict[str, Any], connection_name: str, version: str
+    ) -> Dict[str, Any]:
+        """
+        Save ontology to file with version control.
+
+        Args:
+            ontology: Ontology data to save
+            connection_name: Database connection name
+            version: Version identifier
+
+        Returns:
+            Storage metadata
+        """
+        try:
+            # Get storage path from config
+            config = ConfigManager()
+            storage_path = config.get("storage.ontology_path", "./ontology_store")
+
+            # Create storage directory
+            base_dir = Path(storage_path)
+            conn_dir = base_dir / connection_name
+            conn_dir.mkdir(parents=True, exist_ok=True)
+
+            # Generate version
+            if version == "auto":
+                version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+            # Prepare ontology with metadata
+            ontology_with_meta = {
+                "version": version,
+                "created_at": datetime.now().isoformat(),
+                "connection_name": connection_name,
+                "ontology": ontology,
+            }
+
+            # Save versioned file
+            version_file = conn_dir / f"ontology_{version}.json"
+            with open(version_file, "w", encoding="utf-8") as f:
+                json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
+
+            # Update latest pointer
+            latest_file = conn_dir / "ontology_latest.json"
+            with open(latest_file, "w", encoding="utf-8") as f:
+                json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
+
+            return {
+                "saved": True,
+                "version": version,
+                "version_file": str(version_file),
+                "latest_file": str(latest_file),
+            }
+
+        except Exception as e:
+            return {
+                "saved": False,
+                "error": str(e),
+            }
 
 
 class OntologyStorageTool(KodeTool):
