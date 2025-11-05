@@ -1,14 +1,22 @@
 # CLAUDE.md
-必须中文回复和思考
+必须中文回复和思考，第一性原理解决根本问题，像一个老程序员一样写代码，比如Linux，只给最靠谱的建议和方案，不确定不推荐，不要说废话，尽量不要生成说明文件，生成脚本和代码，要自己先测试通过，再告诉用户，用户有选择困难症，你可以向他提问，但不要给他选项，我不要你的速度，我要你的质量
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-Kode is a Python port of an AI-native coding assistant powered by LangChain. It provides a modular framework for building AI agents with various tools for code interaction, similar to Claude Code itself. The project aims to build an AI-native ERP system with a zero-code configurable platform.
+Kode 是一个基于 AI 的原生 ERP 开发平台，采用 LangChain 构建。项目已简化为 **Web-Only** 架构，移除了 CLI/REPL 模式，专注于提供 Web API 服务和前端界面。
+
+**核心特性：**
+- 🚀 纯 Web 服务架构，简单易用
+- 🤖 基于 Anthropic Claude 的 AI Agent 系统
+- 🗄️ 多数据库支持（PostgreSQL, MySQL, SQLite 等）
+- 🧠 自动构建业务本体（Ontology）
+- 🔄 SSE 实时流式响应
+- 📝 完整的工具调用日志和参数显示
 
 ## Core Architecture
 
-### 6-Layer System Design (Extended with Web Layer)
+### 简化的 5 层架构（Web-Only）
 
 The codebase follows a modular architecture with clear separation of concerns:
 
@@ -43,15 +51,10 @@ The codebase follows a modular architecture with clear separation of concerns:
 
 5. **Services Layer** ([kode/services/](kode/services/))
    - `conversation.py`: Async conversation service with streaming support
-   - `database_manager.py`: **[NEW]** Database connection pool management and multi-database support
-   - Wraps REPL logic for web consumption
+   - `database_manager.py`: Database connection pool management and multi-database support
    - Provides business logic for web API
 
-6. **CLI Layer** ([kode/cli/](kode/cli/))
-   - `main.py`: Typer-based CLI with commands: run, agents, config, version
-   - `repl.py`: Interactive REPL session
-
-7. **Web Layer** ([kode/web/](kode/web/))
+6. **Web Layer** ([kode/web/](kode/web/)) **[主入口]**
    - `main.py`: FastAPI application entry point (port 8000)
    - `api/`: REST API endpoints
      - `chat.py`: Conversation and message endpoints
@@ -79,13 +82,12 @@ The codebase follows a modular architecture with clear separation of concerns:
 
 ### Configuration System
 
-Hierarchical configuration with 5-tier priority ([kode/utils/config.py](kode/utils/config.py)):
+Hierarchical configuration with 4-tier priority ([kode/utils/config.py](kode/utils/config.py)):
 
 1. Environment variables (highest priority)
-2. CLI parameters
-3. Project config (`./.kode.json`)
-4. User config (`~/.kode.json`)
-5. Default values (lowest priority)
+2. Project config (`./.kode.json`)
+3. User config (`~/.kode.json`)
+4. Default values (lowest priority)
 
 Configuration includes:
 - Model definitions and pointers
@@ -138,83 +140,45 @@ System prompt content here...
 ```bash
 # Install dependencies with Poetry
 poetry install
-
-# Or initialize project with setup script
-./setup.sh          # Unix/Linux/Mac
-.\setup.ps1         # Windows PowerShell
 ```
 
-### Running Kode
+### Running Kode (简化启动)
 
-**CLI Mode:**
+**方式一：使用简化启动脚本（推荐）**
 
 ```bash
-# Interactive REPL mode
-python -m kode.cli.main
-# Or with virtual environment:
-.venv/Scripts/python -m kode.cli.main  # Windows
-.venv/bin/python -m kode.cli.main      # Linux/Mac
+# 后端服务
+python run.py           # 直接运行，自动启动在 http://localhost:8001
 
-# Execute single task
-python -m kode.cli.main run "your task here"
-
-# With options
-python -m kode.cli.main --model claude-sonnet-4-5 --verbose
+# 或使用 PowerShell 脚本
+.\start-backend.ps1     # Windows（自动清理旧进程、检查端口）
+.\stop-backend.ps1      # 停止后端
 ```
 
-**Web Mode:**
+**方式二：手动启动**
 
 ```bash
-# Quick start with automated script (recommended)
-.\start-web.ps1          # Windows
-./start-web.sh           # Linux/Mac
-
-# Stop services
-.\stop-web.ps1           # Windows
-./stop-web.sh            # Linux/Mac
-
-# Or manually:
-# Backend (port 8000)
-.venv\Scripts\Activate.ps1  # Windows
-source .venv/bin/activate   # Linux/Mac
+# 后端 (port 8001)
 python -m kode.web.main
 
-# Frontend (port 3000, in separate terminal)
+# 前端 (port 3000, 在另一个终端)
 cd web-frontend
 npm run dev
 ```
 
-**Startup Scripts Features:**
-- Auto-detect `.venv` virtual environment (preferred) or Poetry
-- Check dependencies (Python, Node.js, packages)
-- Verify API key configuration
-- Check port availability (8000, 8001)
-- Launch backend and frontend services
-- Health check backend startup
-- Windows: Opens services in new PowerShell windows
-- Linux/Mac: Runs in background with logs in `logs/` directory
-
-See [WEB_STARTUP_README.md](WEB_STARTUP_README.md) for troubleshooting and detailed instructions.
+**后端启动脚本特性：**
+- ✓ 自动停止占用端口的旧进程
+- ✓ 清除 Python 缓存（__pycache__, *.pyc）
+- ✓ 验证虚拟环境和 API Key
+- ✓ 确保单例运行（端口占用检查）
+- ✓ Uvicorn 自动重载（修改代码自动重启）
 
 ### Configuration Management
 
-```bash
-# Show current configuration
-poetry run kode config --show
-
-# Create example configuration
-poetry run kode config --init
-```
-
-### Agent Management
-
-```bash
-# List all available agents
-poetry run kode agents --list
-
-# Show agent details
-poetry run kode agents --info code-reviewer
-```
+配置文件位置：
+- 项目配置：`./.kode.json`
+- 用户配置：`~/.kode.json`
+- 环境变量：`ANTHROPIC_API_KEY`
 
 ### Testing
 

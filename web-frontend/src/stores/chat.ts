@@ -11,13 +11,22 @@ import { sseService } from '@/services/sse'
 import * as api from '@/services/api'
 import { notification } from '@/composables/useNotification'
 
+export interface ToolCall {
+  toolName: string
+  toolArgs: Record<string, any>
+  toolResult?: string
+  toolError?: string
+  status: string
+}
+
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant' | 'system'
+  role: 'user' | 'assistant' | 'system' | 'tool'
   content: string
   timestamp: Date
   isStreaming?: boolean
   metadata?: Record<string, any>
+  toolCall?: ToolCall
 }
 
 export const useChatStore = defineStore('chat', () => {
@@ -92,7 +101,7 @@ export const useChatStore = defineStore('chat', () => {
 
   /**
    * Send message
-   */
+  */
   async function sendMessage(content: string, databaseName?: string) {
     if (!isConnected.value) {
       throw new Error('Not connected to conversation')
@@ -118,32 +127,112 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  function findLatestToolMessage(toolName: string): ChatMessage | undefined {
+    for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+      const message = messages.value[index]
+      if (message.role === 'tool' && message.toolCall?.toolName === toolName) {
+        return message
+      }
+    }
+    return undefined
+  }
+
   /**
-   * Handle streaming chunk from WebSocket
+   * Handle streaming chunk from SSE
    */
   function handleStreamingChunk(chunk: any) {
+    console.log('[ChatStore] Received chunk:', chunk.type, chunk)
+
     switch (chunk.type) {
       case 'thinking':
-        // Show thinking indicator
+        // Just set typing indicator, don't create message
         isTyping.value = true
-        if (!currentStreamingMessage.value) {
-          currentStreamingMessage.value = {
-            id: `assistant-${Date.now()}`,
-            role: 'assistant',
-            content: chunk.content,
-            timestamp: new Date(),
-            isStreaming: true,
-            metadata: chunk.metadata
-          }
-          messages.value.push(currentStreamingMessage.value)
-        } else {
-          currentStreamingMessage.value.content = chunk.content
-        }
         break
 
+      case 'tool_call': {
+        isTyping.value = true
+        const toolName = chunk.metadata?.tool_name || 'Unknown tool'
+        const toolStatus = chunk.metadata?.status || 'executing'
+        const toolArgs = chunk.metadata?.args || {}
+        const latestToolMessage = findLatestToolMessage(toolName)
+        const shouldCreateNewMessage =
+          !latestToolMessage || (toolStatus === 'started' && latestToolMessage.toolCall?.status === 'completed')
+
+        if (shouldCreateNewMessage) {
+          // Create new tool message
+          messages.value.push({
+            id: `tool-${Date.now()}-${Math.random()}`,
+            role: 'tool',
+            content: '',
+            timestamp: new Date(),
+            metadata: chunk.metadata,
+            isStreaming: false,
+            toolCall: {
+              toolName,
+              toolArgs,
+              status: toolStatus
+            }
+          })
+        } else if (latestToolMessage?.toolCall) {
+          // Update existing tool message
+          const previousToolCall = latestToolMessage.toolCall
+          latestToolMessage.metadata = { ...latestToolMessage.metadata, ...chunk.metadata }
+          latestToolMessage.timestamp = new Date()
+          latestToolMessage.toolCall = {
+            toolName,
+            toolArgs: Object.keys(toolArgs).length > 0 ? toolArgs : previousToolCall.toolArgs,
+            toolResult: previousToolCall.toolResult,
+            toolError: previousToolCall.toolError,
+            status: toolStatus
+          }
+        }
+        break
+      }
+
+      case 'tool_result': {
+        const toolName = chunk.metadata?.tool_name || 'Unknown tool'
+        const toolResult = chunk.metadata?.result ?? chunk.content
+        const toolError = chunk.metadata?.error
+        const toolStatus = chunk.metadata?.status || (toolError ? 'error' : 'completed')
+        const toolMessage = findLatestToolMessage(toolName)
+
+        if (toolMessage?.toolCall) {
+          // Update existing tool message with result
+          const previousToolArgs = toolMessage.toolCall.toolArgs
+          toolMessage.metadata = { ...toolMessage.metadata, ...chunk.metadata }
+          toolMessage.timestamp = new Date()
+          toolMessage.toolCall = {
+            toolName,
+            toolArgs: chunk.metadata?.tool_args || previousToolArgs,
+            toolResult,
+            toolError,
+            status: toolStatus
+          }
+        } else {
+          // Create new tool result message
+          messages.value.push({
+            id: `tool-result-${Date.now()}-${Math.random()}`,
+            role: 'tool',
+            content: '',
+            timestamp: new Date(),
+            metadata: chunk.metadata,
+            isStreaming: false,
+            toolCall: {
+              toolName,
+              toolArgs: chunk.metadata?.tool_args || {},
+              toolResult,
+              toolError,
+              status: toolStatus
+            }
+          })
+        }
+        break
+      }
+
       case 'chunk':
-        // Append to streaming message
+        // Real LLM output
         if (!currentStreamingMessage.value) {
+          // Create new assistant message
           currentStreamingMessage.value = {
             id: `assistant-${Date.now()}`,
             role: 'assistant',
@@ -154,15 +243,14 @@ export const useChatStore = defineStore('chat', () => {
           }
           messages.value.push(currentStreamingMessage.value)
         } else {
-          // Replace thinking message with actual content
-          currentStreamingMessage.value.content = chunk.content
+          // Append to existing message
+          currentStreamingMessage.value.content += chunk.content
         }
         break
 
       case 'complete':
         // Finalize message
         if (currentStreamingMessage.value) {
-          currentStreamingMessage.value.content = chunk.content
           currentStreamingMessage.value.isStreaming = false
           currentStreamingMessage.value.metadata = chunk.metadata
         }
@@ -186,11 +274,6 @@ export const useChatStore = defineStore('chat', () => {
         }
         currentStreamingMessage.value = null
         isTyping.value = false
-        break
-
-      case 'tool_call':
-        // Show tool call status (optional)
-        console.log('Tool call:', chunk.metadata)
         break
     }
   }

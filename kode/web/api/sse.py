@@ -46,6 +46,19 @@ async def event_generator(
             database_name=database_name,
         ):
             # Format as SSE event
+            chunk_type = chunk.get('type')
+            logger.info(f"[SSE] Sending chunk: type={chunk_type}")
+
+            # Log tool call details for debugging
+            if chunk_type in ('tool_call', 'tool_result'):
+                metadata = chunk.get('metadata', {})
+                logger.info(f"[SSE] Tool info: name={metadata.get('tool_name')}, status={metadata.get('status')}")
+                if 'args' in metadata:
+                    logger.info(f"[SSE] Tool args: {metadata['args']}")
+                if 'result' in metadata:
+                    result_preview = str(metadata['result'])[:200]
+                    logger.info(f"[SSE] Tool result preview: {result_preview}")
+
             event_data = json.dumps(chunk, ensure_ascii=False)
             yield f"data: {event_data}\n\n"
 

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from kode.agents.base import KodeAgent
 from kode.agents.loader import AgentLoader
+from kode.agents.anthropic_streaming import AnthropicStreamingAgent
 from kode.core.model_manager import ModelManager
 from kode.tools import (
     BashTool,
@@ -277,35 +278,47 @@ class AsyncConversationService:
                 "metadata": {"agent_config": agent_config.name},
             }
 
-            # Track tool calls for streaming
-            tool_calls = []
+            # Setup progress tracking
+            progress_queue = asyncio.Queue()
 
-            def on_tool_start(tool_name: str, tool_args: dict):
+            async def on_tool_start(tool_name: str, tool_args: dict):
                 """Callback when tool execution starts."""
-                tool_calls.append({
-                    "name": tool_name,
-                    "args": tool_args,
-                    "status": "started"
+                logger.warning(f"[CALLBACK] on_tool_start called: {tool_name}")  # Use warning to ensure visibility
+                logger.warning(f"[CALLBACK] Tool args: {tool_args}")
+                # Send progress update as tool_call event
+                await progress_queue.put({
+                    "type": "tool_call",
+                    "content": f"正在执行工具: {tool_name}",
+                    "metadata": {"tool_name": tool_name, "status": "started", "args": tool_args}
+                })
+                logger.warning(f"[CALLBACK] Queued tool_call event for {tool_name}")
+
+            async def on_tool_end(tool_name: str, tool_args: dict, result: str):
+                """Callback when tool execution ends."""
+                result_str = str(result)
+                result_preview = result_str[:200] if result_str else ""
+                logger.info(f"[PROGRESS] Tool end: {tool_name}")
+                logger.info(f"[PROGRESS] Tool result preview: {result_preview}")
+                # Send progress update with tool result
+                await progress_queue.put({
+                    "type": "tool_result",
+                    "content": f"工具执行完成: {tool_name}",
+                    "metadata": {
+                        "tool_name": tool_name,
+                        "status": "completed",
+                        "tool_args": tool_args,
+                        "result": result_str  # Send full result
+                    }
                 })
 
-            def on_tool_end(tool_name: str, tool_args: dict, result: str):
-                """Callback when tool execution ends."""
-                # Find and update the tool call
-                for tc in tool_calls:
-                    if tc["name"] == tool_name and tc.get("status") == "started":
-                        tc["status"] = "completed"
-                        tc["result"] = str(result)[:200]  # Truncate
-                        break
-
-            # Create agent instance with callbacks
-            agent = KodeAgent(
-                config=agent_config,
-                model=model,
-                tools=self.tools,
-                verbose=self.config.get("verbose", False),
-                on_tool_start=on_tool_start,
-                on_tool_end=on_tool_end,
-            )
+            async def on_iteration(iteration: int):
+                """Callback at the start of each iteration."""
+                logger.info(f"[PROGRESS] Iteration {iteration} starting")
+                await progress_queue.put({
+                    "type": "thinking",
+                    "content": f"思考中... (第 {iteration} 轮)",
+                    "metadata": {"iteration": iteration, "status": "thinking"}
+                })
 
             # Add database context if specified
             enhanced_task = task
@@ -319,74 +332,97 @@ class AsyncConversationService:
                         "metadata": {"database": database_name},
                     }
 
-            # Execute task with streaming
+            # Execute task with streaming using native Anthropic API
             yield {
                 "type": "thinking",
-                "content": "Executing task...",
+                "content": "开始执行任务...",
                 "metadata": {"status": "executing"},
             }
 
-            # Run agent (async)
-            result = await agent.arun(task=enhanced_task, chat_history=chat_history)
+            # Create Anthropic streaming agent
+            logger.info(f"[DEBUG] Creating AnthropicStreamingAgent with model={model_name}")
 
-            # Send tool calls info
-            if result.get("tool_calls"):
-                for tool_call in result["tool_calls"]:
+            # Get API key from config
+            api_key = self.config.get("apiKeys", {}).get("anthropic")
+            if not api_key:
+                raise ValueError("ANTHROPIC_API_KEY not configured in .kode.json or environment")
+
+            try:
+                streaming_agent = AnthropicStreamingAgent(
+                    api_key=api_key,
+                    model=model_name,
+                    tools=self.tools,
+                    system_prompt=agent_config.system_prompt,
+                    verbose=self.config.get("verbose", False),
+                    on_tool_start=on_tool_start,
+                    on_tool_end=on_tool_end,
+                    on_iteration=on_iteration,
+                )
+                logger.info(f"[DEBUG] AnthropicStreamingAgent created successfully")
+            except Exception as e:
+                logger.error(f"[ERROR] Failed to create AnthropicStreamingAgent: {e}", exc_info=True)
+                raise
+
+            # Stream chunks from agent
+            async def stream_with_progress():
+                """Merge agent streaming with progress updates."""
+                # Start streaming from agent
+                logger.info(f"[DEBUG] Starting stream_response...")
+                agent_stream = streaming_agent.stream_response(
+                    task=enhanced_task,
+                    chat_history=chat_history,
+                    max_iterations=agent_config.max_iterations
+                )
+
+                chunk_count = 0
+                async for chunk in agent_stream:
+                    chunk_count += 1
+                    logger.info(f"[DEBUG] Received chunk #{chunk_count}: type={chunk.get('type')}")
+
+                    # First drain any pending progress updates
+                    while not progress_queue.empty():
+                        try:
+                            progress = progress_queue.get_nowait()
+                            yield progress
+                        except asyncio.QueueEmpty:
+                            break
+
+                    # Then yield the agent chunk
+                    yield chunk
+
+                logger.info(f"[DEBUG] stream_response completed, total chunks: {chunk_count}")
+
+                # Final drain of any remaining progress updates
+                while not progress_queue.empty():
+                    try:
+                        progress = progress_queue.get_nowait()
+                        yield progress
+                    except asyncio.QueueEmpty:
+                        break
+
+            # Stream all chunks
+            final_metadata = None
+            async for chunk in stream_with_progress():
+                yield chunk
+
+                # Capture final metadata from complete event
+                if chunk.get("type") == "complete":
+                    final_metadata = chunk.get("metadata", {})
+
+            # Send tool calls info if available
+            if final_metadata and final_metadata.get("tool_calls"):
+                for tool_call in final_metadata["tool_calls"]:
                     yield {
-                        "type": "tool_call",
+                        "type": "tool_result",
                         "content": f"Tool: {tool_call['name']}",
                         "metadata": {
                             "tool_name": tool_call["name"],
                             "tool_args": tool_call.get("args", {}),
-                            "result": tool_call.get("result", "")[:200] if "result" in tool_call else None,
+                            "result": tool_call.get("result", ""),  # Send full result
                             "error": tool_call.get("error"),
+                            "status": "error" if "error" in tool_call else "completed"
                         },
                     }
-
-            # Send final output
-            output = result.get("output", "")
-
-            yield {
-                "type": "chunk",
-                "content": output,
-                "metadata": {
-                    "agent": agent_name,
-                    "model": model_name,
-                    "iterations": result.get("iterations", 0),
-                },
-            }
-
-            # Convert messages to serializable format
-            messages = result.get("messages", [])
-            serializable_messages = []
-            for msg in messages:
-                if hasattr(msg, "type") and hasattr(msg, "content"):
-                    # LangChain message object
-                    msg_dict = {
-                        "role": msg.type if hasattr(msg, "type") else "unknown",
-                        "content": str(msg.content)
-                    }
-                    # Add tool_calls if present
-                    if hasattr(msg, "tool_calls") and msg.tool_calls:
-                        msg_dict["tool_calls"] = msg.tool_calls
-                    serializable_messages.append(msg_dict)
-                elif isinstance(msg, dict):
-                    # Already a dict
-                    serializable_messages.append(msg)
-
-            # Yield completion
-            yield {
-                "type": "complete",
-                "content": output,
-                "metadata": {
-                    "agent": agent_name,
-                    "model": model_name,
-                    "conversation_id": conversation_id,
-                    "messages": serializable_messages,
-                    "tool_calls": result.get("tool_calls", []),
-                    "iterations": result.get("iterations", 0),
-                },
-            }
 
             logger.info(f"Task completed for conversation {conversation_id}")
 

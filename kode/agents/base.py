@@ -86,6 +86,7 @@ class KodeAgent:
         verbose: bool = False,
         on_tool_start: Optional[Callable] = None,
         on_tool_end: Optional[Callable] = None,
+        on_iteration: Optional[Callable] = None,
     ):
         """
         Initialize Kode agent.
@@ -97,6 +98,7 @@ class KodeAgent:
             verbose: Whether to print verbose output
             on_tool_start: Callback when tool execution starts
             on_tool_end: Callback when tool execution ends
+            on_iteration: Callback at the start of each iteration
         """
         self.config = config
         self.model = model
@@ -104,6 +106,7 @@ class KodeAgent:
         self.verbose = verbose
         self.on_tool_start = on_tool_start
         self.on_tool_end = on_tool_end
+        self.on_iteration = on_iteration
 
         # Filter tools based on config
         self.available_tools = self._filter_tools()
@@ -188,9 +191,11 @@ class KodeAgent:
                     print(f"\nTool Call: {tool_name}")
                     print(f"Arguments: {tool_args}")
 
-                # Callback: tool start
+                # Callback: tool start (only call if it's synchronous)
                 if self.on_tool_start:
-                    self.on_tool_start(tool_name, tool_args)
+                    import inspect
+                    if not inspect.iscoroutinefunction(self.on_tool_start):
+                        self.on_tool_start(tool_name, tool_args)
 
                 # Execute tool
                 if tool_name in self.tool_map:
@@ -201,9 +206,11 @@ class KodeAgent:
                         if self.verbose:
                             print(f"Result: {result[:200]}..." if len(str(result)) > 200 else f"Result: {result}")
 
-                        # Callback: tool end
+                        # Callback: tool end (only call if it's synchronous)
                         if self.on_tool_end:
-                            self.on_tool_end(tool_name, tool_args, result)
+                            import inspect
+                            if not inspect.iscoroutinefunction(self.on_tool_end):
+                                self.on_tool_end(tool_name, tool_args, result)
 
                         # Add tool result to messages
                         tool_message = ToolMessage(
@@ -289,6 +296,14 @@ class KodeAgent:
             if self.verbose:
                 print(f"\n=== Iteration {iteration} ===")
 
+            # Callback: iteration start
+            if self.on_iteration:
+                import inspect
+                if inspect.iscoroutinefunction(self.on_iteration):
+                    await self.on_iteration(iteration)
+                else:
+                    self.on_iteration(iteration)
+
             # Call model with tools
             response = await self.model_with_tools.ainvoke(messages)
             messages.append(response)
@@ -315,7 +330,11 @@ class KodeAgent:
 
                 # Callback: tool start
                 if self.on_tool_start:
-                    self.on_tool_start(tool_name, tool_args)
+                    import inspect
+                    if inspect.iscoroutinefunction(self.on_tool_start):
+                        await self.on_tool_start(tool_name, tool_args)
+                    else:
+                        self.on_tool_start(tool_name, tool_args)
 
                 # Execute tool (async if available, otherwise sync)
                 if tool_name in self.tool_map:
@@ -333,7 +352,11 @@ class KodeAgent:
 
                         # Callback: tool end
                         if self.on_tool_end:
-                            self.on_tool_end(tool_name, tool_args, result)
+                            import inspect
+                            if inspect.iscoroutinefunction(self.on_tool_end):
+                                await self.on_tool_end(tool_name, tool_args, result)
+                            else:
+                                self.on_tool_end(tool_name, tool_args, result)
 
                         # Add tool result to messages
                         tool_message = ToolMessage(
@@ -386,4 +409,181 @@ class KodeAgent:
             "messages": messages,
             "tool_calls": tool_calls_history,
             "iterations": iteration,
+        }
+
+    async def arun_streaming(
+        self, task: str, chat_history: Optional[List[Any]] = None
+    ):
+        """
+        Execute a task asynchronously with streaming support.
+
+        Yields chunks of the response as they arrive from the model.
+
+        Args:
+            task: Task description
+            chat_history: Optional chat history
+
+        Yields:
+            Dict with 'type', 'content', and optional 'metadata'
+        """
+        from typing import AsyncGenerator
+
+        # Initialize messages
+        messages = [SystemMessage(content=self.config.system_prompt)]
+
+        if chat_history:
+            messages.extend(chat_history)
+
+        messages.append(HumanMessage(content=task))
+
+        # Execution loop
+        iteration = 0
+        tool_calls_history = []
+
+        while iteration < self.config.max_iterations:
+            iteration += 1
+
+            if self.verbose:
+                print(f"\n=== Iteration {iteration} ===")
+
+            # Callback: iteration start
+            if self.on_iteration:
+                import inspect
+                if inspect.iscoroutinefunction(self.on_iteration):
+                    await self.on_iteration(iteration)
+                else:
+                    self.on_iteration(iteration)
+
+            # Call model with streaming
+            full_response_content = ""
+            tool_calls = []
+
+            async for chunk in self.model_with_tools.astream(messages):
+                # Check if chunk has content
+                if hasattr(chunk, 'content') and chunk.content:
+                    full_response_content += chunk.content
+                    # Yield content chunk immediately
+                    yield {
+                        "type": "chunk",
+                        "content": chunk.content,
+                        "metadata": {"iteration": iteration}
+                    }
+
+                # Collect tool calls from chunk
+                if hasattr(chunk, 'tool_calls') and chunk.tool_calls:
+                    tool_calls.extend(chunk.tool_calls)
+
+            # Create response message
+            from langchain_core.messages import AIMessage
+            response = AIMessage(content=full_response_content, tool_calls=tool_calls)
+            messages.append(response)
+
+            # Check if there are tool calls
+            if not response.tool_calls:
+                # No more tool calls, return final response
+                yield {
+                    "type": "complete",
+                    "content": full_response_content,
+                    "metadata": {
+                        "messages": messages,
+                        "tool_calls": tool_calls_history,
+                        "iterations": iteration,
+                    }
+                }
+                return
+
+            # Execute tool calls
+            for tool_call in response.tool_calls:
+                tool_name = tool_call["name"]
+                tool_args = tool_call["args"]
+                tool_call_id = tool_call.get("id", "")
+
+                if self.verbose:
+                    print(f"\nTool Call: {tool_name}")
+                    print(f"Arguments: {tool_args}")
+
+                # Callback: tool start
+                if self.on_tool_start:
+                    import inspect
+                    if inspect.iscoroutinefunction(self.on_tool_start):
+                        await self.on_tool_start(tool_name, tool_args)
+                    else:
+                        self.on_tool_start(tool_name, tool_args)
+
+                # Execute tool (async if available, otherwise sync)
+                if tool_name in self.tool_map:
+                    try:
+                        tool = self.tool_map[tool_name]
+
+                        # Try async invoke first
+                        if hasattr(tool, "ainvoke"):
+                            result = await tool.ainvoke(tool_args)
+                        else:
+                            result = tool.invoke(tool_args)
+
+                        if self.verbose:
+                            print(f"Result: {result[:200]}..." if len(str(result)) > 200 else f"Result: {result}")
+
+                        # Callback: tool end
+                        if self.on_tool_end:
+                            import inspect
+                            if inspect.iscoroutinefunction(self.on_tool_end):
+                                await self.on_tool_end(tool_name, tool_args, result)
+                            else:
+                                self.on_tool_end(tool_name, tool_args, result)
+
+                        # Add tool result to messages
+                        tool_message = ToolMessage(
+                            content=str(result),
+                            tool_call_id=tool_call_id,
+                            name=tool_name,
+                        )
+                        messages.append(tool_message)
+
+                        # Track tool call
+                        tool_calls_history.append({
+                            "name": tool_name,
+                            "args": tool_args,
+                            "result": str(result)[:500],  # Truncate for history
+                        })
+
+                    except Exception as e:
+                        error_msg = f"Error executing tool {tool_name}: {str(e)}"
+                        if self.verbose:
+                            print(f"Error: {error_msg}")
+
+                        # Add error message
+                        tool_message = ToolMessage(
+                            content=error_msg,
+                            tool_call_id=tool_call_id,
+                            name=tool_name,
+                        )
+                        messages.append(tool_message)
+
+                        tool_calls_history.append({
+                            "name": tool_name,
+                            "args": tool_args,
+                            "error": str(e),
+                        })
+                else:
+                    error_msg = f"Tool '{tool_name}' not found"
+                    if self.verbose:
+                        print(f"Error: {error_msg}")
+
+                    tool_message = ToolMessage(
+                        content=error_msg,
+                        tool_call_id=tool_call_id,
+                        name=tool_name,
+                    )
+                    messages.append(tool_message)
+
+        # Max iterations reached
+        yield {
+            "type": "complete",
+            "content": "Maximum iterations reached without completion",
+            "metadata": {
+                "messages": messages,
+                "tool_calls": tool_calls_history,
+                "iterations": iteration,
+            }
         }

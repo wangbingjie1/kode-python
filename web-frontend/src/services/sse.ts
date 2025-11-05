@@ -6,7 +6,7 @@
  */
 
 export interface StreamingChunk {
-  type: 'thinking' | 'tool_call' | 'chunk' | 'complete' | 'error' | 'done'
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'chunk' | 'complete' | 'error' | 'done'
   content: string
   metadata: Record<string, any>
 }

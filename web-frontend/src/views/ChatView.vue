@@ -1,160 +1,382 @@
 <template>
-  <div class="min-h-screen bg-[#fdf7f0] text-[#322d29] antialiased">
-    <div class="flex min-h-screen flex-col lg:flex-row">
-      <div class="hidden lg:flex lg:w-16 lg:flex-col lg:items-center lg:gap-8 lg:border-r lg:border-[#eadfd3] lg:bg-[#fcf1e4] lg:py-6">
-        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/80 text-[#d78b5b] shadow-inner">
+  <div class="h-screen bg-[#fcf8f4] text-[#2f2720] antialiased">
+    <div
+      class="relative flex h-full flex-col overflow-hidden lg:grid"
+      :class="layoutClass"
+    >
+      <!-- Navigation rail -->
+      <aside class="hidden h-full flex-col items-center gap-4 border-r border-[#eadfd3] bg-[#fcf1e4] px-3 py-6 lg:flex">
+        <button
+          type="button"
+          class="flex h-10 w-10 items-center justify-center rounded-2xl border border-transparent text-[#a38b75] transition hover:border-[#e7d8c9] hover:bg-white/80 hover:text-[#7c6551]"
+          :class="isSidebarCollapsed ? 'bg-white text-[#7c6551] shadow-inner' : ''"
+          aria-label="切换侧边栏"
+          @click="handleSidebarToggle"
+        >
           <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l2.09 6.26H20l-5.05 3.67L16.18 19 12 15.77 7.82 19l1.23-6.07L4 9.26h5.91z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
-        </div>
-        <div class="flex flex-1 flex-col items-center gap-6 text-[#b9a695]">
-          <button type="button" class="rounded-full p-2 transition hover:bg-white/60 hover:text-[#8c7763]">
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
-            </svg>
-          </button>
-          <button type="button" class="rounded-full p-2 transition hover:bg-white/60 hover:text-[#8c7763]">
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <button type="button" class="rounded-full p-2 transition hover:bg-white/60 hover:text-[#8c7763]">
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-          </button>
-        </div>
-      </div>
+        </button>
 
-      <div class="hidden lg:flex lg:w-80 lg:flex-none lg:border-r lg:border-[#eadfd3] lg:bg-[#fefaf4]">
+        <button
+          type="button"
+          class="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#d88a5d] shadow-inner"
+          aria-label="新建对话"
+          @click="handleNewConversation"
+        >
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
+          </svg>
+        </button>
+
+        <div class="mt-3 flex flex-1 flex-col items-center gap-3">
+          <button
+            v-for="section in sidebarSections"
+            :key="section.id"
+            type="button"
+            class="rounded-full p-2 transition hover:bg-white/80 hover:text-[#7c6551]"
+            :class="activeSidebarSection === section.id
+              ? (isSidebarCollapsed ? 'bg-white/60 text-[#9b7558]' : 'bg-white text-[#7c6551] shadow-inner')
+              : 'text-[#b7a594]'"
+            :aria-label="section.label"
+            @click="handleSidebarSectionSelect(section.id)"
+          >
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+              <path stroke-linecap="round" stroke-linejoin="round" :d="section.icon" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Conversation list (desktop) -->
+      <aside
+        v-show="!isSidebarCollapsed"
+        class="hidden h-full border-r border-[#eadfd3] bg-[#fefaf4] lg:flex lg:w-[220px]"
+      >
         <ConversationSidebar
           class="w-full"
           :conversations="conversations"
           :active-conversation-id="currentConversationId"
           :is-connected="isConnected"
+          :active-section="activeSidebarSection"
           @new-conversation="handleNewConversation"
           @select-conversation="handleSelectConversation"
           @delete-conversation="handleDeleteConversation"
+          @navigate="handleSidebarSectionSelect"
         />
-      </div>
+      </aside>
 
-      <main class="flex w-full flex-1 flex-col">
-        <header class="border-b border-[#eadfd3] px-5 py-5 lg:px-12">
-          <div class="flex items-center gap-3">
-            <button
-              @click="sidebarOpen = true"
-              class="flex h-11 w-11 items-center justify-center rounded-full border border-[#eadfd3] bg-white/80 text-[#8a7c6b] shadow-sm transition hover:-translate-y-0.5 hover:text-[#6f6256] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#d8c6b4] lg:hidden"
-              aria-label="打开对话列表"
-              type="button"
-            >
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
+      <!-- Main conversation area -->
+      <main class="relative grid h-full min-w-0 grid-rows-[auto,1fr,auto] overflow-visible">
+        <header class="px-4 py-3 sm:px-6">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3 text-sm text-[#6e6255]">
+              <button
+                @click="sidebarOpen = true"
+                class="flex h-10 w-10 items-center justify-center rounded-full border border-[#eadfd3]/60 bg-white/80 text-[#7c6c5d] shadow-sm transition hover:bg-white hover:text-[#5c4f43] lg:hidden"
+                aria-label="打开对话列表"
+                type="button"
+              >
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
 
-            <div class="flex flex-col gap-2">
-              <p class="text-xs font-semibold uppercase tracking-[0.32em] text-[#b9aa9a]">Kode AI</p>
-              <p class="text-lg font-semibold text-[#2f2720]">{{ conversationTitle }}</p>
+              <div class="flex flex-col">
+                <p class="text-sm font-semibold text-[#2f2720]">{{ conversationTitle }}</p>
+                <div class="flex items-center gap-2 text-xs">
+                  <span class="inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5">
+                    <span class="inline-block h-2 w-2 rounded-full shadow-[0_0_0_3px_rgba(16,166,104,0.1)]" :class="isConnected ? 'bg-emerald-400' : 'bg-rose-300'"></span>
+                    {{ isConnected ? '已连接' : '已断开' }}
+                  </span>
+                  <span v-if="lastUpdatedText" class="text-[#b4a496]">{{ lastUpdatedText }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="hidden items-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2 text-xs font-medium text-[#6d5f52] shadow-sm transition hover:bg-white sm:flex"
+                @click="scrollToBottom(true)"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" />
+                </svg>
+                最新
+              </button>
+
+              <button
+                type="button"
+                class="flex items-center gap-1 rounded-full border border-transparent bg-[#f4e7da] px-3 py-2 text-xs font-semibold text-[#6d5f52] shadow-sm transition hover:bg-[#f0ddcc]"
+                @click="handleContextPanelToggle"
+              >
+                <span class="inline-flex h-2 w-2 rounded-full" :class="isConnected ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+                <span class="hidden sm:inline">上下文</span>
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
           </div>
         </header>
 
-        <div class="flex flex-1 flex-col items-center px-5 pb-16 pt-10 lg:px-16">
-          <div
-            v-if="chatStore.hasMessages"
-            class="flex w-full flex-1"
-          >
-            <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-[32px] border border-[#efe2d0] bg-white/80 shadow-[0_35px_90px_rgba(185,157,126,0.18)]">
-              <div class="conversation-scroll flex-1 overflow-y-auto px-8 py-10">
-                <div class="space-y-8">
-                  <MessageItem
-                    v-for="message in chatStore.messages"
-                    :key="message.id"
-                    :message="message"
-                  />
+        <section ref="messageContainer" class="relative min-w-0 overflow-y-auto px-4 pb-32 pt-6 sm:px-8">
+          <div class="mx-auto w-full max-w-3xl min-w-0 pb-12">
+            <template v-if="timelineMessages.length">
+              <MessageItem
+                v-for="item in timelineMessages"
+                :key="item.message.id"
+                class="w-full py-6"
+                :message="item.message"
+                :group-behavior="item.groupBehavior"
+              />
+            </template>
 
-                  <div
-                    v-if="chatStore.isTyping"
-                    class="typing-indicator flex items-center gap-3 rounded-2xl bg-[#f9f0e4] px-4 py-3 text-[#6d6256] shadow-sm"
-                  >
-                    <div class="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f0c9b0] text-xs font-semibold text-[#a46443]">
-                      AI
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                      <span class="inline-block h-2 w-2 animate-bounce rounded-full bg-[#e4b292]"></span>
-                      <span class="inline-block h-2 w-2 animate-bounce rounded-full bg-[#e4b292]" style="animation-delay: 0.15s"></span>
-                      <span class="inline-block h-2 w-2 animate-bounce rounded-full bg-[#e4b292]" style="animation-delay: 0.3s"></span>
-                    </div>
-                  </div>
-
-                  <div ref="messagesEnd"></div>
-                </div>
+            <div v-else class="flex h-full flex-col items-center justify-center gap-4 py-20 text-center text-[#8d7d6c]">
+              <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#d88a5d] to-[#c47a4d] text-white shadow-lg">
+                <svg class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2h-5l-5 5v-4z" />
+                </svg>
               </div>
+              <div>
+                <h3 class="text-lg font-semibold text-[#3d3430]">开始新的对话</h3>
+                <p class="mt-1 text-sm">在下方输入框中输入消息开始聊天</p>
+              </div>
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-full bg-[#f26b3a] px-4 py-2 text-sm font-semibold text-white shadow-[0_18px_36px_rgba(242,107,58,0.24)] transition hover:-translate-y-0.5 hover:bg-[#dc5d2f]"
+                @click="handleNewConversation"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
+                </svg>
+                新建会话
+              </button>
             </div>
           </div>
 
-          <div class="mt-auto w-full max-w-3xl pt-10">
+          <button
+            v-if="showScrollToLatest"
+            type="button"
+            class="fixed bottom-32 right-6 z-30 flex items-center gap-2 rounded-full bg-[#f4e7da] px-4 py-2 text-xs font-medium text-[#6d5f52] shadow-lg backdrop-blur transition hover:bg-[#f0ddcc]"
+            @click="scrollToBottom(true)"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" />
+            </svg>
+            回到最新
+          </button>
+        </section>
+
+        <footer class="px-4 pb-4 pt-2 sm:px-6">
+          <div class="mx-auto w-full max-w-3xl min-w-0">
             <ChatInput
               :disabled="!isConnected"
               :is-sending="chatStore.isTyping"
               @send="handleSendMessage"
             />
           </div>
-        </div>
+        </footer>
       </main>
-    </div>
 
-    <div
-      v-if="sidebarOpen"
-      class="fixed inset-0 z-40 flex bg-black/30 backdrop-blur-sm transition lg:hidden"
-      @click="sidebarOpen = false"
-    >
+      <!-- Desktop context panel -->
+      <ContextPanel
+        v-if="contextPanelOpen && isDesktopViewport"
+        class="hidden h-full border-l border-[#eadfd3] bg-[#fdfaf4] lg:flex lg:w-[280px]"
+        :conversation="chatStore.currentConversation"
+        :is-connected="isConnected"
+        :message-count="chatStore.messages.length"
+        @close="handleContextPanelClose"
+      />
+
+      <!-- Mobile overlays -->
       <div
-        class="h-full w-72 bg-[#fefaf4] shadow-2xl ring-1 ring-black/5"
-        @click.stop
+        v-if="sidebarOpen"
+        class="fixed inset-0 z-40 flex bg-black/35 backdrop-blur-sm transition lg:hidden"
+        @click="sidebarOpen = false"
       >
-        <ConversationSidebar
-          :conversations="conversations"
-          :active-conversation-id="currentConversationId"
-          :is-connected="isConnected"
-          @new-conversation="handleNewConversation"
-          @select-conversation="handleSelectConversation"
-          @delete-conversation="handleDeleteConversation"
-        />
+        <div
+          class="h-full w-72 bg-[#fefaf4] shadow-2xl ring-1 ring-black/5"
+          @click.stop
+        >
+          <ConversationSidebar
+            :conversations="conversations"
+            :active-conversation-id="currentConversationId"
+            :is-connected="isConnected"
+            :active-section="activeSidebarSection"
+            @new-conversation="handleNewConversation"
+            @select-conversation="handleSelectConversation"
+            @delete-conversation="handleDeleteConversation"
+            @navigate="handleSidebarSectionSelect"
+          />
+        </div>
+      </div>
+
+      <div
+        v-if="contextPanelSheet && !isDesktopViewport"
+        class="fixed inset-0 z-40 flex bg-black/35 backdrop-blur-sm lg:hidden"
+        @click="handleContextPanelClose"
+      >
+        <div class="ml-auto flex h-full w-full max-w-md" @click.stop>
+          <ContextPanel
+            modal
+            :conversation="chatStore.currentConversation"
+            :is-connected="isConnected"
+            :message-count="chatStore.messages.length"
+            @close="handleContextPanelClose"
+          />
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useChatStore } from '@/stores/chat'
-import MessageItem from '@/components/MessageItem.vue'
 import ConversationSidebar from '@/components/ConversationSidebar.vue'
 import ChatInput from '@/components/ChatInput.vue'
+import ContextPanel from '@/components/ContextPanel.vue'
+import MessageItem from '@/components/MessageItem.vue'
 import { notification } from '@/composables/useNotification'
 import { DEFAULT_PROJECT_ID } from '@/config/constants'
+import { useChatStore } from '@/stores/chat'
+import type { ChatMessage } from '@/stores/chat'
 import api from '@/services/api'
+
+type SidebarSection = 'chats' | 'projects' | 'database' | 'documents'
+
+interface TimelineMessage {
+  message: ChatMessage
+  groupBehavior: 'standalone' | 'compact-start' | 'compact-middle' | 'compact-end'
+}
 
 const route = useRoute()
 const router = useRouter()
 const chatStore = useChatStore()
 
-const messagesEnd = ref<HTMLElement>()
+const sidebarSections: ReadonlyArray<{ id: SidebarSection; label: string; icon: string }> = [
+  {
+    id: 'chats',
+    label: 'Chat',
+    icon: 'M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H7l-3 3v-3H4a1 1 0 01-1-1V6a1 1 0 011-1z',
+  },
+  {
+    id: 'projects',
+    label: 'Projects',
+    icon: 'M4 6a2 2 0 012-2h12a2 2 0 012 2v12H4z',
+  },
+  {
+    id: 'database',
+    label: 'Database',
+    icon: 'M4 6c0-1.657 3.582-3 8-3s8 1.343 8 3M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3M4 18c0 1.657 3.582 3 8 3s8-1.343 8-3M4 6v12c0 1.657 3.582 3 8 3s8-1.343 8-3V6',
+  },
+  {
+    id: 'documents',
+    label: 'Documents',
+    icon: 'M7 3h8l4 4v14a1 1 0 01-1 1H7a2 2 0 01-2-2V5a2 2 0 012-2zm8 0v6h6',
+  },
+]
+
 const isLoading = ref(false)
 const sidebarOpen = ref(false)
 const conversations = ref<any[]>([])
+const isSidebarCollapsed = ref(false)
+const activeSidebarSection = ref<SidebarSection>('chats')
+const contextPanelOpen = ref(false)
+const contextPanelSheet = ref(false)
+const isDesktopViewport = ref(false)
+const showScrollToLatest = ref(false)
+const messageContainer = ref<HTMLElement | null>(null)
+const hasUserToggledSidebar = ref(false)
+const hasUserToggledContext = ref(false)
 
 const isConnected = computed(() => chatStore.isConnected)
 const currentConversationId = computed(() => route.params.conversationId as string)
 const conversationTitle = computed(() => chatStore.currentConversation?.title || '未命名会话')
+const lastUpdatedText = computed(() => {
+  const updatedAt = chatStore.currentConversation?.updated_at
+  if (!updatedAt) return ''
+  const date = new Date(updatedAt)
+  if (Number.isNaN(date.getTime())) return ''
+  const diffMinutes = Math.floor((Date.now() - date.getTime()) / (1000 * 60))
+  if (diffMinutes < 1) return '刚刚更新'
+  if (diffMinutes < 60) return `${diffMinutes} 分钟前更新`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours} 小时前更新`
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays === 1) return '昨天更新'
+  return `${diffDays} 天前更新`
+})
+
+const layoutClass = computed(() => {
+  const hasSidebar = !isSidebarCollapsed.value
+  const hasContext = contextPanelOpen.value && isDesktopViewport.value
+
+  if (hasSidebar && hasContext) {
+    return 'lg:grid-cols-[60px_220px_minmax(0,1fr)_320px]'
+  }
+  if (hasSidebar) {
+    return 'lg:grid-cols-[60px_220px_minmax(0,1fr)]'
+  }
+  if (hasContext) {
+    return 'lg:grid-cols-[60px_minmax(0,1fr)_320px]'
+  }
+  return 'lg:grid-cols-[60px_minmax(0,1fr)]'
+})
+
+const timelineMessages = computed<TimelineMessage[]>(() => {
+  const items: TimelineMessage[] = []
+  let previousRole: string | null = null
+
+  chatStore.messages.forEach((message, index) => {
+    const nextMessage = chatStore.messages[index + 1]
+    const nextRole = nextMessage?.role ?? null
+    const groupBehavior = resolveGroupBehavior(previousRole, message.role, nextRole)
+
+    items.push({
+      message,
+      groupBehavior,
+    })
+    previousRole = message.role
+  })
+
+  return items
+})
+
+let scrollThrottle: ReturnType<typeof setTimeout> | null = null
+let mediaQueryCleanup: (() => void) | null = null
+let resizeCleanup: (() => void) | null = null
 
 watch(
-  () => chatStore.messages.length,
+  () => timelineMessages.value.length,
   async () => {
     await nextTick()
-    messagesEnd.value?.scrollIntoView({ behavior: 'smooth' })
+    scrollToBottom()
+  },
+)
+
+watch(
+  () => timelineMessages.value.map(m => m.message.content).join(''),
+  async () => {
+    if (scrollThrottle) {
+      clearTimeout(scrollThrottle)
+    }
+    scrollThrottle = setTimeout(async () => {
+      await nextTick()
+      scrollToBottom()
+    }, 120)
+  },
+)
+
+watch(
+  () => chatStore.isTyping,
+  async (typing) => {
+    if (typing) {
+      await nextTick()
+      scrollToBottom(true)
+    }
   },
 )
 
@@ -167,29 +389,145 @@ watch(
   },
 )
 
+watch(sidebarOpen, (open) => {
+  if (open) {
+    activeSidebarSection.value = 'chats'
+    isSidebarCollapsed.value = false
+  }
+})
+
+watch(messageContainer, (element, previous) => {
+  if (previous) {
+    previous.removeEventListener('scroll', handleScroll)
+  }
+  if (element) {
+    element.addEventListener('scroll', handleScroll)
+  }
+})
+
+function handleScroll() {
+  const container = messageContainer.value
+  if (!container) return
+  const distanceToBottom = container.scrollHeight - (container.scrollTop + container.clientHeight)
+  showScrollToLatest.value = distanceToBottom > 220
+}
+
+function scrollToBottom(force = false) {
+  const container = messageContainer.value
+  if (!container) return
+
+  const distanceToBottom = container.scrollHeight - (container.scrollTop + container.clientHeight)
+  const shouldScroll = force || distanceToBottom < 200
+
+  if (shouldScroll) {
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: force ? 'smooth' : 'auto',
+    })
+    showScrollToLatest.value = false
+  }
+}
+
+function resolveGroupBehavior(
+  previousRole: string | null,
+  currentRole: string,
+  nextRole: string | null,
+): TimelineMessage['groupBehavior'] {
+  if (currentRole !== 'assistant' && currentRole !== 'user') {
+    return 'standalone'
+  }
+
+  const isSameAsPrevious = previousRole === currentRole
+  const isSameAsNext = nextRole === currentRole
+
+  if (!isSameAsPrevious && !isSameAsNext) {
+    return 'standalone'
+  }
+  if (!isSameAsPrevious && isSameAsNext) {
+    return 'compact-start'
+  }
+  if (isSameAsPrevious && isSameAsNext) {
+    return 'compact-middle'
+  }
+  return 'compact-end'
+}
+
+const SIDEBAR_COLLAPSE_BREAKPOINT = 1200
+const CONTEXT_OPEN_BREAKPOINT = 1500
+
+function applyResponsiveLayout(width: number) {
+  if (!width) return
+
+  if (width < 1024) {
+    contextPanelOpen.value = false
+    if (!hasUserToggledSidebar.value) {
+      isSidebarCollapsed.value = true
+    }
+    return
+  }
+
+  if (width < SIDEBAR_COLLAPSE_BREAKPOINT) {
+    if (!hasUserToggledSidebar.value) {
+      isSidebarCollapsed.value = true
+    }
+  } else if (!hasUserToggledSidebar.value) {
+    isSidebarCollapsed.value = false
+  }
+
+  if (width >= CONTEXT_OPEN_BREAKPOINT) {
+    if (!hasUserToggledContext.value) {
+      contextPanelOpen.value = true
+    }
+  } else if (!hasUserToggledContext.value) {
+    contextPanelOpen.value = false
+  }
+}
+
+function handleContextPanelToggle() {
+  hasUserToggledContext.value = true
+  if (isDesktopViewport.value) {
+    contextPanelOpen.value = !contextPanelOpen.value
+  } else {
+    contextPanelSheet.value = true
+  }
+}
+
+function handleContextPanelClose() {
+  hasUserToggledContext.value = true
+  if (isDesktopViewport.value) {
+    contextPanelOpen.value = false
+  } else {
+    contextPanelSheet.value = false
+  }
+}
+
 async function handleSendMessage(message: string, databaseName?: string) {
   if (!isConnected.value) return
 
   try {
     await chatStore.sendMessage(message, databaseName)
+    await nextTick()
+    scrollToBottom(true)
   } catch (error) {
     console.error('Error sending message:', error)
-    notification.error('发送失败', '无法发送消息，请检查连接状态或稍后再试')
+    notification.error('发送失败', '暂时无法发送消息，请检查网络后重试。')
   }
 }
 
 async function handleNewConversation() {
   if (isLoading.value) return
 
+  activeSidebarSection.value = 'chats'
+
   isLoading.value = true
   try {
-    const conversation = await chatStore.createNewConversation(DEFAULT_PROJECT_ID, '新对话')
+    const conversation = await chatStore.createNewConversation(DEFAULT_PROJECT_ID, 'New chat')
     await loadConversations()
     await router.push(`/chat/${conversation.id}`)
-    notification.success('已创建对话', '', 2000, true)
+    notification.success('已创建新会话', '', 2000, true)
   } catch (error) {
     console.error('Error creating conversation:', error)
-    notification.error('创建失败', '无法创建新对话，请稍后再试')
+    notification.error('创建失败', '暂时无法创建新对话，请稍后再试。')
   } finally {
     isLoading.value = false
     sidebarOpen.value = false
@@ -198,6 +536,7 @@ async function handleNewConversation() {
 
 async function handleSelectConversation(conversationId: string) {
   await router.push(`/chat/${conversationId}`)
+  activeSidebarSection.value = 'chats'
   sidebarOpen.value = false
 }
 
@@ -213,7 +552,7 @@ async function handleDeleteConversation(conversationId: string) {
     notification.success('会话已删除', '', 2000, true)
   } catch (error) {
     console.error('Error deleting conversation:', error)
-    notification.error('删除失败', '无法删除会话')
+    notification.error('删除失败', '暂时无法删除该对话。')
   }
 }
 
@@ -226,36 +565,96 @@ async function loadConversations() {
   }
 }
 
+function handleSidebarSectionSelect(section: SidebarSection) {
+  activeSidebarSection.value = section
+
+  if (section === 'chats') {
+    void loadConversations()
+  }
+}
+
+function handleSidebarToggle() {
+  hasUserToggledSidebar.value = true
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+}
+
 async function initializeConversation() {
   const conversationId = route.params.conversationId as string
-  console.log('[ChatView] initializeConversation called with ID:', conversationId)
 
   if (conversationId) {
     isLoading.value = true
-    console.log('[ChatView] Connecting to conversation...')
     try {
       await chatStore.connectToConversation(conversationId)
-      console.log('[ChatView] Connected successfully. isTyping:', chatStore.isTyping, 'hasMessages:', chatStore.hasMessages)
       notification.success('连接成功', '', 1500, true)
+      await nextTick()
+      setTimeout(() => scrollToBottom(true), 200)
     } catch (error) {
       console.error('[ChatView] Error connecting to conversation:', error)
-      notification.error('连接失败', '无法连接到会话，请稍后再试')
+      notification.error('连接失败', '无法连接到对话，请稍后再试。')
     } finally {
       isLoading.value = false
-      console.log('[ChatView] isLoading set to false')
     }
   } else {
-    console.log('[ChatView] No conversation ID, creating new conversation')
     await handleNewConversation()
   }
 }
 
+function setupViewportWatcher() {
+  if (typeof window === 'undefined') return
+  const query = window.matchMedia('(min-width: 1024px)')
+
+  const updateViewportState = (event: MediaQueryList | MediaQueryListEvent) => {
+    const matches = (event as MediaQueryList).matches
+    isDesktopViewport.value = matches
+    if (matches) {
+      contextPanelSheet.value = false
+    } else {
+      contextPanelOpen.value = false
+    }
+    applyResponsiveLayout(window.innerWidth)
+  }
+
+  updateViewportState(query)
+
+  const listener = (event: MediaQueryListEvent) => updateViewportState(event)
+
+  if (typeof query.addEventListener === 'function') {
+    query.addEventListener('change', listener)
+    mediaQueryCleanup = () => query.removeEventListener('change', listener)
+  } else {
+    query.addListener(listener)
+    mediaQueryCleanup = () => query.removeListener(listener)
+  }
+
+  const handleResize = () => applyResponsiveLayout(window.innerWidth)
+  window.addEventListener('resize', handleResize)
+  resizeCleanup = () => window.removeEventListener('resize', handleResize)
+}
+
 onMounted(async () => {
+  setupViewportWatcher()
+  if (typeof window !== 'undefined') {
+    applyResponsiveLayout(window.innerWidth)
+  }
   await loadConversations()
   await initializeConversation()
+  await nextTick()
+  scrollToBottom(true)
 })
 
 onUnmounted(() => {
   chatStore.clearConversation()
+  if (mediaQueryCleanup) {
+    mediaQueryCleanup()
+    mediaQueryCleanup = null
+  }
+  if (resizeCleanup) {
+    resizeCleanup()
+    resizeCleanup = null
+  }
+  const container = messageContainer.value
+  if (container) {
+    container.removeEventListener('scroll', handleScroll)
+  }
 })
 </script>

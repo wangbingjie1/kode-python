@@ -164,11 +164,18 @@ async def create_default_data():
 
 if __name__ == "__main__":
     import uvicorn
+    import sys
+
+    # 修复 Windows 下 multiprocessing 的问题
+    if sys.platform == "win32":
+        import multiprocessing
+        multiprocessing.freeze_support()
 
     uvicorn.run(
         "kode.web.main:app",
         host="0.0.0.0",
         port=8001,
         reload=True,
+        reload_dirs=["kode"],  # 只监控 kode 目录
         log_level="info",
     )

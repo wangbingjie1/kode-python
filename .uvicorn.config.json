@@ -1,0 +1,10 @@
+{
+  "reload": true,
+  "reload_delay": 0.5,
+  "reload_dirs": ["kode"],
+  "reload_includes": ["*.py"],
+  "reload_excludes": ["*.pyc", "__pycache__", ".git"],
+  "log_level": "debug",
+  "access_log": true,
+  "use_colors": true
+}
