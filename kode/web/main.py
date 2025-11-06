@@ -107,11 +107,9 @@ async def get_config():
 
 
 # Import routers
-from kode.web.api import chat, project, sse, database, auth
-# Temporarily disabled billing until models are created
-# from kode.web.api import billing
+from kode.web.api import chat, project, sse, database, auth, billing
 from kode.database.session import init_db, async_session_maker
-from kode.models import User, Project
+from kode.models import User, Project, Plan
 from sqlalchemy import select
 
 # Register routers
@@ -120,7 +118,7 @@ app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(project.router, prefix="/api", tags=["projects"])
 app.include_router(sse.router, prefix="/api/sse", tags=["sse"])
 app.include_router(database.router, prefix="/api/database", tags=["database"])
-# app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
+app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
 
 
 async def create_default_data():
