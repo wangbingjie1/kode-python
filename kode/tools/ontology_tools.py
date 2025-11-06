@@ -290,10 +290,19 @@ class OntologyBuilderTool(KodeTool):
     def _extract_hierarchies(
         self, tables: Dict[str, Any], relationships: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Extract hierarchical relationships (e.g., parent-child)."""
+        """
+        Extract hierarchical relationships (e.g., parent-child).
+
+        Detects hierarchies through:
+        1. Self-referencing foreign keys
+        2. Standard hierarchy column patterns (parent_id, pid, etc.)
+        3. Level/depth indicators
+        4. Category/classification structures
+        5. Order/sequence fields suggesting tree structures
+        """
         hierarchies = []
 
-        # Look for self-referencing relationships
+        # 1. Self-referencing relationships (explicit hierarchies)
         for rel in relationships:
             if rel["from_concept"] == rel["to_concept"]:
                 hierarchies.append(
@@ -306,36 +315,146 @@ class OntologyBuilderTool(KodeTool):
                         "child_property": rel["from_properties"][0]
                         if rel["from_properties"]
                         else None,
+                        "description": f"自引用关系: {rel['from_concept']} 表具有树形结构",
                     }
                 )
 
-        # Look for common hierarchy patterns
+        # 2. Standard hierarchy column patterns
+        hierarchy_indicators = [
+            "parent_id",
+            "parent",
+            "pid",  # Common abbreviation
+            "superior_id",
+            "manager_id",
+            "category_id",
+            "parent_code",
+            "up_id",  # Some systems use this
+        ]
+
         for table_name, table_data in tables.items():
             if "columns" not in table_data:
                 continue
 
-            for column in table_data["columns"]:
-                col_name = column["name"].lower()
+            columns = table_data["columns"]
+            col_names = [col["name"].lower() for col in columns]
 
-                # Common hierarchy columns
-                hierarchy_indicators = [
-                    "parent_id",
-                    "parent",
-                    "superior_id",
-                    "manager_id",
-                    "category_id",
-                ]
-
+            # Check for standard indicators
+            for col in columns:
+                col_name = col["name"].lower()
                 if col_name in hierarchy_indicators:
                     hierarchies.append(
                         {
                             "type": "parent_child",
                             "concept": table_name,
                             "parent_property": col_name,
+                            "description": f"{table_name} 通过 {col_name} 字段形成层次结构",
                         }
                     )
 
-        return hierarchies
+            # 3. Detect level/depth indicators (multi-level structures)
+            level_indicators = ["level", "depth", "tier", "rank", "grade"]
+            has_level = any(
+                any(indicator in col_name for indicator in level_indicators)
+                for col_name in col_names
+            )
+
+            if has_level:
+                level_col = next(
+                    col["name"]
+                    for col in columns
+                    if any(indicator in col["name"].lower() for indicator in level_indicators)
+                )
+                hierarchies.append(
+                    {
+                        "type": "level_based",
+                        "concept": table_name,
+                        "level_property": level_col,
+                        "description": f"{table_name} 使用 {level_col} 字段表示层级深度",
+                    }
+                )
+
+            # 4. Category/Classification structures
+            is_category_table = any(
+                keyword in table_name.lower()
+                for keyword in ["category", "class", "type", "group", "tag"]
+            )
+
+            if is_category_table:
+                # Check if has parent reference or level
+                has_parent = any(
+                    "parent" in col_name or "pid" == col_name for col_name in col_names
+                )
+                if has_parent:
+                    parent_col = next(
+                        col["name"]
+                        for col in columns
+                        if "parent" in col["name"].lower() or col["name"].lower() == "pid"
+                    )
+                    hierarchies.append(
+                        {
+                            "type": "category_hierarchy",
+                            "concept": table_name,
+                            "parent_property": parent_col,
+                            "description": f"{table_name} 是分类表,通过 {parent_col} 形成层次",
+                        }
+                    )
+
+            # 5. Tree structure indicators (path, lft/rgt for nested sets)
+            has_tree_path = any("path" in col_name for col_name in col_names)
+            has_nested_set = "lft" in col_names and "rgt" in col_names
+
+            if has_tree_path:
+                path_col = next(col["name"] for col in columns if "path" in col["name"].lower())
+                hierarchies.append(
+                    {
+                        "type": "path_based",
+                        "concept": table_name,
+                        "path_property": path_col,
+                        "description": f"{table_name} 使用路径字段 {path_col} 存储层次结构",
+                    }
+                )
+
+            if has_nested_set:
+                hierarchies.append(
+                    {
+                        "type": "nested_set",
+                        "concept": table_name,
+                        "left_property": "lft",
+                        "right_property": "rgt",
+                        "description": f"{table_name} 使用嵌套集合模型(Nested Set)存储树形结构",
+                    }
+                )
+
+            # 6. Adjacency patterns (common naming suggesting hierarchy)
+            adjacency_patterns = [
+                ("parent", "parent reference"),
+                ("superior", "superior relationship"),
+                ("belongs_to", "belonging hierarchy"),
+            ]
+
+            for pattern, desc in adjacency_patterns:
+                matching_cols = [col for col in columns if pattern in col["name"].lower()]
+                for col in matching_cols:
+                    if col["name"].lower() not in hierarchy_indicators:  # Avoid duplicates
+                        hierarchies.append(
+                            {
+                                "type": "adjacency_list",
+                                "concept": table_name,
+                                "reference_property": col["name"],
+                                "description": f"{table_name}.{col['name']} 可能表示层次关系 ({desc})",
+                            }
+                        )
+
+        # Remove duplicates (same concept + type)
+        seen = set()
+        unique_hierarchies = []
+        for h in hierarchies:
+            key = (h["concept"], h["type"])
+            if key not in seen:
+                seen.add(key)
+                unique_hierarchies.append(h)
+
+        return unique_hierarchies
 
     def _enrich_with_llm(
         self, ontology: Dict[str, Any], schema_metadata: Dict[str, Any]

@@ -478,28 +478,8 @@ class AsyncConversationService:
                         break
 
             # Stream all chunks
-            final_metadata = None
             async for chunk in stream_with_progress():
                 yield chunk
-
-                # Capture final metadata from complete event
-                if chunk.get("type") == "complete":
-                    final_metadata = chunk.get("metadata", {})
-
-            # Send tool calls info if available
-            if final_metadata and final_metadata.get("tool_calls"):
-                for tool_call in final_metadata["tool_calls"]:
-                    yield {
-                        "type": "tool_result",
-                        "content": f"Tool: {tool_call['name']}",
-                        "metadata": {
-                            "tool_name": tool_call["name"],
-                            "tool_args": tool_call.get("args", {}),
-                            "result": tool_call.get("result", ""),  # Send full result
-                            "error": tool_call.get("error"),
-                            "status": "error" if "error" in tool_call else "completed"
-                        },
-                    }
 
             logger.info(f"Task completed for conversation {conversation_id}")
 

@@ -69,6 +69,10 @@ export const useChatStore = defineStore('chat', () => {
       }))
       console.log('[ChatStore] Loaded', messages.value.length, 'messages')
 
+      // Clear old callbacks before setting up new ones
+      sseService.clearCallbacks()
+      console.log('[ChatStore] Cleared old SSE callbacks')
+
       // Connect SSE
       sseService.connect(conversationId)
       isConnected.value = true

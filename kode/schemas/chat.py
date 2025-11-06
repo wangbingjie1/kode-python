@@ -36,11 +36,12 @@ class MessageResponse(BaseModel):
     conversation_id: str
     role: str
     content: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict, alias="message_metadata")
     created_at: datetime
 
     class Config:
         from_attributes = True
+        populate_by_name = True  # Allow using both 'metadata' and 'message_metadata'
 
 
 class WebSocketMessage(BaseModel):

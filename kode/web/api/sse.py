@@ -74,6 +74,7 @@ async def event_generator(
     conversation_service: AsyncConversationService,
     user_id: str,
     database_name: str | None = None,
+    chat_history: list | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Generate SSE events for streaming AI responses.
@@ -86,16 +87,25 @@ async def event_generator(
     data: {"type": "complete", "content": "...", "metadata": {}}
 
     """
+    from kode.database.session import async_session_maker
+
+    assistant_content = ""  # 收集完整的 AI 回复
+
     try:
         async for chunk in conversation_service.execute_task_streaming(
             task=task_content,
             conversation_id=conversation_id,
             user_id=user_id,
             database_name=database_name,
+            chat_history=chat_history or [],  # ← 传入历史消息
         ):
             # Format as SSE event
             chunk_type = chunk.get('type')
             logger.info(f"[SSE] Sending chunk: type={chunk_type}")
+
+            # Collect assistant response content
+            if chunk_type == "chunk":
+                assistant_content += chunk.get("content", "")
 
             # Log tool call details for debugging
             if chunk_type in ('tool_call', 'tool_result'):
@@ -109,6 +119,19 @@ async def event_generator(
 
             event_data = json.dumps(chunk, ensure_ascii=False)
             yield f"data: {event_data}\n\n"
+
+        # Save assistant message to database (create new session)
+        if assistant_content:
+            async with async_session_maker() as db:
+                assistant_message = Message(
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=assistant_content,
+                    metadata={}
+                )
+                db.add(assistant_message)
+                await db.commit()
+                logger.info(f"[SSE] Saved assistant message to conversation {conversation_id}")
 
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done', 'content': '', 'metadata': {}})}\n\n"
@@ -170,13 +193,47 @@ async def stream_chat(
             detail="Task parameter is required"
         )
 
+    # Load conversation history (last 50 messages for context)
+    messages_result = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at)
+        .limit(50)
+    )
+    messages = messages_result.scalars().all()
+
+    # Convert to chat history format
+    chat_history = [
+        {"role": msg.role, "content": msg.content}
+        for msg in messages
+    ]
+
+    logger.info(f"Loaded {len(chat_history)} messages from conversation {conversation_id}")
+
     # Create conversation service
     conversation_service = AsyncConversationService()
 
-    # Return SSE stream
+    # Save user message to database
+    user_message = Message(
+        conversation_id=conversation_id,
+        role="user",
+        content=task,
+        metadata={"database_name": database_name} if database_name else None
+    )
+    db.add(user_message)
+    await db.commit()
+
+    # Return SSE stream (with history)
     return StreamingResponse(
-        event_generator(conversation_id, task, conversation_service, current_user.id, database_name),
-        media_type="text/event-stream",
+        event_generator(
+            conversation_id,
+            task,
+            conversation_service,
+            current_user.id,
+            database_name,
+            chat_history,  # ← 传入历史消息
+        ),
+        media_type="text/event-stream; charset=utf-8",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
@@ -224,7 +281,7 @@ async def send_message_sse(
     # Return SSE stream
     return StreamingResponse(
         event_generator(conversation_id, task, conversation_service),
-        media_type="text/event-stream",
+        media_type="text/event-stream; charset=utf-8",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",

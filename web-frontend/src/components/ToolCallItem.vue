@@ -35,26 +35,48 @@
           </div>
         </div>
 
+        <!-- SQL Query Display (for DatabaseExecuteQuery tool) -->
+        <div v-if="isDatabaseQueryTool && extractedSQL" class="detail-section">
+          <div class="section-title-with-action">
+            <span class="section-title">SQL 查询</span>
+            <div class="button-group">
+              <button
+                @click.stop="copySQLToClipboard"
+                :disabled="isCopyingSQL"
+                class="icon-button"
+                title="复制SQL"
+              >
+                <svg v-if="!isCopyingSQL" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <svg v-else class="w-3.5 h-3.5 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>{{ isCopyingSQL ? '已复制' : '复制' }}</span>
+              </button>
+              <button
+                @click.stop="executeQuery"
+                :disabled="isQuerying"
+                class="query-button"
+              >
+                <svg v-if="!isQuerying" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <svg v-else class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v4m0 8v4m8-8h-4M8 12H4m12.364-7.364l-2.828 2.828M8.464 15.536l-2.828 2.828m0-12.728l2.828 2.828m8.485 8.485l2.828 2.828" />
+                </svg>
+                <span>{{ isQuerying ? '查询中...' : '立即查询' }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="sql-block">
+            <pre>{{ extractedSQL }}</pre>
+          </div>
+        </div>
+
         <!-- Result or Error -->
         <div v-if="toolResult || toolError" class="detail-section">
-          <div class="section-title-with-action">
-            <span class="section-title">{{ hasError ? '错误信息' : '执行结果' }}</span>
-            <!-- Query button for DatabaseExecuteQuery tool -->
-            <button
-              v-if="isDatabaseQueryTool && parsedResult && parsedResult.sql"
-              @click.stop="executeQuery"
-              :disabled="isQuerying"
-              class="query-button"
-            >
-              <svg v-if="!isQuerying" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <svg v-else class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v4m0 8v4m8-8h-4M8 12H4m12.364-7.364l-2.828 2.828M8.464 15.536l-2.828 2.828m0-12.728l2.828 2.828m8.485 8.485l2.828 2.828" />
-              </svg>
-              <span>{{ isQuerying ? '查询中...' : '立即查询' }}</span>
-            </button>
-          </div>
+          <div class="section-title">{{ hasError ? '错误信息' : '执行结果' }}</div>
           <div class="code-block" :class="{ 'is-error': hasError }">
             <pre>{{ toolResult || toolError }}</pre>
           </div>
@@ -92,6 +114,7 @@ const props = defineProps<ToolCallProps>()
 
 const isExpanded = ref(false)
 const isQuerying = ref(false)
+const isCopyingSQL = ref(false)
 const queryResults = ref<any>(null)
 const queryError = ref<string>('')
 const showQueryResults = ref(false)
@@ -112,10 +135,30 @@ const isDatabaseQueryTool = computed(() => {
 const parsedResult = computed(() => {
   if (!props.toolResult) return null
   try {
-    return JSON.parse(props.toolResult)
+    const parsed = JSON.parse(props.toolResult)
+    console.log('[ToolCallItem] Parsed result:', parsed)
+    return parsed
   } catch (e) {
+    console.error('[ToolCallItem] Failed to parse toolResult:', e, 'Raw:', props.toolResult)
     return null
   }
+})
+
+// 提取并反转义SQL语句
+const extractedSQL = computed(() => {
+  if (!parsedResult.value || !parsedResult.value.sql) return null
+
+  // 反转义SQL字符串：\n → 换行, \t → 制表符
+  const sql = parsedResult.value.sql
+  const unescaped = sql
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\r/g, '\r')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+
+  console.log('[ToolCallItem] Extracted SQL (unescaped):', unescaped)
+  return unescaped
 })
 
 function toggleExpand() {
@@ -130,17 +173,36 @@ function formatJSON(obj: any): string {
   }
 }
 
+async function copySQLToClipboard() {
+  if (!extractedSQL.value) {
+    notification.error('错误', '无法复制SQL')
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(extractedSQL.value)
+    isCopyingSQL.value = true
+    notification.success('已复制', 'SQL已复制到剪贴板')
+    setTimeout(() => {
+      isCopyingSQL.value = false
+    }, 2000)
+  } catch (error) {
+    console.error('Failed to copy SQL:', error)
+    notification.error('复制失败', '无法访问剪贴板')
+  }
+}
+
 async function executeQuery() {
-  if (!parsedResult.value || !parsedResult.value.sql) {
+  if (!extractedSQL.value) {
     notification.error('错误', '无法提取SQL查询')
     return
   }
 
-  const sql = parsedResult.value.sql
-  const connectionName = parsedResult.value.connection_name || props.toolArgs?.connection_name
+  const connectionName = parsedResult.value?.connection_name || props.toolArgs?.connection_name
 
   if (!connectionName) {
     notification.error('错误', '无法确定数据库连接名称')
+    console.error('[ToolCallItem] Missing connection_name. parsedResult:', parsedResult.value, 'toolArgs:', props.toolArgs)
     return
   }
 
@@ -150,7 +212,8 @@ async function executeQuery() {
   showQueryResults.value = true
 
   try {
-    const result = await executeDatabaseQuery(connectionName, sql)
+    console.log('[ToolCallItem] Executing query:', { connectionName, sql: extractedSQL.value })
+    const result = await executeDatabaseQuery(connectionName, extractedSQL.value)
 
     if (result.status === 'success') {
       queryResults.value = result
@@ -161,6 +224,7 @@ async function executeQuery() {
     }
   } catch (error: any) {
     queryError.value = error.response?.data?.detail || error.message || '查询执行失败'
+    console.error('[ToolCallItem] Query execution error:', error)
     notification.error('查询失败', queryError.value)
   } finally {
     isQuerying.value = false
@@ -296,6 +360,38 @@ async function executeQuery() {
   margin-bottom: 0.5rem;
 }
 
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+
+.icon-button:hover:not(:disabled) {
+  border-color: #9ca3af;
+  background: #f9fafb;
+  color: #374151;
+}
+
+.icon-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .query-button {
   display: inline-flex;
   align-items: center;
@@ -322,9 +418,28 @@ async function executeQuery() {
   cursor: not-allowed;
 }
 
-.query-button svg {
+.query-button svg,
+.icon-button svg {
   width: 0.875rem;
   height: 0.875rem;
+}
+
+.sql-block {
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  background: #1f2937;
+  padding: 0.75rem;
+  overflow-x: auto;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.sql-block pre {
+  margin: 0;
+  color: #f3f4f6;
+  white-space: pre;
+  word-break: normal;
 }
 
 .code-block {
