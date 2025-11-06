@@ -37,10 +37,37 @@
 
         <!-- Result or Error -->
         <div v-if="toolResult || toolError" class="detail-section">
-          <div class="section-title">{{ hasError ? '错误信息' : '执行结果' }}</div>
+          <div class="section-title-with-action">
+            <span class="section-title">{{ hasError ? '错误信息' : '执行结果' }}</span>
+            <!-- Query button for DatabaseExecuteQuery tool -->
+            <button
+              v-if="isDatabaseQueryTool && parsedResult && parsedResult.sql"
+              @click.stop="executeQuery"
+              :disabled="isQuerying"
+              class="query-button"
+            >
+              <svg v-if="!isQuerying" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <svg v-else class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v4m0 8v4m8-8h-4M8 12H4m12.364-7.364l-2.828 2.828M8.464 15.536l-2.828 2.828m0-12.728l2.828 2.828m8.485 8.485l2.828 2.828" />
+              </svg>
+              <span>{{ isQuerying ? '查询中...' : '立即查询' }}</span>
+            </button>
+          </div>
           <div class="code-block" :class="{ 'is-error': hasError }">
             <pre>{{ toolResult || toolError }}</pre>
           </div>
+        </div>
+
+        <!-- Query results table -->
+        <div v-if="showQueryResults" class="detail-section">
+          <div class="section-title">查询结果</div>
+          <QueryResultTable
+            :loading="isQuerying"
+            :error="queryError"
+            :data="queryResults"
+          />
         </div>
       </div>
     </transition>
@@ -49,6 +76,9 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import QueryResultTable from './QueryResultTable.vue'
+import { executeDatabaseQuery } from '@/services/api'
+import { notification } from '@/composables/useNotification'
 
 interface ToolCallProps {
   toolName: string
@@ -61,6 +91,10 @@ interface ToolCallProps {
 const props = defineProps<ToolCallProps>()
 
 const isExpanded = ref(false)
+const isQuerying = ref(false)
+const queryResults = ref<any>(null)
+const queryError = ref<string>('')
+const showQueryResults = ref(false)
 
 const hasError = computed(() => !!props.toolError)
 
@@ -69,6 +103,19 @@ const statusText = computed(() => {
   if (props.status === 'completed') return '执行成功'
   if (props.status === 'started') return '执行中...'
   return '已完成'
+})
+
+const isDatabaseQueryTool = computed(() => {
+  return props.toolName === 'DatabaseExecuteQuery'
+})
+
+const parsedResult = computed(() => {
+  if (!props.toolResult) return null
+  try {
+    return JSON.parse(props.toolResult)
+  } catch (e) {
+    return null
+  }
 })
 
 function toggleExpand() {
@@ -80,6 +127,43 @@ function formatJSON(obj: any): string {
     return JSON.stringify(obj, null, 2)
   } catch (e) {
     return String(obj)
+  }
+}
+
+async function executeQuery() {
+  if (!parsedResult.value || !parsedResult.value.sql) {
+    notification.error('错误', '无法提取SQL查询')
+    return
+  }
+
+  const sql = parsedResult.value.sql
+  const connectionName = parsedResult.value.connection_name || props.toolArgs?.connection_name
+
+  if (!connectionName) {
+    notification.error('错误', '无法确定数据库连接名称')
+    return
+  }
+
+  isQuerying.value = true
+  queryError.value = ''
+  queryResults.value = null
+  showQueryResults.value = true
+
+  try {
+    const result = await executeDatabaseQuery(connectionName, sql)
+
+    if (result.status === 'success') {
+      queryResults.value = result
+      notification.success('查询成功', result.message || '查询执行完成')
+    } else {
+      queryError.value = result.message || '查询执行失败'
+      notification.error('查询失败', queryError.value)
+    }
+  } catch (error: any) {
+    queryError.value = error.response?.data?.detail || error.message || '查询执行失败'
+    notification.error('查询失败', queryError.value)
+  } finally {
+    isQuerying.value = false
   }
 }
 </script>
@@ -203,6 +287,44 @@ function formatJSON(obj: any): string {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
+}
+
+.section-title-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.query-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid #3b82f6;
+  background: white;
+  color: #3b82f6;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+
+.query-button:hover:not(:disabled) {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
+}
+
+.query-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.query-button svg {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 .code-block {
