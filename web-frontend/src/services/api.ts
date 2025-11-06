@@ -314,4 +314,24 @@ export async function searchOntology(
   return response.data
 }
 
+/**
+ * Execute SQL query on a database connection
+ */
+export async function executeDatabaseQuery(
+  connectionName: string,
+  sql: string,
+  params?: Record<string, any>,
+  fetchLimit?: number
+): Promise<any> {
+  const response = await apiClient.post<any>(
+    `/database/connections/${connectionName}/query`,
+    {
+      sql,
+      params,
+      fetch_limit: fetchLimit || 100
+    }
+  )
+  return response.data
+}
+
 export default apiClient

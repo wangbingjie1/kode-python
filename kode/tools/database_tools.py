@@ -761,8 +761,10 @@ class DatabaseExecuteQueryTool(KodeTool):
                             "has_more": has_more,
                             "columns": columns,
                             "data": data,
-                            "message": f"Query returned {len(data)} row(s)" +
-                                      (f" (limited to {fetch_limit}, more available)" if has_more else ""),
+                            "sql": sql,
+                            "connection_name": connection_name,
+                            "message": f"查询返回 {len(data)} 行" +
+                                      (f" (限制 {fetch_limit} 行，可能有更多)" if has_more else ""),
                         },
                         indent=2,
                         ensure_ascii=False,
@@ -778,7 +780,9 @@ class DatabaseExecuteQueryTool(KodeTool):
                             "status": "success",
                             "query_type": query_type,
                             "affected_rows": affected_rows,
-                            "message": f"{query_type} operation completed, {affected_rows} row(s) affected",
+                            "sql": sql,
+                            "connection_name": connection_name,
+                            "message": f"{query_type} 操作完成，影响 {affected_rows} 行",
                         },
                         indent=2,
                         ensure_ascii=False,

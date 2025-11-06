@@ -490,3 +490,145 @@ async def search_ontology(name: str, search_query: OntologySearchQuery):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to search ontology: {str(e)}",
         )
+
+
+@router.post("/connections/{name}/query", response_model=Dict[str, Any])
+async def execute_query(name: str, request_data: Dict[str, Any]):
+    """Execute SQL query on a database connection"""
+    try:
+        # Get connection
+        connection = db_manager.get_connection(name)
+        if not connection:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Connection '{name}' not found",
+            )
+
+        sql = request_data.get("sql", "")
+        params = request_data.get("params")
+        fetch_limit = request_data.get("fetch_limit", 100)
+
+        if not sql or not sql.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="SQL query is required",
+            )
+
+        # Run query in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            partial(_execute_query_sync, name, sql, params, fetch_limit)
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error executing query: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to execute query: {str(e)}",
+        )
+
+
+def _execute_query_sync(
+    connection_name: str,
+    sql: str,
+    params: Dict[str, Any] = None,
+    fetch_limit: int = 100
+) -> Dict[str, Any]:
+    """
+    Synchronous query execution function to run in thread pool.
+    """
+    from sqlalchemy import create_engine, text
+    from datetime import datetime
+    import re
+
+    connection = db_manager.get_connection(connection_name)
+    if not connection:
+        raise ValueError(f"Connection '{connection_name}' not found")
+
+    # Create engine
+    url = connection.get_connection_url(async_mode=False)
+    engine = create_engine(url, pool_pre_ping=True)
+
+    try:
+        # Determine query type
+        query_type = _get_query_type(sql)
+        is_select = query_type == "SELECT"
+
+        with engine.connect() as conn:
+            # Execute query
+            if params:
+                result = conn.execute(text(sql), params)
+            else:
+                result = conn.execute(text(sql))
+
+            # Process results
+            if is_select:
+                rows = result.fetchmany(fetch_limit)
+                columns = list(result.keys())
+
+                # Convert to list of dicts
+                data = []
+                for row in rows:
+                    row_dict = {}
+                    for i, col in enumerate(columns):
+                        value = row[i]
+                        # Convert non-JSON-serializable types
+                        if isinstance(value, datetime):
+                            value = value.isoformat()
+                        elif not isinstance(value, (str, int, float, bool, type(None))):
+                            value = str(value)
+                        row_dict[col] = value
+                    data.append(row_dict)
+
+                has_more = len(rows) == fetch_limit
+
+                return {
+                    "status": "success",
+                    "query_type": query_type,
+                    "row_count": len(data),
+                    "has_more": has_more,
+                    "columns": columns,
+                    "data": data,
+                    "message": f"查询返回 {len(data)} 行" +
+                              (f" (限制 {fetch_limit} 行，可能有更多)" if has_more else ""),
+                }
+            else:
+                # Write operation
+                conn.commit()
+                affected_rows = result.rowcount if hasattr(result, 'rowcount') else 0
+
+                return {
+                    "status": "success",
+                    "query_type": query_type,
+                    "affected_rows": affected_rows,
+                    "message": f"{query_type} 操作完成，影响 {affected_rows} 行",
+                }
+
+    except Exception as e:
+        error_msg = str(e)
+        return {
+            "status": "error",
+            "message": f"查询执行失败: {error_msg}",
+            "query_type": _get_query_type(sql),
+        }
+    finally:
+        engine.dispose()
+
+
+def _get_query_type(sql: str) -> str:
+    """Determine SQL query type"""
+    import re
+    sql_clean = sql.strip()
+    sql_clean = re.sub(r'/\*.*?\*/', '', sql_clean, flags=re.DOTALL)
+    sql_clean = re.sub(r'--.*?(\n|$)', '', sql_clean)
+    sql_clean = sql_clean.strip()
+
+    match = re.match(r'^\s*(\w+)', sql_clean, re.IGNORECASE)
+    if match:
+        return match.group(1).upper()
+    return "UNKNOWN"
