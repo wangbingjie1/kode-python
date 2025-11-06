@@ -78,6 +78,7 @@ nul
 
 # Database files
 *.db
+kode.db
 !schema.db
 
 # Test files
