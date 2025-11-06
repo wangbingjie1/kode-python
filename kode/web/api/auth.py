@@ -4,10 +4,13 @@ Authentication API Routes
 User registration, login, token refresh, and profile endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime
+import httpx
+import uuid
 
 from kode.database.session import get_db
 from kode.models import User
@@ -17,6 +20,7 @@ from kode.schemas.auth import (
     TokenResponse,
     TokenRefresh,
     UserProfile,
+    GoogleCallbackRequest,
 )
 from kode.core.security import (
     hash_password,
@@ -25,6 +29,7 @@ from kode.core.security import (
     create_refresh_token,
     verify_token,
 )
+from kode.core.oauth import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
 from kode.web.dependencies import get_current_user
 
 router = APIRouter()
@@ -171,4 +176,146 @@ async def get_profile(
         email=current_user.email,
         is_active=current_user.is_active,
         created_at=current_user.created_at.isoformat(),
+        auth_provider=current_user.auth_provider,
+        avatar_url=current_user.avatar_url,
+    )
+
+
+@router.get("/google/login")
+async def google_login():
+    """
+    发起谷歌OAuth2登录
+
+    返回谷歌授权URL，前端跳转到该URL
+    """
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="谷歌登录未配置",
+        )
+
+    google_auth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={GOOGLE_CLIENT_ID}&"
+        f"redirect_uri={GOOGLE_REDIRECT_URI}&"
+        f"response_type=code&"
+        f"scope=openid email profile&"
+        f"access_type=offline&"
+        f"prompt=consent"
+    )
+
+    return {"auth_url": google_auth_url}
+
+
+@router.post("/google/callback", response_model=TokenResponse)
+async def google_callback(
+    callback_data: GoogleCallbackRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    谷歌OAuth2回调处理
+
+    接收授权码，交换访问令牌，获取用户信息，创建/登录用户
+    """
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="谷歌登录未配置",
+        )
+
+    # 1. 交换授权码获取访问令牌
+    async with httpx.AsyncClient() as client:
+        token_response = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": callback_data.code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": GOOGLE_REDIRECT_URI,
+                "grant_type": "authorization_code",
+            },
+        )
+
+        if token_response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="授权码验证失败",
+            )
+
+        token_data = token_response.json()
+        access_token = token_data.get("access_token")
+
+        # 2. 使用访问令牌获取用户信息
+        user_info_response = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        if user_info_response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="获取用户信息失败",
+            )
+
+        user_info = user_info_response.json()
+
+    # 3. 提取用户信息
+    google_id = user_info.get("id")
+    email = user_info.get("email")
+    name = user_info.get("name", email.split("@")[0])
+    avatar_url = user_info.get("picture")
+
+    if not google_id or not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户信息不完整",
+        )
+
+    # 4. 查找或创建用户
+    # 先通过google_id查找
+    result = await db.execute(select(User).where(User.google_id == google_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # 再通过email查找（可能是已有用户首次使用谷歌登录）
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+
+        if user:
+            # 关联现有用户到谷歌账号
+            user.google_id = google_id
+            user.auth_provider = "google"
+            user.avatar_url = avatar_url
+        else:
+            # 创建新用户
+            user = User(
+                id=str(uuid.uuid4()),
+                username=name,
+                email=email,
+                hashed_password=None,  # OAuth用户无密码
+                auth_provider="google",
+                google_id=google_id,
+                avatar_url=avatar_url,
+                is_active=True,
+            )
+            db.add(user)
+
+        await db.commit()
+        await db.refresh(user)
+
+    # 5. 检查用户状态
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="用户已被禁用",
+        )
+
+    # 6. 生成JWT令牌
+    jwt_access_token = create_access_token(data={"sub": user.id})
+    jwt_refresh_token = create_refresh_token(data={"sub": user.id})
+
+    return TokenResponse(
+        access_token=jwt_access_token,
+        refresh_token=jwt_refresh_token,
+        token_type="bearer",
     )

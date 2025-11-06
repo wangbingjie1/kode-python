@@ -27,8 +27,8 @@
     <!-- Expandable content -->
     <transition name="expand">
       <div v-if="isExpanded" class="tool-details">
-        <!-- Arguments -->
-        <div v-if="toolArgs && Object.keys(toolArgs).length > 0" class="detail-section">
+        <!-- Arguments (数据库工具默认隐藏) -->
+        <div v-if="toolArgs && Object.keys(toolArgs).length > 0 && !isDatabaseQueryTool" class="detail-section">
           <div class="section-title">输入参数</div>
           <div class="code-block">
             <pre>{{ formatJSON(toolArgs) }}</pre>
@@ -77,7 +77,17 @@
         <!-- Result or Error -->
         <div v-if="toolResult || toolError" class="detail-section">
           <div class="section-title">{{ hasError ? '错误信息' : '执行结果' }}</div>
-          <div class="code-block" :class="{ 'is-error': hasError }">
+
+          <!-- 如果结果是表格数据，用表格展示 -->
+          <QueryResultTable
+            v-if="!hasError && parsedToolResult && isTableData(parsedToolResult)"
+            :loading="false"
+            :error="''"
+            :data="parsedToolResult"
+          />
+
+          <!-- 否则用代码块展示 -->
+          <div v-else class="code-block" :class="{ 'is-error': hasError }">
             <pre>{{ toolResult || toolError }}</pre>
           </div>
         </div>
@@ -143,6 +153,28 @@ const parsedResult = computed(() => {
     return null
   }
 })
+
+// 解析 toolResult 用于表格渲染
+const parsedToolResult = computed(() => {
+  if (!props.toolResult || hasError.value) return null
+  try {
+    const parsed = JSON.parse(props.toolResult)
+    return parsed
+  } catch (e) {
+    return null
+  }
+})
+
+// 判断是否为表格数据
+function isTableData(data: any): boolean {
+  return (
+    data &&
+    typeof data === 'object' &&
+    Array.isArray(data.columns) &&
+    Array.isArray(data.data) &&
+    data.columns.length > 0
+  )
+}
 
 // 提取并反转义SQL语句
 const extractedSQL = computed(() => {

@@ -30,6 +30,8 @@ alembic = "^1.13.0"
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-multipart = "^0.0.6"
+authlib = "^1.3.0"
+httpx = "^0.26.0"
 # Database drivers for multi-DB support
 asyncpg = "^0.29.0"
 aiomysql = "^0.2.0"

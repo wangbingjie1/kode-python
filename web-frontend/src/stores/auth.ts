@@ -12,6 +12,8 @@ interface User {
   email: string
   is_active: boolean
   created_at: string
+  auth_provider?: string
+  avatar_url?: string
 }
 
 interface LoginCredentials {
@@ -122,6 +124,42 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function loginWithGoogle(code: string) {
+    isLoading.value = true
+    error.value = null
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/google/callback`, { code })
+      const { access_token, refresh_token } = response.data
+
+      // 存储令牌
+      accessToken.value = access_token
+      refreshToken.value = refresh_token
+      localStorage.setItem('access_token', access_token)
+      localStorage.setItem('refresh_token', refresh_token)
+
+      // 获取用户信息
+      await fetchUserProfile()
+
+      return true
+    } catch (err: any) {
+      error.value = err.response?.data?.detail || '谷歌登录失败'
+      throw error.value
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function getGoogleAuthUrl(): Promise<string> {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/auth/google/login`)
+      return response.data.auth_url
+    } catch (err: any) {
+      error.value = err.response?.data?.detail || '获取谷歌登录URL失败'
+      throw error.value
+    }
+  }
+
   function logout() {
     user.value = null
     accessToken.value = null
@@ -150,6 +188,8 @@ export const useAuthStore = defineStore('auth', () => {
     // Actions
     login,
     register,
+    loginWithGoogle,
+    getGoogleAuthUrl,
     fetchUserProfile,
     refreshAccessToken,
     logout

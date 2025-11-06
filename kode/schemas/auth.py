@@ -45,6 +45,14 @@ class UserProfile(BaseModel):
     email: str
     is_active: bool
     created_at: str
+    auth_provider: Optional[str] = "local"
+    avatar_url: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class GoogleCallbackRequest(BaseModel):
+    """谷歌OAuth2回调请求"""
+
+    code: str = Field(..., description="授权码")
