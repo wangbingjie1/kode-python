@@ -1,0 +1,882 @@
+<template>
+  <aside class="app-sidebar" :class="{ 'is-collapsed': isCollapsed }">
+    <!-- Header: Logo + User Menu -->
+    <header class="sidebar-header">
+      <button
+        class="collapse-btn"
+        @click="$emit('toggle-collapse')"
+        :aria-label="isCollapsed ? '展开侧边栏' : '折叠侧边栏'"
+      >
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      <div v-if="!isCollapsed" class="logo">
+        <span class="logo-text">Kode AI</span>
+      </div>
+
+      <div v-if="!isCollapsed" class="user-menu">
+        <div class="user-trigger" @click="toggleUserMenu">
+          <div class="user-avatar">
+            {{ userInitial }}
+          </div>
+          <svg class="dropdown-icon" :class="{ 'is-open': isUserMenuOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+
+        <div v-if="isUserMenuOpen" class="user-dropdown">
+          <div class="dropdown-item user-info">
+            <div class="user-name">{{ authStore.currentUser?.username }}</div>
+            <div class="user-email">{{ authStore.currentUser?.email }}</div>
+          </div>
+          <div class="dropdown-divider"></div>
+          <router-link to="/profile" class="dropdown-item" @click="isUserMenuOpen = false">
+            <svg class="item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            {{ $t('nav.profile') }}
+          </router-link>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item logout-btn" @click="handleLogout">
+            <svg class="item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            {{ $t('nav.logout') }}
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <template v-if="!isCollapsed">
+      <!-- New Chat Button -->
+      <div class="new-chat-section">
+        <button class="new-chat-btn" @click="$emit('new-conversation')">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
+          </svg>
+          <span>新建对话</span>
+        </button>
+      </div>
+
+      <!-- Tab Navigation -->
+      <nav class="sidebar-nav">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          class="nav-tab"
+          :class="{ 'is-active': activeTab === tab.id }"
+          @click="$emit('change-tab', tab.id)"
+        >
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" :d="tab.icon" />
+          </svg>
+          <span>{{ tab.label }}</span>
+        </button>
+      </nav>
+
+      <!-- Content Area -->
+      <div class="sidebar-content">
+        <!-- Chats Tab -->
+        <div v-if="activeTab === 'chats'" class="content-section">
+          <h3 class="section-title">最近对话</h3>
+          <div v-if="conversations.length" class="conversations-list">
+            <div
+              v-for="conv in conversations"
+              :key="conv.id"
+              class="conversation-item"
+              :class="{ 'is-active': conv.id === activeConversationId }"
+              @click="$emit('select-conversation', conv.id)"
+            >
+              <svg class="conv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2h-5l-5 5v-4z" />
+              </svg>
+              <div class="conv-info">
+                <div class="conv-title">{{ conv.title }}</div>
+                <div class="conv-time">{{ formatTime(conv.created_at) }}</div>
+              </div>
+              <button class="delete-btn" @click.stop="$emit('delete-conversation', conv.id)">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-1 12a2 2 0 01-2 2H8a2 2 0 01-2-2L5 7m4 4v6m4-6v6M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-9 0h12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div v-else class="empty-state">
+            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.26-.95L3 20l1.4-3.72A6.96 6.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <p>暂无对话</p>
+          </div>
+        </div>
+
+        <!-- Database Tab -->
+        <div v-else-if="activeTab === 'database'" class="content-section">
+          <h3 class="section-title">数据库</h3>
+          <div class="empty-state">
+            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6c0-1.657 3.582-3 8-3s8 1.343 8 3M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3M4 18c0 1.657 3.582 3 8 3s8-1.343 8-3M4 6v12c0 1.657 3.582 3 8 3s8-1.343 8-3V6" />
+            </svg>
+            <p>通过对话连接和管理数据库</p>
+          </div>
+        </div>
+
+        <!-- Billing Tab -->
+        <div v-else-if="activeTab === 'billing'" class="content-section">
+          <h3 class="section-title">订阅计划</h3>
+          <div class="billing-info">
+            <div class="plan-card">
+              <div class="plan-name">{{ currentPlan?.display_name || '免费计划' }}</div>
+              <div class="plan-price" v-if="currentPlan">
+                ${{ currentPlan.price_monthly }}/月
+              </div>
+              <router-link to="/billing" class="upgrade-btn" @click="$emit('close-mobile')">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                查看套餐
+              </router-link>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div v-else-if="activeTab === 'settings'" class="content-section">
+          <h3 class="section-title">设置</h3>
+          <div class="settings-list">
+            <div class="setting-item">
+              <div class="setting-label">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                </svg>
+                <span>语言</span>
+              </div>
+              <LanguageSwitcher />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer: User Profile Card -->
+      <footer class="sidebar-footer">
+        <div class="profile-card">
+          <div class="profile-header">
+            <div class="profile-avatar">
+              {{ userInitial }}
+            </div>
+            <div class="profile-info">
+              <div class="profile-name">{{ authStore.currentUser?.username }}</div>
+              <div class="profile-plan">{{ currentPlan?.display_name || '免费计划' }}</div>
+            </div>
+          </div>
+          <div class="profile-stats" v-if="usageSummary">
+            <div class="stat-item">
+              <div class="stat-label">消息配额</div>
+              <div class="stat-value">{{ usageSummary.message_used }} / {{ usageSummary.message_quota }}</div>
+              <div class="stat-bar">
+                <div class="stat-fill" :style="{ width: `${messagePercentage}%`, backgroundColor: getBarColor(messagePercentage) }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </template>
+  </aside>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
+import { useBillingStore } from '@/stores/billing'
+import { notification } from '@/composables/useNotification'
+import LanguageSwitcher from './LanguageSwitcher.vue'
+
+interface Conversation {
+  id: string
+  title: string
+  created_at: string
+}
+
+type TabId = 'chats' | 'database' | 'billing' | 'settings'
+
+const props = defineProps<{
+  isCollapsed: boolean
+  activeTab: TabId
+  conversations: Conversation[]
+  activeConversationId?: string
+}>()
+
+defineEmits<{
+  'toggle-collapse': []
+  'change-tab': [id: TabId]
+  'new-conversation': []
+  'select-conversation': [id: string]
+  'delete-conversation': [id: string]
+  'close-mobile': []
+}>()
+
+const router = useRouter()
+const { t } = useI18n()
+const authStore = useAuthStore()
+const billingStore = useBillingStore()
+
+const isUserMenuOpen = ref(false)
+
+const tabs = [
+  {
+    id: 'chats' as TabId,
+    label: '对话',
+    icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2h-5l-5 5v-4z'
+  },
+  {
+    id: 'database' as TabId,
+    label: '数据库',
+    icon: 'M4 6c0-1.657 3.582-3 8-3s8 1.343 8 3M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3M4 18c0 1.657 3.582 3 8 3s8-1.343 8-3M4 6v12c0 1.657 3.582 3 8 3s8-1.343 8-3V6'
+  },
+  {
+    id: 'billing' as TabId,
+    label: '订阅',
+    icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'
+  },
+  {
+    id: 'settings' as TabId,
+    label: '设置',
+    icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z'
+  }
+]
+
+const userInitial = computed(() => {
+  const username = authStore.currentUser?.username || 'U'
+  return username.charAt(0).toUpperCase()
+})
+
+const currentPlan = computed(() => billingStore.currentPlan)
+const usageSummary = computed(() => billingStore.usageSummary)
+const messagePercentage = computed(() => billingStore.messageUsagePercentage)
+
+onMounted(async () => {
+  await billingStore.refreshAll()
+})
+
+function toggleUserMenu() {
+  isUserMenuOpen.value = !isUserMenuOpen.value
+}
+
+async function handleLogout() {
+  authStore.logout()
+  notification.success(t('auth.logoutSuccess'), t('auth.logoutSuccessMsg'))
+  router.push('/login')
+}
+
+function formatTime(dateString: string): string {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.floor(diffMinutes / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffDays === 0) {
+    if (diffHours === 0) {
+      return diffMinutes <= 1 ? '刚刚' : `${diffMinutes}分钟前`
+    }
+    return `${diffHours}小时前`
+  }
+  if (diffDays === 1) return '昨天'
+  if (diffDays < 7) return `${diffDays}天前`
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+}
+
+function getBarColor(percentage: number): string {
+  if (percentage >= 90) return '#ef4444'
+  if (percentage >= 70) return '#f59e0b'
+  return '#10b981'
+}
+
+// Close menu when clicking outside
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement
+    if (!target.closest('.user-menu')) {
+      isUserMenuOpen.value = false
+    }
+  })
+}
+</script>
+
+<style scoped>
+.app-sidebar {
+  width: 280px;
+  height: 100vh;
+  background: linear-gradient(to bottom, #fefaf7, #fdf7f0);
+  border-right: 1px solid #eadfd3;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.app-sidebar.is-collapsed {
+  width: 0;
+  overflow: hidden;
+}
+
+/* Header */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid #eadfd3;
+  min-height: 64px;
+}
+
+.collapse-btn {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: #8c7763;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+}
+
+.collapse-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #322d29;
+}
+
+.logo {
+  flex: 1;
+}
+
+.logo-text {
+  font-size: 1.25rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #2b6cb0, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.user-menu {
+  position: relative;
+}
+
+.user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.user-trigger:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.user-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.dropdown-icon {
+  width: 1rem;
+  height: 1rem;
+  color: #8c7763;
+  transition: transform 0.2s;
+}
+
+.dropdown-icon.is-open {
+  transform: rotate(180deg);
+}
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 220px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border: 1px solid #eadfd3;
+  overflow: hidden;
+  z-index: 1000;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-item {
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.875rem;
+  color: #322d29;
+  text-decoration: none;
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background: rgba(244, 229, 213, 0.4);
+}
+
+.dropdown-item.user-info {
+  cursor: default;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.dropdown-item.user-info:hover {
+  background: none;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #322d29;
+}
+
+.user-email {
+  font-size: 0.75rem;
+  color: #8c7763;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: #eadfd3;
+}
+
+.logout-btn {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.logout-btn:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.item-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* New Chat Button */
+.new-chat-section {
+  padding: 1rem;
+  border-bottom: 1px solid #eadfd3;
+}
+
+.new-chat-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #f26b3a, #e0582a);
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 12px rgba(242, 107, 58, 0.3);
+}
+
+.new-chat-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(242, 107, 58, 0.4);
+}
+
+.new-chat-btn .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* Navigation Tabs */
+.sidebar-nav {
+  padding: 0.5rem;
+  border-bottom: 1px solid #eadfd3;
+}
+
+.nav-tab {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: none;
+  background: none;
+  color: #6d5f52;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.nav-tab:hover {
+  background: rgba(255, 255, 255, 0.7);
+  color: #322d29;
+}
+
+.nav-tab.is-active {
+  background: white;
+  color: #322d29;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.nav-tab .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: #c58d63;
+}
+
+/* Content Area */
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.content-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #b49f8d;
+  margin: 0;
+}
+
+/* Conversations List */
+.conversations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.conversation-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.conversation-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.conversation-item.is-active {
+  background: linear-gradient(135deg, rgba(242, 107, 58, 0.1), rgba(224, 88, 42, 0.1));
+  box-shadow: 0 2px 12px rgba(242, 107, 58, 0.2);
+}
+
+.conv-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: #c58d63;
+  flex-shrink: 0;
+}
+
+.conv-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.conv-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #322d29;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-time {
+  font-size: 0.75rem;
+  color: #8c7763;
+  margin-top: 0.25rem;
+}
+
+.delete-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: #b6a393;
+  cursor: pointer;
+  border-radius: 0.375rem;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.conversation-item:hover .delete-btn {
+  opacity: 1;
+}
+
+.delete-btn:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+.delete-btn .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #8c7763;
+}
+
+.empty-icon {
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 1rem;
+  color: #c58d63;
+}
+
+.empty-state p {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* Billing Info */
+.billing-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.plan-card {
+  background: white;
+  border: 1px solid #eadfd3;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.plan-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #322d29;
+}
+
+.plan-price {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #2b6cb0;
+}
+
+.upgrade-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem;
+  background: linear-gradient(135deg, #2b6cb0, #3b82f6);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.2s;
+}
+
+.upgrade-btn:hover {
+  transform: translateY(-2px);
+}
+
+.upgrade-btn .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Settings */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.setting-item {
+  background: white;
+  border: 1px solid #eadfd3;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.setting-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #322d29;
+}
+
+.setting-label .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: #c58d63;
+}
+
+/* Footer: Profile Card */
+.sidebar-footer {
+  border-top: 1px solid #eadfd3;
+  padding: 1rem;
+}
+
+.profile-card {
+  background: white;
+  border: 1px solid #eadfd3;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profile-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.profile-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #322d29;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-plan {
+  font-size: 0.75rem;
+  color: #8c7763;
+  margin-top: 0.125rem;
+}
+
+.profile-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #8c7763;
+}
+
+.stat-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #322d29;
+}
+
+.stat-bar {
+  height: 0.375rem;
+  background: rgba(234, 223, 211, 0.5);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.stat-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.icon {
+  flex-shrink: 0;
+}
+</style>

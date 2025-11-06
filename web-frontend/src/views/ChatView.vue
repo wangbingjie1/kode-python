@@ -1,231 +1,155 @@
 <template>
-  <div class="h-screen bg-white text-gray-900 antialiased">
-    <div
-      class="relative flex h-full flex-col overflow-hidden lg:grid min-h-0"
-      :class="layoutClass"
-    >
-      <!-- Navigation rail -->
-      <aside class="hidden h-full flex-col items-center gap-3 border-r border-gray-200 bg-white px-2 py-4 lg:flex">
-        <button
-          type="button"
-          class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 transition hover:bg-gray-100"
-          :class="isSidebarCollapsed ? 'bg-gray-100' : ''"
-          aria-label="切换侧边栏"
-          @click="handleSidebarToggle"
-        >
-          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
+  <div class="chat-view">
+    <!-- App Sidebar -->
+    <AppSidebar
+      :is-collapsed="isSidebarCollapsed"
+      :active-tab="activeSidebarTab"
+      :conversations="conversations"
+      :active-conversation-id="currentConversationId"
+      @toggle-collapse="handleSidebarToggle"
+      @change-tab="handleTabChange"
+      @new-conversation="handleNewConversation"
+      @select-conversation="handleSelectConversation"
+      @delete-conversation="handleDeleteConversation"
+    />
 
-        <button
-          type="button"
-          class="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900 text-white transition hover:bg-gray-800"
-          aria-label="新建对话"
-          @click="handleNewConversation"
-        >
-          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
-          </svg>
-        </button>
-
-        <div class="mt-2 flex flex-1 flex-col items-center gap-2">
+    <!-- Main Chat Area -->
+    <main class="chat-main">
+      <!-- Chat Header -->
+      <header class="chat-header">
+        <div class="header-left">
           <button
-            v-for="section in sidebarSections"
-            :key="section.id"
-            type="button"
-            class="rounded-lg p-2 transition hover:bg-gray-100"
-            :class="activeSidebarSection === section.id ? 'bg-gray-100 text-gray-900' : 'text-gray-500'"
-            :aria-label="section.label"
-            @click="handleSidebarSectionSelect(section.id)"
+            v-if="isSidebarCollapsed"
+            @click="handleSidebarToggle"
+            class="sidebar-toggle-btn"
+            aria-label="展开侧边栏"
           >
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" :d="section.icon" />
+            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
+
+          <div class="conversation-info">
+            <p class="conversation-title">{{ conversationTitle }}</p>
+            <div class="conversation-meta">
+              <span class="connection-status" :class="{ 'is-connected': isConnected }">
+                <span class="status-dot"></span>
+                {{ isConnected ? '已连接' : '已断开' }}
+              </span>
+              <span v-if="lastUpdatedText">{{ lastUpdatedText }}</span>
+            </div>
+          </div>
         </div>
-      </aside>
 
-      <!-- Conversation list (desktop) -->
-      <aside
-        v-show="!isSidebarCollapsed"
-        class="hidden h-full border-r border-gray-200 bg-white lg:flex lg:w-[240px]"
-      >
-        <ConversationSidebar
-          class="w-full"
-          :conversations="conversations"
-          :active-conversation-id="currentConversationId"
-          :is-connected="isConnected"
-          :active-section="activeSidebarSection"
-          @new-conversation="handleNewConversation"
-          @select-conversation="handleSelectConversation"
-          @delete-conversation="handleDeleteConversation"
-          @navigate="handleSidebarSectionSelect"
-        />
-      </aside>
-
-      <!-- Main conversation area -->
-      <main class="relative grid h-full min-w-0 grid-rows-[auto,1fr,auto] overflow-visible min-h-0">
-        <header class="border-b border-gray-200 px-4 py-3 sm:px-6">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-              <button
-                @click="sidebarOpen = true"
-                class="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-50 lg:hidden"
-                aria-label="打开对话列表"
-                type="button"
-              >
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-
-              <div class="flex flex-col">
-                <p class="text-sm font-medium text-gray-900">{{ conversationTitle }}</p>
-                <div class="flex items-center gap-2 text-xs text-gray-500">
-                  <span class="inline-flex items-center gap-1">
-                    <span class="inline-block h-1.5 w-1.5 rounded-full" :class="isConnected ? 'bg-green-500' : 'bg-red-400'"></span>
-                    {{ isConnected ? '已连接' : '已断开' }}
-                  </span>
-                  <span v-if="lastUpdatedText">{{ lastUpdatedText }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-2">
-              <LanguageSwitcher />
-
-              <button
-                type="button"
-                class="hidden items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:flex"
-                @click="scrollToBottom(true)"
-              >
-                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" />
-                </svg>
-                最新
-              </button>
-
-              <button
-                type="button"
-                class="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
-                @click="handleContextPanelToggle"
-              >
-                <span>上下文</span>
-                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </header>
-
-        <section ref="messageContainer" class="relative min-w-0 overflow-y-auto px-4 pb-32 pt-6 sm:px-8 min-h-0 bg-white">
-          <div class="mx-auto w-full max-w-3xl min-w-0 pb-12">
-            <template v-if="timelineMessages.length">
-              <MessageItem
-                v-for="item in timelineMessages"
-                :key="item.message.id"
-                class="w-full"
-                :message="item.message"
-                :group-behavior="item.groupBehavior"
-              />
-            </template>
-
-            <div v-else class="flex h-full flex-col items-center justify-center gap-4 py-20 text-center">
-              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-900 text-white">
-                <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2h-5l-5 5v-4z" />
-                </svg>
-              </div>
-              <div>
-                <h3 class="text-base font-semibold text-gray-900">开始新的对话</h3>
-                <p class="mt-1 text-sm text-gray-500">在下方输入框中输入消息开始聊天</p>
-              </div>
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
-                @click="handleNewConversation"
-              >
-                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
-                </svg>
-                新建会话
-              </button>
-            </div>
-          </div>
-
+        <div class="header-right">
           <button
-            v-if="showScrollToLatest"
             type="button"
-            class="fixed bottom-32 right-6 z-30 flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition hover:bg-gray-50"
+            class="header-btn"
             @click="scrollToBottom(true)"
           >
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" />
             </svg>
-            回到最新
+            <span>最新</span>
           </button>
-        </section>
 
-        <footer class="px-4 pb-6 pt-4 sm:px-6">
-          <div class="mx-auto w-full max-w-3xl min-w-0">
-            <ChatInput
-              :disabled="!isConnected"
-              :is-sending="chatStore.isTyping"
-              @send="handleSendMessage"
+          <button
+            type="button"
+            class="header-btn"
+            @click="handleContextPanelToggle"
+          >
+            <span>上下文</span>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Messages Area -->
+      <section ref="messageContainer" class="messages-container">
+        <div class="messages-wrapper">
+          <template v-if="timelineMessages.length">
+            <MessageItem
+              v-for="item in timelineMessages"
+              :key="item.message.id"
+              :message="item.message"
+              :group-behavior="item.groupBehavior"
             />
+          </template>
+
+          <div v-else class="empty-state">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2h-5l-5 5v-4z" />
+              </svg>
+            </div>
+            <div class="empty-content">
+              <h3>开始新的对话</h3>
+              <p>在下方输入框中输入消息开始聊天</p>
+            </div>
+            <button
+              type="button"
+              class="new-conversation-btn"
+              @click="handleNewConversation"
+            >
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
+              </svg>
+              新建会话
+            </button>
           </div>
-        </footer>
-      </main>
+        </div>
 
-      <!-- Desktop context panel -->
-      <ContextPanel
-        v-if="contextPanelOpen && isDesktopViewport"
-        class="hidden h-full border-l border-gray-200 bg-white lg:flex lg:w-[300px]"
-        :conversation="chatStore.currentConversation"
-        :is-connected="isConnected"
-        :message-count="chatStore.messages.length"
-        @close="handleContextPanelClose"
-      />
-
-      <!-- Mobile overlays -->
-      <div
-        v-if="sidebarOpen"
-        class="fixed inset-0 z-40 flex bg-black/20 backdrop-blur-sm transition lg:hidden"
-        @click="sidebarOpen = false"
-      >
-        <div
-          class="h-full w-72 bg-white shadow-xl"
-          @click.stop
+        <button
+          v-if="showScrollToLatest"
+          type="button"
+          class="scroll-to-latest-btn"
+          @click="scrollToBottom(true)"
         >
-          <ConversationSidebar
-            :conversations="conversations"
-            :active-conversation-id="currentConversationId"
-            :is-connected="isConnected"
-            :active-section="activeSidebarSection"
-            @new-conversation="handleNewConversation"
-            @select-conversation="handleSelectConversation"
-            @delete-conversation="handleDeleteConversation"
-            @navigate="handleSidebarSectionSelect"
-          />
-        </div>
-      </div>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" />
+          </svg>
+          回到最新
+        </button>
+      </section>
 
-      <div
-        v-if="contextPanelSheet && !isDesktopViewport"
-        class="fixed inset-0 z-40 flex bg-black/20 backdrop-blur-sm lg:hidden"
-        @click="handleContextPanelClose"
-      >
-        <div class="ml-auto flex h-full w-full max-w-md" @click.stop>
-          <ContextPanel
-            modal
-            :conversation="chatStore.currentConversation"
-            :is-connected="isConnected"
-            :message-count="chatStore.messages.length"
-            @close="handleContextPanelClose"
+      <!-- Chat Input -->
+      <footer class="chat-footer">
+        <div class="input-wrapper">
+          <ChatInput
+            :disabled="!isConnected"
+            :is-sending="chatStore.isTyping"
+            @send="handleSendMessage"
           />
         </div>
+      </footer>
+    </main>
+
+    <!-- Context Panel (Desktop) -->
+    <ContextPanel
+      v-if="contextPanelOpen && isDesktopViewport"
+      class="context-panel"
+      :conversation="chatStore.currentConversation"
+      :is-connected="isConnected"
+      :message-count="chatStore.messages.length"
+      @close="handleContextPanelClose"
+    />
+
+    <!-- Context Panel (Mobile Sheet) -->
+    <div
+      v-if="contextPanelSheet && !isDesktopViewport"
+      class="mobile-overlay"
+      @click="handleContextPanelClose"
+    >
+      <div class="mobile-sheet" @click.stop>
+        <ContextPanel
+          modal
+          :conversation="chatStore.currentConversation"
+          :is-connected="isConnected"
+          :message-count="chatStore.messages.length"
+          @close="handleContextPanelClose"
+        />
       </div>
     </div>
   </div>
@@ -234,18 +158,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import ConversationSidebar from '@/components/ConversationSidebar.vue'
+import AppSidebar from '@/components/AppSidebar.vue'
 import ChatInput from '@/components/ChatInput.vue'
 import ContextPanel from '@/components/ContextPanel.vue'
 import MessageItem from '@/components/MessageItem.vue'
-import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { notification } from '@/composables/useNotification'
 import { DEFAULT_PROJECT_ID } from '@/config/constants'
 import { useChatStore } from '@/stores/chat'
 import type { ChatMessage } from '@/stores/chat'
 import api from '@/services/api'
 
-type SidebarSection = 'chats' | 'projects' | 'database' | 'documents'
+type TabId = 'chats' | 'database' | 'billing' | 'settings'
 
 interface TimelineMessage {
   message: ChatMessage
@@ -256,41 +179,15 @@ const route = useRoute()
 const router = useRouter()
 const chatStore = useChatStore()
 
-const sidebarSections: ReadonlyArray<{ id: SidebarSection; label: string; icon: string }> = [
-  {
-    id: 'chats',
-    label: 'Chat',
-    icon: 'M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H7l-3 3v-3H4a1 1 0 01-1-1V6a1 1 0 011-1z',
-  },
-  {
-    id: 'projects',
-    label: 'Projects',
-    icon: 'M4 6a2 2 0 012-2h12a2 2 0 012 2v12H4z',
-  },
-  {
-    id: 'database',
-    label: 'Database',
-    icon: 'M4 6c0-1.657 3.582-3 8-3s8 1.343 8 3M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3M4 18c0 1.657 3.582 3 8 3s8-1.343 8-3M4 6v12c0 1.657 3.582 3 8 3s8-1.343 8-3V6',
-  },
-  {
-    id: 'documents',
-    label: 'Documents',
-    icon: 'M7 3h8l4 4v14a1 1 0 01-1 1H7a2 2 0 01-2-2V5a2 2 0 012-2zm8 0v6h6',
-  },
-]
-
 const isLoading = ref(false)
-const sidebarOpen = ref(false)
 const conversations = ref<any[]>([])
 const isSidebarCollapsed = ref(false)
-const activeSidebarSection = ref<SidebarSection>('chats')
+const activeSidebarTab = ref<TabId>('chats')
 const contextPanelOpen = ref(false)
 const contextPanelSheet = ref(false)
 const isDesktopViewport = ref(false)
 const showScrollToLatest = ref(false)
 const messageContainer = ref<HTMLElement | null>(null)
-const hasUserToggledSidebar = ref(false)
-const hasUserToggledContext = ref(false)
 
 const isConnected = computed(() => chatStore.isConnected)
 const currentConversationId = computed(() => route.params.conversationId as string)
@@ -308,22 +205,6 @@ const lastUpdatedText = computed(() => {
   const diffDays = Math.floor(diffHours / 24)
   if (diffDays === 1) return '昨天更新'
   return `${diffDays} 天前更新`
-})
-
-const layoutClass = computed(() => {
-  const hasSidebar = !isSidebarCollapsed.value
-  const hasContext = contextPanelOpen.value && isDesktopViewport.value
-
-  if (hasSidebar && hasContext) {
-    return 'lg:grid-cols-[48px_240px_minmax(0,1fr)_300px]'
-  }
-  if (hasSidebar) {
-    return 'lg:grid-cols-[48px_240px_minmax(0,1fr)]'
-  }
-  if (hasContext) {
-    return 'lg:grid-cols-[48px_minmax(0,1fr)_300px]'
-  }
-  return 'lg:grid-cols-[48px_minmax(0,1fr)]'
 })
 
 const timelineMessages = computed<TimelineMessage[]>(() => {
@@ -347,7 +228,6 @@ const timelineMessages = computed<TimelineMessage[]>(() => {
 
 let scrollThrottle: ReturnType<typeof setTimeout> | null = null
 let mediaQueryCleanup: (() => void) | null = null
-let resizeCleanup: (() => void) | null = null
 
 watch(
   () => timelineMessages.value.length,
@@ -389,13 +269,6 @@ watch(
   },
 )
 
-watch(sidebarOpen, (open) => {
-  if (open) {
-    activeSidebarSection.value = 'chats'
-    isSidebarCollapsed.value = false
-  }
-})
-
 watch(messageContainer, (element, previous) => {
   if (previous) {
     previous.removeEventListener('scroll', handleScroll)
@@ -433,12 +306,10 @@ function resolveGroupBehavior(
   currentRole: string,
   nextRole: string | null,
 ): TimelineMessage['groupBehavior'] {
-  // 系统消息独立显示
   if (currentRole === 'system') {
     return 'standalone'
   }
 
-  // 工具调用和 assistant/user 消息都参与紧凑分组
   const isSameAsPrevious = previousRole === currentRole
   const isSameAsNext = nextRole === currentRole
 
@@ -454,39 +325,7 @@ function resolveGroupBehavior(
   return 'compact-end'
 }
 
-const SIDEBAR_COLLAPSE_BREAKPOINT = 1200
-const CONTEXT_OPEN_BREAKPOINT = 1500
-
-function applyResponsiveLayout(width: number) {
-  if (!width) return
-
-  if (width < 1024) {
-    contextPanelOpen.value = false
-    if (!hasUserToggledSidebar.value) {
-      isSidebarCollapsed.value = true
-    }
-    return
-  }
-
-  if (width < SIDEBAR_COLLAPSE_BREAKPOINT) {
-    if (!hasUserToggledSidebar.value) {
-      isSidebarCollapsed.value = true
-    }
-  } else if (!hasUserToggledSidebar.value) {
-    isSidebarCollapsed.value = false
-  }
-
-  if (width >= CONTEXT_OPEN_BREAKPOINT) {
-    if (!hasUserToggledContext.value) {
-      contextPanelOpen.value = true
-    }
-  } else if (!hasUserToggledContext.value) {
-    contextPanelOpen.value = false
-  }
-}
-
 function handleContextPanelToggle() {
-  hasUserToggledContext.value = true
   if (isDesktopViewport.value) {
     contextPanelOpen.value = !contextPanelOpen.value
   } else {
@@ -495,7 +334,6 @@ function handleContextPanelToggle() {
 }
 
 function handleContextPanelClose() {
-  hasUserToggledContext.value = true
   if (isDesktopViewport.value) {
     contextPanelOpen.value = false
   } else {
@@ -519,7 +357,7 @@ async function handleSendMessage(message: string, databaseName?: string) {
 async function handleNewConversation() {
   if (isLoading.value) return
 
-  activeSidebarSection.value = 'chats'
+  activeSidebarTab.value = 'chats'
 
   isLoading.value = true
   try {
@@ -532,14 +370,12 @@ async function handleNewConversation() {
     notification.error('创建失败', '暂时无法创建新对话，请稍后再试。')
   } finally {
     isLoading.value = false
-    sidebarOpen.value = false
   }
 }
 
 async function handleSelectConversation(conversationId: string) {
   await router.push(`/chat/${conversationId}`)
-  activeSidebarSection.value = 'chats'
-  sidebarOpen.value = false
+  activeSidebarTab.value = 'chats'
 }
 
 async function handleDeleteConversation(conversationId: string) {
@@ -567,18 +403,11 @@ async function loadConversations() {
   }
 }
 
-function handleSidebarSectionSelect(section: SidebarSection) {
-  activeSidebarSection.value = section
-
-  if (section === 'chats') {
-    void loadConversations()
-  } else if (section === 'database') {
-    void router.push('/database')
-  }
+function handleTabChange(tab: TabId) {
+  activeSidebarTab.value = tab
 }
 
 function handleSidebarToggle() {
-  hasUserToggledSidebar.value = true
   isSidebarCollapsed.value = !isSidebarCollapsed.value
 }
 
@@ -615,7 +444,6 @@ function setupViewportWatcher() {
     } else {
       contextPanelOpen.value = false
     }
-    applyResponsiveLayout(window.innerWidth)
   }
 
   updateViewportState(query)
@@ -629,17 +457,10 @@ function setupViewportWatcher() {
     query.addListener(listener)
     mediaQueryCleanup = () => query.removeListener(listener)
   }
-
-  const handleResize = () => applyResponsiveLayout(window.innerWidth)
-  window.addEventListener('resize', handleResize)
-  resizeCleanup = () => window.removeEventListener('resize', handleResize)
 }
 
 onMounted(async () => {
   setupViewportWatcher()
-  if (typeof window !== 'undefined') {
-    applyResponsiveLayout(window.innerWidth)
-  }
   await loadConversations()
   await initializeConversation()
   await nextTick()
@@ -652,13 +473,285 @@ onUnmounted(() => {
     mediaQueryCleanup()
     mediaQueryCleanup = null
   }
-  if (resizeCleanup) {
-    resizeCleanup()
-    resizeCleanup = null
-  }
   const container = messageContainer.value
   if (container) {
     container.removeEventListener('scroll', handleScroll)
   }
 })
 </script>
+
+<style scoped>
+.chat-view {
+  display: flex;
+  height: 100vh;
+  background: #fdf7f0;
+}
+
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: white;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid #eadfd3;
+  min-height: 64px;
+  background: white;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-toggle-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-center;
+  border: 1px solid #eadfd3;
+  background: white;
+  border-radius: 0.5rem;
+  color: #8c7763;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sidebar-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #322d29;
+}
+
+.sidebar-toggle-btn .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.conversation-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.conversation-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #322d29;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #8c7763;
+  margin-top: 0.25rem;
+}
+
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #dc2626;
+}
+
+.connection-status.is-connected .status-dot {
+  background: #10b981;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #eadfd3;
+  background: white;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6d5f52;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.header-btn:hover {
+  background: rgba(244, 229, 213, 0.4);
+  color: #322d29;
+}
+
+.header-btn .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 1rem 8rem 1rem;
+  position: relative;
+}
+
+.messages-wrapper {
+  max-width: 48rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 1rem;
+  text-align: center;
+}
+
+.empty-icon {
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2b6cb0, #3b82f6);
+  color: white;
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.empty-icon svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.empty-content h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #322d29;
+  margin: 0 0 0.5rem 0;
+}
+
+.empty-content p {
+  font-size: 0.875rem;
+  color: #8c7763;
+  margin: 0 0 1.5rem 0;
+}
+
+.new-conversation-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #2b6cb0, #3b82f6);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.new-conversation-btn:hover {
+  transform: translateY(-2px);
+}
+
+.new-conversation-btn .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.scroll-to-latest-btn {
+  position: fixed;
+  bottom: 8rem;
+  right: 1.5rem;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: white;
+  border: 1px solid #eadfd3;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6d5f52;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.scroll-to-latest-btn:hover {
+  background: rgba(244, 229, 213, 0.4);
+}
+
+.scroll-to-latest-btn .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.chat-footer {
+  padding: 1rem 1.5rem 1.5rem;
+  background: white;
+  border-top: 1px solid #eadfd3;
+}
+
+.input-wrapper {
+  max-width: 48rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.context-panel {
+  width: 300px;
+  height: 100vh;
+  border-left: 1px solid #eadfd3;
+  background: white;
+}
+
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+}
+
+.mobile-sheet {
+  margin-left: auto;
+  width: 100%;
+  max-width: 28rem;
+  height: 100%;
+}
+
+@media (max-width: 1023px) {
+  .context-panel {
+    display: none;
+  }
+}
+</style>
