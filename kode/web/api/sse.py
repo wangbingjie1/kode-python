@@ -15,8 +15,10 @@ import logging
 from kode.database.session import get_db
 from kode.models import Conversation, Message, User
 from kode.services.conversation import AsyncConversationService
+from kode.services.billing_service import BillingService
 from kode.utils.logger import setup_logger
 from kode.web.dependencies import get_current_user
+from kode.web.middleware.quota_check import check_user_quota
 from kode.core.security import verify_token
 
 logger = setup_logger(__name__)
@@ -133,6 +135,21 @@ async def event_generator(
                 await db.commit()
                 logger.info(f"[SSE] Saved assistant message to conversation {conversation_id}")
 
+                # 更新使用量统计
+                # 估算 token 数量（简化版：1 token ≈ 4 字符）
+                estimated_tokens = len(task_content + assistant_content) // 4
+                try:
+                    await BillingService.increment_usage(
+                        db=db,
+                        user_id=user_id,
+                        token_count=estimated_tokens,
+                        message_count=1,  # 一次对话
+                    )
+                    logger.info(f"[SSE] Updated usage: ~{estimated_tokens} tokens, 1 message")
+                except Exception as e:
+                    # 使用量更新失败不应该影响主流程
+                    logger.warning(f"[SSE] Failed to update usage: {e}")
+
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done', 'content': '', 'metadata': {}})}\n\n"
 
@@ -175,6 +192,9 @@ async def stream_chat(
 
         data: {"type": "done", "content": "", "metadata": {}}
     """
+    # 检查用户配额
+    await check_user_quota(current_user.id, db)
+
     # Verify conversation exists
     result = await db.execute(
         select(Conversation).where(Conversation.id == conversation_id)
