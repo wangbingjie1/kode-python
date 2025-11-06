@@ -107,9 +107,9 @@ async def get_config():
 
 
 # Import routers
-from kode.web.api import chat, project, sse, database, auth
+from kode.web.api import chat, project, sse, database, auth, billing
 from kode.database.session import init_db, async_session_maker
-from kode.models import User, Project
+from kode.models import User, Project, Plan
 from sqlalchemy import select
 
 # Register routers
@@ -118,10 +118,11 @@ app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(project.router, prefix="/api", tags=["projects"])
 app.include_router(sse.router, prefix="/api/sse", tags=["sse"])
 app.include_router(database.router, prefix="/api/database", tags=["database"])
+app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
 
 
 async def create_default_data():
-    """Create default user and project if they don't exist"""
+    """Create default user, project, and plans if they don't exist"""
     async with async_session_maker() as db:
         try:
             # Check if default user exists
@@ -154,6 +155,75 @@ async def create_default_data():
                 )
                 db.add(project)
                 logger.info("Created default project")
+
+            # Create default plans (类似 Cursor 的套餐体系)
+            result = await db.execute(select(Plan).where(Plan.name == "free"))
+            if not result.scalar_one_or_none():
+                free_plan = Plan(
+                    name="free",
+                    display_name="免费版",
+                    description="体验 AI 助手的基础功能",
+                    price=0.0,
+                    billing_period="monthly",
+                    token_quota=100000,  # 10万 tokens/月
+                    message_quota=50,  # 50 条消息/月
+                    conversation_quota=3,  # 3 个对话
+                    database_connection_quota=0,
+                    database_access=False,
+                    advanced_analysis=False,
+                    ontology_building=False,
+                    priority_support=False,
+                    sort_order=1,
+                )
+                db.add(free_plan)
+                logger.info("Created Free plan")
+
+            result = await db.execute(select(Plan).where(Plan.name == "pro"))
+            if not result.scalar_one_or_none():
+                pro_plan = Plan(
+                    name="pro",
+                    display_name="专业版",
+                    description="适合个人开发者和小团队",
+                    price=99.0,  # 99元/月
+                    billing_period="monthly",
+                    token_quota=2000000,  # 200万 tokens/月
+                    message_quota=1000,  # 1000 条消息/月
+                    conversation_quota=50,  # 50 个对话
+                    database_connection_quota=5,  # 5 个数据库连接
+                    database_access=True,
+                    advanced_analysis=True,
+                    ontology_building=True,
+                    priority_support=False,
+                    sort_order=2,
+                )
+                db.add(pro_plan)
+                logger.info("Created Pro plan")
+
+            result = await db.execute(select(Plan).where(Plan.name == "enterprise"))
+            if not result.scalar_one_or_none():
+                enterprise_plan = Plan(
+                    name="enterprise",
+                    display_name="企业版",
+                    description="适合大型团队和企业客户",
+                    price=499.0,  # 499元/月
+                    billing_period="monthly",
+                    token_quota=10000000,  # 1000万 tokens/月
+                    message_quota=10000,  # 10000 条消息/月
+                    conversation_quota=500,  # 500 个对话
+                    database_connection_quota=50,  # 50 个数据库连接
+                    database_access=True,
+                    advanced_analysis=True,
+                    ontology_building=True,
+                    priority_support=True,
+                    features={
+                        "custom_model": True,
+                        "api_access": True,
+                        "dedicated_support": True,
+                    },
+                    sort_order=3,
+                )
+                db.add(enterprise_plan)
+                logger.info("Created Enterprise plan")
 
             await db.commit()
 
