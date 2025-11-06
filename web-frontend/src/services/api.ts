@@ -339,4 +339,168 @@ export async function executeDatabaseQuery(
   return response.data
 }
 
+// Billing Types
+export interface Plan {
+  id: string
+  name: string
+  display_name: string
+  description: string
+  price: number
+  billing_period: 'monthly' | 'yearly'
+  token_quota: number
+  message_quota: number
+  conversation_quota: number
+  database_connection_quota: number
+  database_access: boolean
+  advanced_analysis: boolean
+  ontology_building: boolean
+  priority_support: boolean
+  features: Record<string, any> | null
+  is_active: boolean
+  sort_order: number
+}
+
+export interface Subscription {
+  id: string
+  user_id: string
+  plan_id: string
+  status: 'active' | 'expired' | 'cancelled' | 'trial'
+  start_date: string
+  end_date: string
+  auto_renew: boolean
+  payment_method: string | null
+  last_payment_date: string | null
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  created_at: string
+  updated_at: string
+  plan?: Plan
+}
+
+export interface Usage {
+  id: string
+  user_id: string
+  subscription_id: string | null
+  period_start: string
+  period_end: string
+  token_count: number
+  message_count: number
+  conversation_count: number
+  database_query_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface UsageSummary {
+  current_period_start: string
+  current_period_end: string
+  token_used: number
+  token_quota: number
+  token_remaining: number
+  message_used: number
+  message_quota: number
+  message_remaining: number
+  conversation_count: number
+  conversation_quota: number
+  database_query_count: number
+  is_quota_exceeded: boolean
+}
+
+export interface CreateSubscriptionRequest {
+  plan_id: string
+  auto_renew?: boolean
+}
+
+export interface StripeCheckoutRequest {
+  plan_id: string
+  success_url: string
+  cancel_url: string
+}
+
+export interface StripeCheckoutResponse {
+  session_id: string
+  checkout_url: string
+}
+
+// Billing API Functions
+
+/**
+ * List all available plans
+ */
+export async function listPlans(activeOnly = true): Promise<Plan[]> {
+  const response = await apiClient.get<Plan[]>('/billing/plans', {
+    params: { active_only: activeOnly }
+  })
+  return response.data
+}
+
+/**
+ * Get a specific plan
+ */
+export async function getPlan(planId: string): Promise<Plan> {
+  const response = await apiClient.get<Plan>(`/billing/plans/${planId}`)
+  return response.data
+}
+
+/**
+ * Get current user's subscription
+ */
+export async function getMySubscription(): Promise<Subscription> {
+  const response = await apiClient.get<Subscription>('/billing/subscriptions/me')
+  return response.data
+}
+
+/**
+ * Create a new subscription
+ */
+export async function createSubscription(
+  data: CreateSubscriptionRequest
+): Promise<Subscription> {
+  const response = await apiClient.post<Subscription>('/billing/subscriptions', data)
+  return response.data
+}
+
+/**
+ * Cancel a subscription
+ */
+export async function cancelSubscription(
+  subscriptionId: string,
+  immediate = false
+): Promise<Subscription> {
+  const response = await apiClient.post<Subscription>(
+    `/billing/subscriptions/${subscriptionId}/cancel`,
+    { immediate }
+  )
+  return response.data
+}
+
+/**
+ * Get current user's usage
+ */
+export async function getMyUsage(): Promise<Usage> {
+  const response = await apiClient.get<Usage>('/billing/usage/me')
+  return response.data
+}
+
+/**
+ * Get current user's usage summary
+ */
+export async function getMyUsageSummary(): Promise<UsageSummary> {
+  const response = await apiClient.get<UsageSummary>('/billing/usage/me/summary')
+  return response.data
+}
+
+/**
+ * Create Stripe checkout session
+ */
+export async function createStripeCheckout(
+  data: StripeCheckoutRequest
+): Promise<StripeCheckoutResponse> {
+  const response = await apiClient.post<StripeCheckoutResponse>(
+    '/billing/stripe/checkout',
+    data
+  )
+  return response.data
+}
+
 export default apiClient

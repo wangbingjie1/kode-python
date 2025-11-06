@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import ChatView from '@/views/ChatView.vue'
 import DatabaseView from '@/views/DatabaseView.vue'
 import LoginView from '@/views/LoginView.vue'
+import BillingView from '@/views/BillingView.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
@@ -35,6 +36,18 @@ const router = createRouter({
       path: '/database',
       name: 'database',
       component: DatabaseView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/billing',
+      name: 'billing',
+      component: BillingView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/billing/success',
+      name: 'billing-success',
+      component: BillingView,
       meta: { requiresAuth: true }
     }
   ]

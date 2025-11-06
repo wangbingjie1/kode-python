@@ -17,6 +17,12 @@
           </svg>
           <span>{{ $t('nav.database') }}</span>
         </router-link>
+        <router-link to="/billing" class="nav-link">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+          </svg>
+          <span>订阅</span>
+        </router-link>
       </div>
 
       <!-- 语言切换 -->
