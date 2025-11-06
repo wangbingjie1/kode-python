@@ -16,7 +16,7 @@ class Plan(Base):
 
     __tablename__ = "plans"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(50), unique=True, nullable=False, index=True)  # 套餐名称
     display_name = Column(String(100), nullable=False)  # 显示名称（中文）
     description = Column(Text, nullable=True)  # 套餐描述

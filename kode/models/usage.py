@@ -15,11 +15,11 @@ from kode.database.session import Base
 class Usage(Base):
     """使用量记录模型"""
 
-    __tablename__ = "usage"
+    __tablename__ = "user_usage"  # 避免使用 MySQL 保留关键字 usage
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    subscription_id = Column(String, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    subscription_id = Column(String(36), ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=True)
 
     # 计费周期
     period_start = Column(DateTime, nullable=False, index=True)

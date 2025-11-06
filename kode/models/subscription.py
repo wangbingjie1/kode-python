@@ -26,9 +26,9 @@ class Subscription(Base):
 
     __tablename__ = "subscriptions"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    plan_id = Column(String, ForeignKey("plans.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False)
 
     # 订阅状态
     status = Column(Enum(SubscriptionStatus), default=SubscriptionStatus.ACTIVE, nullable=False, index=True)
