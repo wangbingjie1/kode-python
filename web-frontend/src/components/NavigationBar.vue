@@ -1,7 +1,7 @@
 <template>
   <nav class="navigation-bar">
     <div class="nav-inner">
-      <router-link to="/chat" class="nav-brand" aria-label="返回主页">
+      <router-link to="/chat" class="nav-brand" :aria-label="$t('nav.backToHome')">
         <span class="brand-logo">Kode AI</span>
       </router-link>
       <div class="nav-links">
@@ -9,14 +9,19 @@
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
             <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2h-5l-5 5v-4z" />
           </svg>
-          <span>对话</span>
+          <span>{{ $t('nav.conversation') }}</span>
         </router-link>
         <router-link to="/database" class="nav-link">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
           </svg>
-          <span>数据库</span>
+          <span>{{ $t('nav.database') }}</span>
         </router-link>
+      </div>
+
+      <!-- 语言切换 -->
+      <div class="language-switcher-wrapper">
+        <LanguageSwitcher />
       </div>
 
       <!-- 用户菜单 -->
@@ -40,7 +45,7 @@
             <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            退出登录
+            {{ $t('nav.logout') }}
           </button>
         </div>
       </div>
@@ -51,11 +56,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { notification } from '@/composables/useNotification'
+import LanguageSwitcher from './LanguageSwitcher.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 const isMenuOpen = ref(false)
 
 function toggleMenu() {
@@ -64,7 +72,7 @@ function toggleMenu() {
 
 async function handleLogout() {
   authStore.logout()
-  notification.success('已退出登录', '期待您的再次光临')
+  notification.success(t('auth.logoutSuccess'), t('auth.logoutSuccessMsg'))
   router.push('/login')
 }
 
@@ -142,9 +150,14 @@ if (typeof document !== 'undefined') {
   color: #c58d63;
 }
 
+/* 语言切换 */
+.language-switcher-wrapper {
+  margin-left: auto;
+}
+
 /* 用户菜单 */
 .user-menu {
-  margin-left: auto;
+  margin-left: 1rem;
   position: relative;
 }
 

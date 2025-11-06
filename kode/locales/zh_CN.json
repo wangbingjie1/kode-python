@@ -1,0 +1,131 @@
+{
+  "auth": {
+    "username_exists": "用户名已存在",
+    "email_exists": "邮箱已被注册",
+    "invalid_credentials": "用户名或密码错误",
+    "user_disabled": "用户已被禁用",
+    "invalid_refresh_token": "无效的刷新令牌",
+    "invalid_token": "无效的认证凭证",
+    "invalid_token_format": "无效的令牌格式",
+    "user_not_found": "用户不存在或已被禁用",
+    "google_not_configured": "谷歌登录未配置",
+    "google_auth_failed": "授权码验证失败",
+    "google_userinfo_failed": "获取用户信息失败",
+    "google_userinfo_incomplete": "用户信息不完整",
+    "token_required": "需要提供token参数进行认证"
+  },
+  "chat": {
+    "project_not_found": "项目不存在",
+    "conversation_not_found": "对话不存在",
+    "task_required": "需要提供 task 参数"
+  },
+  "database": {
+    "connection_not_found": "数据库连接不存在",
+    "create_failed": "创建连接失败",
+    "update_failed": "更新连接失败",
+    "delete_failed": "删除连接失败",
+    "test_failed": "测试连接失败",
+    "schema_extract_failed": "提取数据库结构失败",
+    "query_required": "需要提供 SQL 查询语句",
+    "query_execute_failed": "查询执行失败",
+    "query_success": "查询返回 {rows} 行",
+    "ontology_list_failed": "获取本体列表失败",
+    "ontology_search_failed": "搜索本体失败",
+    "affected_rows": "影响 {rows} 行"
+  },
+  "middleware": {
+    "quota_exceeded": "配额已用尽，请升级套餐或等待下个计费周期"
+  },
+  "startup": {
+    "starting": "启动 Kode Web 服务",
+    "db_initialized": "数据库初始化完成",
+    "default_data_created": "默认数据创建完成",
+    "connections_loaded": "加载了 {count} 个持久化数据库连接",
+    "connections_load_failed": "无法加载数据库连接",
+    "shutting_down": "关闭 Kode Web 服务",
+    "default_user_created": "创建默认用户",
+    "default_project_created": "创建默认项目",
+    "default_plans_created": "创建默认套餐",
+    "default_data_error": "创建默认数据时出错"
+  },
+  "plans": {
+    "free": {
+      "name": "免费版",
+      "description": "体验 AI 助手的基础功能"
+    },
+    "professional": {
+      "name": "专业版",
+      "description": "适合个人开发者和小团队"
+    },
+    "enterprise": {
+      "name": "企业版",
+      "description": "适合大型团队和企业客户"
+    }
+  },
+  "tools": {
+    "file_read": {
+      "name": "文件读取",
+      "description": "从本地文件系统读取文件内容。支持指定行范围和偏移量。"
+    },
+    "file_write": {
+      "name": "文件写入",
+      "description": "将内容写入本地文件系统。如果文件已存在将覆盖。"
+    },
+    "file_edit": {
+      "name": "文件编辑",
+      "description": "对文件执行精确的字符串替换操作。"
+    },
+    "bash": {
+      "name": "Bash 命令",
+      "description": "在持久化 Shell 会话中执行 Bash 命令，支持可选的超时设置。"
+    },
+    "grep": {
+      "name": "代码搜索",
+      "description": "强大的代码搜索工具，用于在代码中查找模式。支持正则表达式和文件过滤。"
+    },
+    "glob": {
+      "name": "文件匹配",
+      "description": "快速的文件模式匹配工具。支持 glob 模式如 \"**/*.js\" 或 \"src/**/*.ts\"。"
+    },
+    "database_connect": {
+      "name": "数据库连接",
+      "description": "连接到数据库（PostgreSQL、MySQL、SQL Server、Oracle、SQLite）。支持连接池管理。"
+    },
+    "database_test": {
+      "name": "测试连接",
+      "description": "测试现有数据库连接的健康状态。"
+    },
+    "database_list": {
+      "name": "列出连接",
+      "description": "列出所有已配置的数据库连接。"
+    },
+    "database_schema": {
+      "name": "提取结构",
+      "description": "提取完整的数据库结构元数据（表、列、约束、关系）。"
+    },
+    "database_execute": {
+      "name": "执行查询",
+      "description": "在数据库上执行 SQL 查询（SELECT、INSERT、UPDATE、DELETE）。支持参数化查询。"
+    },
+    "ontology_builder": {
+      "name": "构建本体",
+      "description": "从数据库结构元数据构建业务本体。将技术表/列名转换为业务术语。"
+    },
+    "ontology_storage": {
+      "name": "存储本体",
+      "description": "将本体持久化到存储，支持版本控制。"
+    },
+    "ontology_search": {
+      "name": "搜索本体",
+      "description": "在存储的本体中搜索概念。支持语义搜索和相关度排序。"
+    },
+    "ontology_load": {
+      "name": "加载本体",
+      "description": "加载先前构建的业务本体。"
+    }
+  },
+  "service": {
+    "task_started": "开始执行任务",
+    "tool_completed": "工具执行完成: {tool_name}"
+  }
+}
