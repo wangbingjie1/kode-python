@@ -11,6 +11,7 @@ import logging
 
 from kode.utils.logger import setup_logger
 from kode.utils.config import ConfigManager
+from kode.web.middleware.locale import LocaleMiddleware
 
 # Setup logger
 logger = setup_logger(__name__)
@@ -30,6 +31,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Locale middleware (for i18n support)
+app.add_middleware(LocaleMiddleware)
 
 
 @app.on_event("startup")

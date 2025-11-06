@@ -14,13 +14,18 @@ const apiClient = axios.create({
   }
 })
 
-// Request interceptor for adding auth token
+// Request interceptor for adding auth token and language
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+
+    // Add Accept-Language header
+    const locale = localStorage.getItem('locale') || 'zh-CN'
+    config.headers['Accept-Language'] = locale
+
     return config
   },
   (error) => {
