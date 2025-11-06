@@ -272,37 +272,57 @@ async def google_callback(
             detail="用户信息不完整",
         )
 
-    # 4. 查找或创建用户
-    # 先通过google_id查找
-    result = await db.execute(select(User).where(User.google_id == google_id))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        # 再通过email查找（可能是已有用户首次使用谷歌登录）
-        result = await db.execute(select(User).where(User.email == email))
+    # 4. 查找或创建用户（使用事务确保原子性）
+    try:
+        # 先通过google_id查找
+        result = await db.execute(select(User).where(User.google_id == google_id))
         user = result.scalar_one_or_none()
 
-        if user:
-            # 关联现有用户到谷歌账号
-            user.google_id = google_id
-            user.auth_provider = "google"
-            user.avatar_url = avatar_url
-        else:
-            # 创建新用户
-            user = User(
-                id=str(uuid.uuid4()),
-                username=name,
-                email=email,
-                hashed_password=None,  # OAuth用户无密码
-                auth_provider="google",
-                google_id=google_id,
-                avatar_url=avatar_url,
-                is_active=True,
-            )
-            db.add(user)
+        if not user:
+            # 再通过email查找（可能是已有用户首次使用谷歌登录）
+            result = await db.execute(select(User).where(User.email == email))
+            user = result.scalar_one_or_none()
 
-        await db.commit()
-        await db.refresh(user)
+            if user:
+                # 关联现有用户到谷歌账号
+                user.google_id = google_id
+                user.auth_provider = "google"
+                user.avatar_url = avatar_url
+                user.updated_at = datetime.utcnow()
+            else:
+                # 创建新用户 - 确保 username 唯一
+                # 如果 username 重复，添加后缀
+                base_username = name
+                username = base_username
+                counter = 1
+
+                while True:
+                    result = await db.execute(select(User).where(User.username == username))
+                    if not result.scalar_one_or_none():
+                        break
+                    username = f"{base_username}_{counter}"
+                    counter += 1
+
+                user = User(
+                    id=str(uuid.uuid4()),
+                    username=username,
+                    email=email,
+                    hashed_password=None,  # OAuth用户无密码
+                    auth_provider="google",
+                    google_id=google_id,
+                    avatar_url=avatar_url,
+                    is_active=True,
+                )
+                db.add(user)
+
+            await db.commit()
+            await db.refresh(user)
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建用户失败: {str(e)}",
+        )
 
     # 5. 检查用户状态
     if not user.is_active:

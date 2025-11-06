@@ -93,6 +93,8 @@
             </div>
 
             <div class="flex items-center gap-2">
+              <LanguageSwitcher />
+
               <button
                 type="button"
                 class="hidden items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:flex"
@@ -236,6 +238,7 @@ import ConversationSidebar from '@/components/ConversationSidebar.vue'
 import ChatInput from '@/components/ChatInput.vue'
 import ContextPanel from '@/components/ContextPanel.vue'
 import MessageItem from '@/components/MessageItem.vue'
+import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { notification } from '@/composables/useNotification'
 import { DEFAULT_PROJECT_ID } from '@/config/constants'
 import { useChatStore } from '@/stores/chat'

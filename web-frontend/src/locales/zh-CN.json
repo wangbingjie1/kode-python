@@ -25,6 +25,8 @@
   "nav": {
     "conversation": "对话",
     "database": "数据库",
+    "billing": "订阅",
+    "profile": "用户中心",
     "recent": "Recent",
     "chat": "Chat",
     "projects": "Projects",
@@ -133,7 +135,7 @@
     "connections": "数据库连接",
     "connectionsDesc": "管理与切换数据源，保持工作区一致体验",
     "noConnections": "暂无数据库连接",
-    "noConnectionsHint": "点击右上角"新建连接"即可开始配置",
+    "noConnectionsHint": "点击右上角【新建连接】即可开始配置",
     "selectConnection": "请选择一个数据库连接",
     "selectConnectionHint": "在左侧列表中选择已有连接，或新建一个连接来开始协作",
     "type": "类型",

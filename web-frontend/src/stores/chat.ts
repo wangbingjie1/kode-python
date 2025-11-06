@@ -321,6 +321,17 @@ export const useChatStore = defineStore('chat', () => {
         }
         currentStreamingMessage.value = null
         isTyping.value = false
+
+        // 刷新配额信息（异步，不阻塞）
+        ;(async () => {
+          try {
+            const { useBillingStore } = await import('@/stores/billing')
+            const billingStore = useBillingStore()
+            await billingStore.fetchUsageSummary()
+          } catch (err) {
+            console.warn('Failed to refresh billing usage:', err)
+          }
+        })()
         break
 
       case 'error':

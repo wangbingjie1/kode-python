@@ -1,6 +1,9 @@
 <template>
   <div class="min-h-screen bg-[#fdf7f0] text-[#322d29] antialiased">
-    <div class="flex min-h-screen flex-col lg:flex-row">
+    <!-- Top Navigation Bar -->
+    <NavigationBar />
+
+    <div class="flex min-h-screen flex-col lg:flex-row" style="height: calc(100vh - 60px);">
       <!-- Left Navigation Rail (Desktop) -->
       <div class="hidden lg:flex lg:w-16 lg:flex-col lg:items-center lg:gap-4 lg:border-r lg:border-[#eadfd3] lg:bg-[#fcf1e4] lg:py-6">
         <!-- Sidebar toggle -->
@@ -107,6 +110,7 @@
 <script setup lang="ts">
 import { computed, onMounted, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import NavigationBar from '@/components/NavigationBar.vue'
 import ConversationSidebar from '@/components/ConversationSidebar.vue'
 import { useChatStore } from '@/stores/chat'
 import { notification } from '@/composables/useNotification'

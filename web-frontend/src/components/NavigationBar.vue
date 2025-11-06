@@ -21,7 +21,7 @@
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
           </svg>
-          <span>订阅</span>
+          <span>{{ $t('nav.billing') }}</span>
         </router-link>
       </div>
 
@@ -46,6 +46,13 @@
           <div class="menu-item user-detail">
             <div class="user-email">{{ authStore.currentUser?.email }}</div>
           </div>
+          <div class="menu-divider"></div>
+          <router-link to="/profile" class="menu-item menu-link">
+            <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            {{ $t('nav.profile') }}
+          </router-link>
           <div class="menu-divider"></div>
           <button class="menu-item logout-btn" @click="handleLogout">
             <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -258,6 +265,10 @@ if (typeof document !== 'undefined') {
 
 .menu-item:hover {
   background: rgba(244, 229, 213, 0.4);
+}
+
+.menu-link {
+  text-decoration: none;
 }
 
 .user-detail {

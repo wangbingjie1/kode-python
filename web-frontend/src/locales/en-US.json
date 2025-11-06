@@ -25,6 +25,8 @@
   "nav": {
     "conversation": "Conversation",
     "database": "Database",
+    "billing": "Billing",
+    "profile": "Profile",
     "recent": "Recent",
     "chat": "Chat",
     "projects": "Projects",

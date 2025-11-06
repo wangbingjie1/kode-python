@@ -127,11 +127,24 @@
         </div>
       </template>
     </section>
+
+    <!-- 配额显示 -->
+    <footer class="border-t border-[#eadfd3] p-4">
+      <UsageQuota />
+    </footer>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
+import UsageQuota from './UsageQuota.vue'
+import { useBillingStore } from '@/stores/billing'
+
+const billingStore = useBillingStore()
+
+onMounted(async () => {
+  await billingStore.refreshAll()
+})
 
 interface Conversation {
   id: string

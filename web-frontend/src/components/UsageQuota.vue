@@ -70,11 +70,11 @@ function getProgressColor(percentage: number): string {
 
 <style scoped>
 .usage-quota {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid #eadfd3;
+  border-radius: 0.75rem;
   padding: 1rem;
-  margin-bottom: 1rem;
+  box-shadow: 0 8px 20px rgba(190, 160, 130, 0.1);
 }
 
 .quota-header {
@@ -85,19 +85,20 @@ function getProgressColor(percentage: number): string {
 }
 
 .quota-header h4 {
-  font-size: 0.875rem;
+  font-size: 0.813rem;
   font-weight: 600;
-  color: #374151;
+  color: #362e27;
   margin: 0;
 }
 
 .plan-badge {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #f26b3a, #e0582a);
   color: white;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
+  font-size: 0.688rem;
   font-weight: 600;
+  box-shadow: 0 4px 12px rgba(242, 107, 58, 0.2);
 }
 
 .quota-items {
@@ -116,18 +117,18 @@ function getProgressColor(percentage: number): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: 0.813rem;
+  color: #78695c;
 }
 
 .quota-text {
   font-weight: 600;
-  color: #374151;
+  color: #362e27;
 }
 
 .progress-bar {
   height: 0.5rem;
-  background: #f3f4f6;
+  background: rgba(234, 223, 211, 0.5);
   border-radius: 9999px;
   overflow: hidden;
 }
@@ -143,10 +144,10 @@ function getProgressColor(percentage: number): string {
   gap: 0.5rem;
   background: #fef2f2;
   border: 1px solid #fecaca;
-  border-radius: 0.375rem;
+  border-radius: 0.75rem;
   padding: 0.75rem;
   margin-top: 1rem;
-  font-size: 0.875rem;
+  font-size: 0.813rem;
   color: #991b1b;
 }
 
