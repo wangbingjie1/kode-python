@@ -11,8 +11,8 @@ from typing import AsyncGenerator
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file (override existing values)
+load_dotenv(override=True)
 
 # Database URL from environment or default to SQLite
 DATABASE_URL = os.getenv(

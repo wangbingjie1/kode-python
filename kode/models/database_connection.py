@@ -16,7 +16,7 @@ class DatabaseConnectionModel(Base):
 
     __tablename__ = "database_connections"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(100), unique=True, nullable=False, index=True)
     db_type = Column(String(50), nullable=False)
     host = Column(String(255), nullable=False)

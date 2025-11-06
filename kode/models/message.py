@@ -17,9 +17,9 @@ class Message(Base):
 
     __tablename__ = "messages"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     conversation_id = Column(
-        String, ForeignKey("conversations.id"), nullable=False, index=True
+        String(36), ForeignKey("conversations.id"), nullable=False, index=True
     )
     role = Column(String(20), nullable=False)  # "user" or "assistant"
     content = Column(Text, nullable=False)
