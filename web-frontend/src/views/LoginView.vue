@@ -214,10 +214,21 @@ async function handleGoogleLogin() {
 
 // 处理谷歌OAuth2回调
 onMounted(async () => {
-  const code = route.query.code as string
-  if (code) {
+  const googleSuccess = route.query.google_success as string
+  const accessToken = route.query.access_token as string
+  const refreshToken = route.query.refresh_token as string
+
+  if (googleSuccess === 'true' && accessToken && refreshToken) {
     try {
-      await authStore.loginWithGoogle(code)
+      // 保存token到store和localStorage
+      authStore.accessToken = accessToken
+      authStore.refreshToken = refreshToken
+      localStorage.setItem('access_token', accessToken)
+      localStorage.setItem('refresh_token', refreshToken)
+
+      // 获取用户信息
+      await authStore.fetchUserProfile()
+
       notification.success('登录成功', '欢迎使用谷歌账号登录！')
       router.push('/')
     } catch (error) {

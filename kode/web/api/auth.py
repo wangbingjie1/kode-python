@@ -207,13 +207,13 @@ async def google_login():
     return {"auth_url": google_auth_url}
 
 
-@router.post("/google/callback", response_model=TokenResponse)
+@router.get("/google/callback")
 async def google_callback(
-    callback_data: GoogleCallbackRequest,
+    code: str,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    谷歌OAuth2回调处理
+    谷歌OAuth2回调处理（GET请求）
 
     接收授权码，交换访问令牌，获取用户信息，创建/登录用户
     """
@@ -228,7 +228,7 @@ async def google_callback(
         token_response = await client.post(
             "https://oauth2.googleapis.com/token",
             data={
-                "code": callback_data.code,
+                "code": code,
                 "client_id": GOOGLE_CLIENT_ID,
                 "client_secret": GOOGLE_CLIENT_SECRET,
                 "redirect_uri": GOOGLE_REDIRECT_URI,
@@ -314,8 +314,6 @@ async def google_callback(
     jwt_access_token = create_access_token(data={"sub": user.id})
     jwt_refresh_token = create_refresh_token(data={"sub": user.id})
 
-    return TokenResponse(
-        access_token=jwt_access_token,
-        refresh_token=jwt_refresh_token,
-        token_type="bearer",
-    )
+    # 重定向到前端，并通过URL传递token
+    frontend_url = f"http://localhost:3000/login?google_success=true&access_token={jwt_access_token}&refresh_token={jwt_refresh_token}"
+    return RedirectResponse(url=frontend_url)
