@@ -9,6 +9,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from typing import AsyncGenerator
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Database URL from environment or default to SQLite
 DATABASE_URL = os.getenv(
@@ -17,12 +21,21 @@ DATABASE_URL = os.getenv(
 )
 
 # Sync database URL for sync operations (like connection persistence)
+# Convert async driver to sync driver for synchronous operations
+def get_sync_url(async_url: str) -> str:
+    """Convert async database URL to sync URL"""
+    if "mysql+aiomysql" in async_url:
+        return async_url.replace("mysql+aiomysql", "mysql+pymysql")
+    elif "postgresql+asyncpg" in async_url:
+        return async_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
+    elif "sqlite+aiosqlite" in async_url:
+        return async_url.replace("sqlite+aiosqlite", "sqlite")
+    return async_url
+
 SYNC_DATABASE_URL = os.getenv(
     "SYNC_DATABASE_URL",
-    "sqlite:///./kode.db"  # Sync SQLite
+    get_sync_url(DATABASE_URL)
 )
-
-# For PostgreSQL, use: postgresql+asyncpg://user:password@localhost/dbname
 
 # Create async engine
 engine = create_async_engine(
