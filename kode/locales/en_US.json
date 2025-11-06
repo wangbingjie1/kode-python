@@ -1,0 +1,131 @@
+{
+  "auth": {
+    "username_exists": "Username already exists",
+    "email_exists": "Email already registered",
+    "invalid_credentials": "Invalid username or password",
+    "user_disabled": "User account is disabled",
+    "invalid_refresh_token": "Invalid refresh token",
+    "invalid_token": "Invalid authentication credentials",
+    "invalid_token_format": "Invalid token format",
+    "user_not_found": "User not found or disabled",
+    "google_not_configured": "Google login not configured",
+    "google_auth_failed": "Authorization code validation failed",
+    "google_userinfo_failed": "Failed to retrieve user information",
+    "google_userinfo_incomplete": "User information incomplete",
+    "token_required": "Token parameter required for authentication"
+  },
+  "chat": {
+    "project_not_found": "Project not found",
+    "conversation_not_found": "Conversation not found",
+    "task_required": "Task parameter is required"
+  },
+  "database": {
+    "connection_not_found": "Database connection not found",
+    "create_failed": "Failed to create connection",
+    "update_failed": "Failed to update connection",
+    "delete_failed": "Failed to delete connection",
+    "test_failed": "Failed to test connection",
+    "schema_extract_failed": "Failed to extract database schema",
+    "query_required": "SQL query is required",
+    "query_execute_failed": "Query execution failed",
+    "query_success": "Query returned {rows} rows",
+    "ontology_list_failed": "Failed to list ontologies",
+    "ontology_search_failed": "Failed to search ontology",
+    "affected_rows": "Affected {rows} rows"
+  },
+  "middleware": {
+    "quota_exceeded": "Quota exceeded. Please upgrade your plan or wait for the next billing cycle"
+  },
+  "startup": {
+    "starting": "Starting Kode Web Service",
+    "db_initialized": "Database initialized",
+    "default_data_created": "Default data created",
+    "connections_loaded": "Loaded {count} persisted database connections",
+    "connections_load_failed": "Could not load database connections",
+    "shutting_down": "Shutting down Kode Web Service",
+    "default_user_created": "Created default user",
+    "default_project_created": "Created default project",
+    "default_plans_created": "Created default plans",
+    "default_data_error": "Error creating default data"
+  },
+  "plans": {
+    "free": {
+      "name": "Free",
+      "description": "Experience basic AI assistant features"
+    },
+    "professional": {
+      "name": "Professional",
+      "description": "Perfect for individual developers and small teams"
+    },
+    "enterprise": {
+      "name": "Enterprise",
+      "description": "Tailored for large teams and enterprise customers"
+    }
+  },
+  "tools": {
+    "file_read": {
+      "name": "File Read",
+      "description": "Reads a file from the local filesystem. Supports line range and offset."
+    },
+    "file_write": {
+      "name": "File Write",
+      "description": "Writes content to the local filesystem. Overwrites existing file."
+    },
+    "file_edit": {
+      "name": "File Edit",
+      "description": "Performs exact string replacements in files."
+    },
+    "bash": {
+      "name": "Bash Command",
+      "description": "Executes bash commands in a persistent shell session with optional timeout."
+    },
+    "grep": {
+      "name": "Code Search",
+      "description": "Powerful search tool for finding patterns in code. Supports regex and file filtering."
+    },
+    "glob": {
+      "name": "File Matching",
+      "description": "Fast file pattern matching tool. Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\"."
+    },
+    "database_connect": {
+      "name": "Database Connect",
+      "description": "Connect to a database (PostgreSQL, MySQL, SQL Server, Oracle, SQLite). Supports connection pooling."
+    },
+    "database_test": {
+      "name": "Test Connection",
+      "description": "Test health of an existing database connection."
+    },
+    "database_list": {
+      "name": "List Connections",
+      "description": "List all configured database connections."
+    },
+    "database_schema": {
+      "name": "Extract Schema",
+      "description": "Extract complete database schema metadata (tables, columns, constraints, relationships)."
+    },
+    "database_execute": {
+      "name": "Execute Query",
+      "description": "Execute SQL queries on a database (SELECT, INSERT, UPDATE, DELETE). Supports parameterized queries."
+    },
+    "ontology_builder": {
+      "name": "Build Ontology",
+      "description": "Build business ontology from database schema metadata. Transforms technical table/column names to business terms."
+    },
+    "ontology_storage": {
+      "name": "Store Ontology",
+      "description": "Persist ontology to storage with versioning support."
+    },
+    "ontology_search": {
+      "name": "Search Ontology",
+      "description": "Search for concepts in stored ontology. Supports semantic search and relevance ranking."
+    },
+    "ontology_load": {
+      "name": "Load Ontology",
+      "description": "Load previously built business ontology."
+    }
+  },
+  "service": {
+    "task_started": "Started task execution",
+    "tool_completed": "Tool execution completed: {tool_name}"
+  }
+}

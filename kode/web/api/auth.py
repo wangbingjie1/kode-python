@@ -31,6 +31,7 @@ from kode.core.security import (
 )
 from kode.core.oauth import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
 from kode.web.dependencies import get_current_user
+from kode.utils.i18n import t
 
 router = APIRouter()
 
@@ -47,7 +48,7 @@ async def register(
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户名已存在",
+            detail=t('auth.username_exists'),
         )
 
     # 检查邮箱是否已存在
@@ -55,7 +56,7 @@ async def register(
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="邮箱已被注册",
+            detail=t('auth.email_exists'),
         )
 
     # 创建新用户
@@ -94,21 +95,21 @@ async def login(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误",
+            detail=t('auth.invalid_credentials'),
         )
 
     # 验证密码
     if not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误",
+            detail=t('auth.invalid_credentials'),
         )
 
     # 检查用户状态
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="用户已被禁用",
+            detail=t('auth.user_disabled'),
         )
 
     # 生成令牌
@@ -134,14 +135,14 @@ async def refresh_token(
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的刷新令牌",
+            detail=t('auth.invalid_refresh_token'),
         )
 
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的令牌格式",
+            detail=t('auth.invalid_token_format'),
         )
 
     # 验证用户是否存在且活跃
