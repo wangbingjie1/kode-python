@@ -8,6 +8,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
+import os
 
 from kode.utils.logger import setup_logger
 from kode.utils.config import ConfigManager
@@ -23,13 +24,30 @@ app = FastAPI(
     version="0.2.0",
 )
 
-# CORS middleware
+# CORS configuration - secure by default
+# For production, set ALLOWED_ORIGINS environment variable
+# Example: ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else []
+
+# Development mode fallback - only allow localhost
+if not allowed_origins:
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:8001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8001",
+    ]
+    logger.warning(
+        "ALLOWED_ORIGINS not set - using development defaults (localhost only). "
+        "For production, set ALLOWED_ORIGINS environment variable."
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Configure based on environment
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "Accept-Language"],
 )
 
 # Locale middleware (for i18n support)
@@ -40,6 +58,49 @@ app.add_middleware(LocaleMiddleware)
 async def startup_event():
     """Initialize application on startup"""
     logger.info("Starting Kode Web Service...")
+
+    # Validate required environment variables
+    is_production = os.getenv("ENVIRONMENT", "").lower() == "production"
+
+    # Check for required API keys
+    has_anthropic_key = bool(os.getenv("ANTHROPIC_API_KEY"))
+    has_openai_key = bool(os.getenv("OPENAI_API_KEY"))
+
+    if not has_anthropic_key and not has_openai_key:
+        logger.error(
+            "CRITICAL: No AI API keys found. "
+            "Set either ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable."
+        )
+        if is_production:
+            raise RuntimeError(
+                "At least one AI API key (ANTHROPIC_API_KEY or OPENAI_API_KEY) must be set in production"
+            )
+        else:
+            logger.warning("Continuing in development mode without AI API keys - AI features will not work")
+
+    # Validate SECRET_KEY (already checked during import of security.py, but log it)
+    secret_key = os.getenv("SECRET_KEY")
+    if not secret_key:
+        logger.error("SECRET_KEY not set - this should have been caught earlier")
+    elif secret_key == "kode-secret-key-change-in-production":
+        logger.error("CRITICAL: Using default SECRET_KEY value")
+        if is_production:
+            raise RuntimeError("SECRET_KEY must be changed from default value in production")
+
+    # Check ENCRYPTION_KEY for database password encryption
+    if not os.getenv("ENCRYPTION_KEY") and not secret_key:
+        logger.error("Neither ENCRYPTION_KEY nor SECRET_KEY is set - cannot encrypt database passwords")
+        if is_production:
+            raise RuntimeError("ENCRYPTION_KEY or SECRET_KEY must be set for secure password encryption")
+
+    # Warn about CORS in production
+    if is_production and not os.getenv("ALLOWED_ORIGINS"):
+        logger.warning(
+            "Production mode without ALLOWED_ORIGINS set - "
+            "using default localhost origins which is likely incorrect for production"
+        )
+
+    logger.info("Environment validation complete")
 
     # Initialize database
     await init_db()
@@ -133,16 +194,48 @@ async def create_default_data():
             result = await db.execute(select(User).where(User.id == "default"))
             user = result.scalar_one_or_none()
 
+            # Only create default user in development environment
+            # In production, users must register properly
+            is_production = os.getenv("ENVIRONMENT", "").lower() == "production"
+
             if not user:
-                # Create default user
-                user = User(
-                    id="default",
-                    username="default",
-                    email="default@kode.local",
-                    hashed_password="default",  # Placeholder password for demo
-                )
-                db.add(user)
-                logger.info("Created default user")
+                # Import here to avoid circular dependency
+                from kode.core.security import hash_password
+                import secrets
+
+                if not is_production:
+                    # Development mode - create default user with random password
+                    random_password = secrets.token_urlsafe(16)
+
+                    user = User(
+                        id="default",
+                        username="default",
+                        email="default@kode.local",
+                        hashed_password=hash_password(random_password),
+                    )
+                    db.add(user)
+                    logger.warning(
+                        f"Created default user for development. "
+                        f"Username: default, Password: {random_password}"
+                    )
+                    logger.warning(
+                        "IMPORTANT: Default user is disabled in production. "
+                        "Set ENVIRONMENT=production to disable this."
+                    )
+                else:
+                    # Production mode - create system user only
+                    logger.info(
+                        "Production mode - skipping default user creation. "
+                        "Users must register through the API."
+                    )
+                    user = User(
+                        id="system",
+                        username="system",
+                        email="system@kode.local",
+                        hashed_password=hash_password(secrets.token_urlsafe(32)),
+                    )
+                    db.add(user)
+                    logger.info("Created system user")
 
             # Check if default project exists
             result = await db.execute(select(Project).where(Project.id == "default"))

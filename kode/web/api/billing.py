@@ -26,7 +26,7 @@ from kode.schemas.billing import (
 )
 from kode.services.billing_service import BillingService
 from kode.services.stripe_service import StripeService
-from kode.web.dependencies import get_current_user
+from kode.web.dependencies import get_current_user, require_admin
 from kode.utils.config import ConfigManager
 
 router = APIRouter()
@@ -48,17 +48,16 @@ async def list_plans(
 @router.post("/plans", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
 async def create_plan(
     plan: PlanCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """创建新套餐（管理员功能）"""
-    # TODO: 添加管理员权限检查
+    """创建新套餐（仅管理员）"""
     new_plan = Plan(**plan.dict())
     db.add(new_plan)
     await db.commit()
     await db.refresh(new_plan)
 
-    logger.info(f"Created plan {new_plan.id} by user {current_user.id}")
+    logger.info(f"Created plan {new_plan.id} by admin {current_user.id}")
     return new_plan
 
 
@@ -84,11 +83,10 @@ async def get_plan(
 async def update_plan(
     plan_id: str,
     plan_update: PlanUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """更新套餐（管理员功能）"""
-    # TODO: 添加管理员权限检查
+    """更新套餐（仅管理员）"""
     result = await db.execute(select(Plan).where(Plan.id == plan_id))
     plan = result.scalar_one_or_none()
 
@@ -105,7 +103,7 @@ async def update_plan(
     await db.commit()
     await db.refresh(plan)
 
-    logger.info(f"Updated plan {plan_id} by user {current_user.id}")
+    logger.info(f"Updated plan {plan_id} by admin {current_user.id}")
     return plan
 
 

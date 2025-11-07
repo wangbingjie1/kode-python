@@ -23,7 +23,8 @@ class DatabaseConnectionModel(Base):
     port = Column(Integer, nullable=False)
     database = Column(String(255), nullable=False)
     username = Column(String(100), nullable=False)
-    # Encrypted password storage - should use encryption in production
+    # Password is encrypted using Fernet encryption (see kode/utils/encryption.py)
+    # Encrypted at save time, decrypted at connection time
     password = Column(Text, nullable=False)
     db_schema = Column(String(100), nullable=True)
     ssl = Column(Boolean, default=False)

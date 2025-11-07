@@ -9,6 +9,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import Session
 
+from kode.utils.encryption import encrypt_password, decrypt_password
+
 
 class DatabaseConnection:
     """Represents a database connection configuration."""
@@ -62,8 +64,16 @@ class DatabaseConnection:
         Returns:
             SQLAlchemy connection URL
         """
+        # Password is stored encrypted - decrypt before use
+        # If decryption fails, assume it's already plaintext (backward compatibility)
+        try:
+            decrypted_password = decrypt_password(self.password)
+        except Exception:
+            # Fallback for legacy unencrypted passwords
+            decrypted_password = self.password
+
         # Encode password to handle special characters
-        encoded_password = quote_plus(self.password)
+        encoded_password = quote_plus(decrypted_password)
 
         if self.db_type == "postgresql":
             driver = "asyncpg" if async_mode else "psycopg2"
@@ -374,6 +384,7 @@ class DatabaseConnectionManager:
                     continue
 
                 # Create DatabaseConnection object from model
+                # Password is already encrypted in database, keep it encrypted
                 connection = DatabaseConnection(
                     name=model.name,
                     db_type=model.db_type,
@@ -381,7 +392,7 @@ class DatabaseConnectionManager:
                     port=model.port,
                     database=model.database,
                     username=model.username,
-                    password=model.password,  # Note: Should decrypt in production
+                    password=model.password,  # Encrypted password from database
                     db_schema=model.db_schema,
                     ssl=model.ssl,
                 )
@@ -411,6 +422,17 @@ class DatabaseConnectionManager:
         from kode.models.database_connection import DatabaseConnectionModel
 
         try:
+            # Encrypt password before saving
+            # If already encrypted, this will double-encrypt, so check first
+            encrypted_password = connection.password
+            try:
+                # Try to decrypt - if it fails, it means password is plaintext
+                decrypt_password(connection.password)
+                # Already encrypted, use as-is
+            except Exception:
+                # Not encrypted yet, encrypt it now
+                encrypted_password = encrypt_password(connection.password)
+
             # Check if connection already exists
             existing = (
                 db_session.query(DatabaseConnectionModel)
@@ -425,7 +447,7 @@ class DatabaseConnectionManager:
                 existing.port = connection.port
                 existing.database = connection.database
                 existing.username = connection.username
-                existing.password = connection.password  # Note: Should encrypt in production
+                existing.password = encrypted_password  # Encrypted password
                 existing.db_schema = connection.db_schema
                 existing.ssl = connection.ssl
             else:
@@ -437,7 +459,7 @@ class DatabaseConnectionManager:
                     port=connection.port,
                     database=connection.database,
                     username=connection.username,
-                    password=connection.password,  # Note: Should encrypt in production
+                    password=encrypted_password,  # Encrypted password
                     db_schema=connection.db_schema,
                     ssl=connection.ssl,
                 )

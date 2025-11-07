@@ -22,6 +22,7 @@ class User(Base):
     email = Column(String(100), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=True)  # OAuth登录时可为空
     is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)  # 管理员权限标识
 
     # OAuth相关字段
     auth_provider = Column(String(20), default="local")  # local, google, github等
