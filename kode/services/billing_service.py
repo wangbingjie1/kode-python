@@ -26,6 +26,8 @@ class BillingService:
         """
         获取用户当前有效的订阅。
 
+        如果存在多条活跃订阅（数据异常情况），返回 end_date 最晚的一条。
+
         Args:
             db: 数据库会话
             user_id: 用户 ID
@@ -44,7 +46,16 @@ class BillingService:
             )
             .order_by(Subscription.end_date.desc())
         )
-        return result.scalar_one_or_none()
+        subscriptions = result.scalars().all()
+
+        # 如果存在多条活跃订阅，记录警告并返回最新的一条
+        if len(subscriptions) > 1:
+            logger.warning(
+                f"User {user_id} has {len(subscriptions)} active subscriptions. "
+                f"This is a data integrity issue. Returning the latest one."
+            )
+
+        return subscriptions[0] if subscriptions else None
 
     @staticmethod
     async def create_subscription(
@@ -58,6 +69,8 @@ class BillingService:
         """
         创建新订阅。
 
+        如果用户已有活跃订阅，将其设置为已取消。
+
         Args:
             db: 数据库会话
             user_id: 用户 ID
@@ -69,11 +82,44 @@ class BillingService:
         Returns:
             新创建的订阅对象
         """
+        # 检查是否已存在相同的 Stripe 订阅 ID（防止 webhook 重复处理）
+        if stripe_subscription_id:
+            existing_result = await db.execute(
+                select(Subscription).where(
+                    Subscription.stripe_subscription_id == stripe_subscription_id
+                )
+            )
+            existing_subscription = existing_result.scalar_one_or_none()
+            if existing_subscription:
+                logger.info(
+                    f"Subscription with stripe_subscription_id {stripe_subscription_id} "
+                    f"already exists. Returning existing subscription."
+                )
+                return existing_subscription
+
         # 获取套餐信息
         plan_result = await db.execute(select(Plan).where(Plan.id == plan_id))
         plan = plan_result.scalar_one_or_none()
         if not plan:
             raise ValueError(f"Plan {plan_id} not found")
+
+        # 取消用户所有活跃订阅（只保留一个活跃订阅）
+        existing_active_result = await db.execute(
+            select(Subscription).where(
+                and_(
+                    Subscription.user_id == user_id,
+                    Subscription.status == SubscriptionStatus.ACTIVE,
+                )
+            )
+        )
+        existing_active_subs = existing_active_result.scalars().all()
+        for old_sub in existing_active_subs:
+            old_sub.status = SubscriptionStatus.CANCELLED
+            old_sub.auto_renew = False
+            logger.info(
+                f"Cancelled existing active subscription {old_sub.id} "
+                f"for user {user_id} when creating new subscription"
+            )
 
         # 计算订阅结束时间
         start_date = datetime.utcnow()
