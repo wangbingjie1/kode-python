@@ -247,12 +247,18 @@ class BillingService:
         Returns:
             使用量记录，如果不存在则返回 None
         """
+        # 首先获取当前活跃订阅
+        subscription = await BillingService.get_user_active_subscription(db, user_id)
+        if not subscription:
+            return None
+
         now = datetime.utcnow()
         result = await db.execute(
             select(Usage)
             .where(
                 and_(
                     Usage.user_id == user_id,
+                    Usage.subscription_id == subscription.id,  # 关键修复：只查询活跃订阅的 usage
                     Usage.period_start <= now,
                     Usage.period_end > now,
                 )

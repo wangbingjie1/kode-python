@@ -13,7 +13,7 @@ import httpx
 import uuid
 
 from kode.database.session import get_db
-from kode.models import User
+from kode.models import User, Plan
 from kode.schemas.auth import (
     UserRegister,
     UserLogin,
@@ -32,6 +32,7 @@ from kode.core.security import (
 from kode.core.oauth import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
 from kode.web.dependencies import get_current_user
 from kode.utils.i18n import t
+from kode.services.billing_service import BillingService
 
 router = APIRouter()
 
@@ -70,6 +71,23 @@ async def register(
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
+
+    # 自动分配 Free 套餐
+    try:
+        free_plan_result = await db.execute(select(Plan).where(Plan.name == "free"))
+        free_plan = free_plan_result.scalar_one_or_none()
+
+        if free_plan:
+            await BillingService.create_subscription(
+                db=db,
+                user_id=new_user.id,
+                plan_id=free_plan.id,
+                auto_renew=False
+            )
+    except Exception as e:
+        # 订阅创建失败不影响注册，记录日志即可
+        import logging
+        logging.error(f"Failed to create free subscription for user {new_user.id}: {str(e)}")
 
     # 转换为响应格式
     return UserProfile(
@@ -273,6 +291,7 @@ async def google_callback(
         )
 
     # 4. 查找或创建用户（使用事务确保原子性）
+    is_new_user = False
     try:
         # 先通过google_id查找
         result = await db.execute(select(User).where(User.google_id == google_id))
@@ -314,9 +333,30 @@ async def google_callback(
                     is_active=True,
                 )
                 db.add(user)
+                is_new_user = True
 
             await db.commit()
             await db.refresh(user)
+
+            # 为新创建的用户自动分配 Free 套餐
+            if is_new_user:
+                try:
+                    # 检查用户是否已有订阅（双重保险）
+                    existing_sub = await BillingService.get_user_active_subscription(db, user.id)
+                    if not existing_sub:
+                        free_plan_result = await db.execute(select(Plan).where(Plan.name == "free"))
+                        free_plan = free_plan_result.scalar_one_or_none()
+
+                        if free_plan:
+                            await BillingService.create_subscription(
+                                db=db,
+                                user_id=user.id,
+                                plan_id=free_plan.id,
+                                auto_renew=False
+                            )
+                except Exception as e:
+                    import logging
+                    logging.error(f"Failed to create free subscription for OAuth user {user.id}: {str(e)}")
     except Exception as e:
         await db.rollback()
         raise HTTPException(
