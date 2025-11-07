@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import ChatView from '@/views/ChatView.vue'
-import DatabaseView from '@/views/DatabaseView.vue'
 import LoginView from '@/views/LoginView.vue'
 import BillingView from '@/views/BillingView.vue'
 import ProfileView from '@/views/ProfileView.vue'
@@ -31,12 +30,6 @@ const router = createRouter({
       path: '/chat/:conversationId',
       name: 'chat-conversation',
       component: ChatView,
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/database',
-      name: 'database',
-      component: DatabaseView,
       meta: { requiresAuth: true }
     },
     {
