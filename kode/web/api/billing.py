@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 import logging
+import os
 
 from kode.database.session import get_db
 from kode.models import User, Plan, Subscription
@@ -292,22 +293,25 @@ async def create_stripe_checkout_session(
 @router.post("/stripe/webhook")
 async def stripe_webhook(
     request: Request,
-    stripe_signature: str = Header(None, alias="stripe-signature"),
+    stripe_signature: Optional[str] = Header(None, alias="Stripe-Signature"),
     db: AsyncSession = Depends(get_db),
 ):
     """处理 Stripe Webhook 事件"""
     try:
+        # 获取配置
         config = ConfigManager()
-        stripe_key = config.get("stripe.secret_key")
-        webhook_secret = config.get("stripe.webhook_secret")
+        stripe_key = config.get("stripe.secret_key") or os.getenv("STRIPE_SECRET_KEY")
+        webhook_secret = config.get("stripe.webhook_secret") or os.getenv("STRIPE_WEBHOOK_SECRET")
 
         if not stripe_key or not webhook_secret:
+            logger.warning("Stripe not configured, webhook ignored")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Stripe is not configured",
             )
 
         if not stripe_signature:
+            logger.warning("Missing Stripe-Signature header")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Missing Stripe signature",
@@ -325,13 +329,17 @@ async def stripe_webhook(
 
         return result
 
+    except HTTPException:
+        # 重新抛出 HTTPException
+        raise
     except ValueError as e:
+        logger.error(f"Invalid webhook data: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
     except Exception as e:
-        logger.error(f"Failed to handle Stripe webhook: {e}")
+        logger.error(f"Failed to handle Stripe webhook: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process webhook",

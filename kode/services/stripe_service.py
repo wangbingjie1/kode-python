@@ -185,25 +185,64 @@ class StripeService:
         event_type = event["type"]
         data = event["data"]["object"]
 
-        logger.info(f"Received Stripe webhook: {event_type}")
+        logger.info(f"Received Stripe webhook: {event_type} [event_id: {event.get('id', 'unknown')}]")
 
-        # 处理订阅创建成功
-        if event_type == "checkout.session.completed":
-            await self._handle_checkout_completed(db, data)
+        try:
+            # 处理订阅创建成功
+            if event_type == "checkout.session.completed":
+                await self._handle_checkout_completed(db, data)
 
-        # 处理订阅支付成功
-        elif event_type == "invoice.payment_succeeded":
-            await self._handle_payment_succeeded(db, data)
+            # 处理订阅支付成功
+            elif event_type == "invoice.payment_succeeded":
+                await self._handle_payment_succeeded(db, data)
 
-        # 处理订阅支付失败
-        elif event_type == "invoice.payment_failed":
-            await self._handle_payment_failed(db, data)
+            # 处理订阅支付失败
+            elif event_type == "invoice.payment_failed":
+                await self._handle_payment_failed(db, data)
 
-        # 处理订阅取消
-        elif event_type == "customer.subscription.deleted":
-            await self._handle_subscription_deleted(db, data)
+            # 处理订阅取消
+            elif event_type == "customer.subscription.deleted":
+                await self._handle_subscription_deleted(db, data)
 
-        return {"status": "success", "event_type": event_type}
+            # 其他不需要处理的事件（仅记录日志）
+            elif event_type in [
+                # 发票相关
+                "invoice.created",
+                "invoice.finalized",
+                "invoice.paid",
+                "invoice.updated",
+                "invoice_payment.paid",
+                # 客户相关
+                "customer.created",
+                "customer.updated",
+                "customer.deleted",
+                # 订阅相关
+                "customer.subscription.created",
+                "customer.subscription.updated",
+                # 支付相关
+                "payment_intent.created",
+                "payment_intent.succeeded",
+                "payment_intent.payment_failed",
+                "payment_method.attached",
+                "payment_method.detached",
+                "payment_method.updated",
+                "charge.succeeded",
+                "charge.failed",
+                "charge.refunded",
+            ]:
+                logger.info(f"Event {event_type} received, no action needed")
+
+            # 未处理的事件类型
+            else:
+                logger.info(f"Unhandled webhook event type: {event_type}")
+
+            return {"status": "success", "event_type": event_type}
+
+        except Exception as e:
+            logger.error(f"Error processing webhook event {event_type}: {e}", exc_info=True)
+            # 不要向 Stripe 返回错误，避免重试风暴
+            # 但记录错误以便后续排查
+            return {"status": "error", "event_type": event_type, "error": str(e)}
 
     async def _handle_checkout_completed(
         self, db: AsyncSession, session_data: Dict[str, Any]
@@ -232,6 +271,7 @@ class StripeService:
         """处理支付成功事件"""
         stripe_subscription_id = invoice_data.get("subscription")
         if not stripe_subscription_id:
+            logger.warning("invoice.payment_succeeded event missing subscription ID")
             return
 
         # 更新订阅状态
@@ -242,16 +282,27 @@ class StripeService:
         )
         subscription = result.scalar_one_or_none()
 
-        if subscription:
+        if not subscription:
+            logger.warning(
+                f"Subscription not found for Stripe subscription {stripe_subscription_id}. "
+                "This is normal if checkout.session.completed hasn't been processed yet."
+            )
+            return
+
+        try:
             subscription.status = SubscriptionStatus.ACTIVE
             subscription.last_payment_date = datetime.utcnow()
 
             # 续期
-            if subscription.end_date < datetime.utcnow():
+            if subscription.end_date and subscription.end_date < datetime.utcnow():
                 plan_result = await db.execute(
                     select(Plan).where(Plan.id == subscription.plan_id)
                 )
-                plan = plan_result.scalar_one()
+                plan = plan_result.scalar_one_or_none()
+
+                if not plan:
+                    logger.error(f"Plan {subscription.plan_id} not found for subscription {subscription.id}")
+                    return
 
                 if plan.billing_period == "monthly":
                     subscription.end_date = datetime.utcnow() + timedelta(days=30)
@@ -260,6 +311,10 @@ class StripeService:
 
             await db.commit()
             logger.info(f"Payment succeeded for subscription {subscription.id}")
+        except Exception as e:
+            logger.error(f"Error updating subscription after payment: {e}", exc_info=True)
+            await db.rollback()
+            raise
 
     async def _handle_payment_failed(
         self, db: AsyncSession, invoice_data: Dict[str, Any]
