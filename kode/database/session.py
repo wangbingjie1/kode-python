@@ -37,17 +37,57 @@ SYNC_DATABASE_URL = os.getenv(
     get_sync_url(DATABASE_URL)
 )
 
-# Create async engine
+# Create async engine with connection pool settings
+# MySQL-specific pool configuration for better stability
+pool_config = {
+    "pool_pre_ping": True,  # Test connections before using them
+    "pool_recycle": 3600,   # Recycle connections after 1 hour
+    "pool_size": 10,        # Connection pool size
+    "max_overflow": 20,     # Max overflow connections
+    "echo_pool": False,     # Pool debug logging
+}
+
+# Add MySQL-specific settings if using MySQL
+if "mysql" in DATABASE_URL:
+    # aiomysql 支持的连接参数
+    pool_config.update({
+        "connect_args": {
+            "connect_timeout": 10,        # Connection timeout (seconds)
+            "charset": "utf8mb4",
+            "autocommit": False,
+        }
+    })
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,  # Set to True for SQL debugging
     future=True,
+    **pool_config
 )
 
-# Create sync engine for sync operations
+# Create sync engine for sync operations with same pool config
+sync_pool_config = {
+    "pool_pre_ping": True,
+    "pool_recycle": 3600,
+    "pool_size": 10,
+    "max_overflow": 20,
+}
+
+if "mysql" in SYNC_DATABASE_URL:
+    # pymysql 支持的连接参数
+    sync_pool_config.update({
+        "connect_args": {
+            "connect_timeout": 10,
+            "read_timeout": 30,           # pymysql 支持 read_timeout
+            "write_timeout": 30,          # pymysql 支持 write_timeout
+            "charset": "utf8mb4",
+        }
+    })
+
 sync_engine = create_engine(
     SYNC_DATABASE_URL,
     echo=False,
+    **sync_pool_config
 )
 
 # Create async session maker
