@@ -21,6 +21,8 @@ from .ontology_tools import (
     OntologyStorageTool,
     OntologySearchTool,
 )
+from .visualization_tools import ChartGeneratorTool
+from .insight_tools import InsightExtractorTool
 
 __all__ = [
     # Base
@@ -56,4 +58,7 @@ __all__ = [
     "OntologyBuilderTool",
     "OntologyStorageTool",
     "OntologySearchTool",
+    # Visualization
+    "ChartGeneratorTool",
+    "InsightExtractorTool",
 ]

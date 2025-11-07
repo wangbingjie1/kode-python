@@ -3,7 +3,7 @@
     <div class="login-card">
       <div class="login-header">
         <h1>Kode AI</h1>
-        <p>AI原生ERP开发平台</p>
+        <p>AI原生开发平台</p>
       </div>
 
       <!-- 登录表单 -->

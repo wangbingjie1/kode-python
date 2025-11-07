@@ -19,14 +19,30 @@ export interface ToolCall {
   status: string
 }
 
+export interface ChartData {
+  type: string
+  config: any
+  metadata?: Record<string, any>
+}
+
+export interface Insight {
+  type: string
+  severity: string
+  content: string
+  icon?: string
+  metadata?: Record<string, any>
+}
+
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant' | 'system' | 'tool'
+  role: 'user' | 'assistant' | 'system' | 'tool' | 'chart' | 'insight'
   content: string
   timestamp: Date
   isStreaming?: boolean
   metadata?: Record<string, any>
   toolCall?: ToolCall
+  chart?: ChartData
+  insights?: Insight[]
 }
 
 export const useChatStore = defineStore('chat', () => {
@@ -333,6 +349,41 @@ export const useChatStore = defineStore('chat', () => {
           }
         })()
         break
+
+      case 'chart': {
+        // 处理图表消息
+        const chartMessage = {
+          id: `chart-${Date.now()}-${Math.random()}`,
+          role: 'chart' as const,
+          content: '',
+          timestamp: new Date(),
+          isStreaming: false,
+          chart: {
+            type: chunk.metadata?.chart_type || 'unknown',
+            config: chunk.content,
+            metadata: chunk.metadata
+          }
+        }
+        console.log('[ChatStore] Adding chart message:', chartMessage)
+        messages.value.push(chartMessage)
+        break
+      }
+
+      case 'insight': {
+        // 处理洞察消息
+        const insightMessage = {
+          id: `insight-${Date.now()}-${Math.random()}`,
+          role: 'insight' as const,
+          content: '',
+          timestamp: new Date(),
+          isStreaming: false,
+          insights: chunk.content,
+          metadata: chunk.metadata
+        }
+        console.log('[ChatStore] Adding insight message:', insightMessage)
+        messages.value.push(insightMessage)
+        break
+      }
 
       case 'error':
         // Handle error

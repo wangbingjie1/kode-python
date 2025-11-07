@@ -51,3 +51,16 @@ def setup_logger(
         logger.addHandler(file_handler)
 
     return logger
+
+
+def get_logger(name: str) -> logging.Logger:
+    """
+    Get or create a logger with the given name.
+
+    Args:
+        name: Logger name (typically __name__)
+
+    Returns:
+        Logger instance
+    """
+    return setup_logger(name)

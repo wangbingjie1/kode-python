@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Kode 是一个基于 AI 的原生 ERP 开发平台，采用 LangChain 构建。项目已简化为 **Web-Only** 架构，移除了 CLI/REPL 模式，专注于提供 Web API 服务和前端界面。
+Kode 是一个基于 AI 的原生 数据分析开发平台，采用 LangChain 构建。项目已简化为 **Web-Only** 架构，移除了 CLI/REPL 模式，专注于提供 Web API 服务和前端界面。
 
 **核心特性：**
 - 🚀 纯 Web 服务架构，简单易用
@@ -55,16 +55,21 @@ The codebase follows a modular architecture with clear separation of concerns:
    - Provides business logic for web API
 
 6. **Web Layer** ([kode/web/](kode/web/)) **[主入口]**
-   - `main.py`: FastAPI application entry point (port 8000)
+   - `main.py`: FastAPI application entry point (port 8001)
    - `api/`: REST API endpoints
      - `chat.py`: Conversation and message endpoints
      - `project.py`: Project management endpoints
-   - `websocket/`: WebSocket handlers for real-time streaming chat
-     - `connection.py`: WebSocket connection manager and message routing
-   - Database: SQLite (default) with SQLAlchemy ORM
-   - Models: User, Conversation, Message, Project
+     - `database.py`: Database connection management endpoints
+     - `auth.py`: OAuth authentication (Google login)
+     - `billing.py`: Stripe billing and subscription management
+     - `sse.py`: Server-Sent Events streaming endpoints
+   - `middleware/`: Middleware components
+     - `quota_check.py`: Token/message quota enforcement
+     - `locale.py`: i18n locale detection
+   - Database: SQLite (default) with SQLAlchemy ORM + Alembic migrations
+   - Models: User, Project, Conversation, Message, DatabaseConnection, Plan, Subscription, Usage
 
-**Frontend Layer** ([web-frontend/](web-frontend/))
+**Frontend Layer** (位于 `../web-frontend/`,父目录)
    - Vue 3 + TypeScript + Vite
    - `src/components/`: Reusable UI components
      - `NotificationContainer.vue`: Toast notification system
@@ -72,10 +77,10 @@ The codebase follows a modular architecture with clear separation of concerns:
    - `src/views/`: Page views
      - `ChatView.vue`: Main chat interface
    - `src/stores/`: Pinia state management
-     - `chat.ts`: Chat state, WebSocket integration, message handling
+     - `chat.ts`: Chat state, SSE integration, message handling
    - `src/services/`:
      - `api.ts`: REST API client (Axios)
-     - `websocket.ts`: WebSocket service with auto-reconnect
+     - `sse.ts`: SSE (Server-Sent Events) service with auto-reconnect
    - `src/composables/`: Vue composables
      - `useNotification.ts`: Global notification system
    - `src/config/`: Configuration constants
@@ -97,12 +102,30 @@ Configuration includes:
 ### Web API Architecture
 
 **REST Endpoints:**
+
+*Core:*
 - `GET /health` - Health check (no auth)
 - `GET /api/config` - Get current configuration
+
+*Chat:*
 - `POST /api/chat/conversations` - Create conversation
 - `GET /api/chat/conversations/{id}` - Get conversation details
 - `GET /api/chat/conversations/{id}/messages` - Get message history
 - `DELETE /api/chat/conversations/{id}` - Delete conversation
+
+*Database Management:*
+- `POST /api/database/connections` - Create database connection
+- `GET /api/database/connections` - List all connections
+- `DELETE /api/database/connections/{id}` - Delete connection
+
+*Authentication:*
+- `GET /api/auth/google` - Google OAuth login
+- `GET /api/auth/google/callback` - OAuth callback
+
+*Billing (Stripe):*
+- `GET /api/billing/plans` - List subscription plans
+- `POST /api/billing/checkout` - Create Stripe checkout session
+- `POST /api/billing/webhook` - Stripe webhook endpoint
 
 **SSE (Server-Sent Events):**
 - `GET /api/sse/chat/{conversation_id}/stream?task=xxx` - Real-time streaming chat via SSE
@@ -112,10 +135,14 @@ Configuration includes:
 - Uses text/event-stream with automatic reconnection support
 
 **Database Models:**
-- `User`: Basic user information (default user created on startup)
-- `Project`: Project grouping for conversations (default project: "default")
+- `User`: User accounts with OAuth support (Google)
+- `Project`: Project grouping for conversations
 - `Conversation`: Chat sessions with title and timestamps
 - `Message`: Individual messages (role: user/assistant, content, metadata)
+- `DatabaseConnection`: Persisted database connections (PostgreSQL, MySQL, etc.)
+- `Plan`: Subscription plans (Free, Pro, Enterprise) with quotas
+- `Subscription`: User subscriptions linked to Stripe
+- `Usage`: Token and message usage tracking for billing
 
 ### Agent Definition Format
 
@@ -144,15 +171,15 @@ poetry install
 
 ### Running Kode (简化启动)
 
-**方式一：使用简化启动脚本（推荐）**
+**方式一：使用启动脚本（推荐）**
 
 ```bash
-# 后端服务
-python run.py           # 直接运行，自动启动在 http://localhost:8001
+# 后端服务 (自动清理端口、启动在 http://localhost:8001)
+python run.py
 
-# 或使用 PowerShell 脚本
-.\start-backend.ps1     # Windows（自动清理旧进程、检查端口）
-.\stop-backend.ps1      # 停止后端
+# 前端服务 (在另一个终端，从父目录运行)
+cd ../web-frontend
+npm run dev
 ```
 
 **方式二：手动启动**
@@ -161,24 +188,68 @@ python run.py           # 直接运行，自动启动在 http://localhost:8001
 # 后端 (port 8001)
 python -m kode.web.main
 
-# 前端 (port 3000, 在另一个终端)
-cd web-frontend
+# 前端 (port 3000)
+cd ../web-frontend
 npm run dev
 ```
 
-**后端启动脚本特性：**
-- ✓ 自动停止占用端口的旧进程
-- ✓ 清除 Python 缓存（__pycache__, *.pyc）
-- ✓ 验证虚拟环境和 API Key
-- ✓ 确保单例运行（端口占用检查）
-- ✓ Uvicorn 自动重载（修改代码自动重启）
+**run.py 启动脚本特性：**
+- ✓ 自动清理占用 8001 端口的旧进程 (Windows)
+- ✓ 多进程兼容 (Windows multiprocessing.freeze_support)
+- ✓ 简化配置，直接启动
 
 ### Configuration Management
 
-配置文件位置：
-- 项目配置：`./.kode.json`
-- 用户配置：`~/.kode.json`
-- 环境变量：`ANTHROPIC_API_KEY`
+**配置文件位置：**
+- 项目配置：`./.kode.json` (API keys, model settings)
+- 用户配置：`~/.kode.json` (用户级默认配置)
+- 环境变量：`.env` (OAuth, Stripe, database credentials)
+
+**必需的环境变量** (`.env`):
+```bash
+# AI Model API Keys
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...  # Optional
+
+# OAuth (Google Login)
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://localhost:8001/api/auth/google/callback
+
+# Stripe Billing
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Security
+SECRET_KEY=your-secret-key-here  # For JWT tokens
+
+# Database (optional, defaults to SQLite)
+DATABASE_URL=sqlite+aiosqlite:///./kode.db
+```
+
+参考 `.env.example` 获取完整模板。
+
+### Database Migrations (Alembic)
+
+```bash
+# 创建新的迁移文件
+alembic revision --autogenerate -m "描述变更内容"
+
+# 应用迁移到数据库
+alembic upgrade head
+
+# 回滚到上一个版本
+alembic downgrade -1
+
+# 查看当前版本
+alembic current
+
+# 查看迁移历史
+alembic history
+```
+
+**注意**: 数据库 schema 变更后必须生成迁移文件。
 
 ### Testing
 
@@ -191,6 +262,9 @@ python test_run.py
 
 # Run real API test (requires API key)
 python test_real_api.py
+
+# Test database connections
+pytest tests/test_database_tools.py -v
 ```
 
 ### Code Quality
@@ -288,6 +362,56 @@ notification.error('Error', 'Details', 5000) // 5s duration
 - EventSource API provides automatic reconnection
 - Vite proxy forwards `/api` to backend (port 8000)
 
+## Key Architecture Decisions
+
+### Single Agent System (重要变更)
+
+项目采用 **单 Agent 架构**，移除了原有的多 Agent 加载系统：
+
+- **唯一 Agent**: `data-analyst` 内置在 `conversation.py:_create_data_analyst_agent()`
+- **专注领域**: ERP 数据分析和业务洞察
+- **缓存优先**: Agent 自动检测并使用已缓存的 schema/ontology
+- **工具集**: 拥有所有工具的访问权限 (`tools: "*"`)
+- **代码位置**: `kode/services/conversation.py:127-184`
+
+这个设计简化了系统复杂度，专注于数据分析场景。
+
+### Subscription & Billing System
+
+**三层计费体系**（类似 Cursor）:
+
+1. **Free Plan (免费版)**
+   - 10万 tokens/月
+   - 50 条消息/月
+   - 3 个对话
+   - 无数据库连接
+
+2. **Pro Plan (专业版 - ¥99/月)**
+   - 200万 tokens/月
+   - 1000 条消息/月
+   - 50 个对话
+   - 5 个数据库连接
+   - 支持本体构建
+
+3. **Enterprise Plan (企业版 - ¥499/月)**
+   - 1000万 tokens/月
+   - 无限消息
+   - 500 个对话
+   - 50 个数据库连接
+   - 定制模型、API 访问、专属支持
+
+**配额执行**:
+- `QuotaCheckMiddleware` 在每次 API 调用前检查配额
+- `Usage` 模型跟踪实际使用量
+- 超额后阻止请求并返回 403 错误
+
+**Stripe 集成**:
+- Checkout Sessions 用于订阅
+- Webhook 处理支付事件
+- 自动创建/更新/取消订阅
+
+详见 `BILLING_MODULE_README.md` 和 `STRIPE_SETUP_COMPLETE.md`。
+
 ## Important Notes
 
 - **Virtual Environment**: Prefer using `.venv` directly over Poetry for running services. Startup scripts auto-detect the environment.
@@ -297,49 +421,80 @@ notification.error('Error', 'Details', 5000) // 5s duration
 - **Chinese Support**: Example agents provided in Chinese ([examples/agents/](examples/agents/))
 - **Permission System**: Tools can require user permission before execution
 - **SSE Communication**: Frontend uses SSE (Server-Sent Events) for streaming responses with automatic reconnection
-- **Port Configuration**: Backend uses 8000, frontend development server uses 3000 (proxied to backend)
+- **Port Configuration**: Backend uses 8001, frontend development server uses 3000 (proxied to backend)
+- **Authentication**: OAuth 2.0 with Google login (configured via .env)
+- **Billing System**: Stripe integration for subscription management (Free/Pro/Enterprise plans)
+- **Quota Enforcement**: Middleware enforces token/message limits based on user plan
+- **Database Migrations**: Alembic for schema versioning (migrations/ directory)
 
 ## File Structure Overview
 
 ```
 kode-python/
-├── kode/
-│   ├── agents/          # Agent system with loader
-│   ├── cli/             # CLI interface and REPL
-│   ├── context/         # Conversation and project context
-│   ├── core/            # Core systems (models, permissions)
-│   ├── tools/           # Tool implementations
-│   ├── services/        # Business services
-│   ├── web/             # Web layer
-│   │   ├── api/         # REST API endpoints (chat, project, sse)
-│   │   └── main.py      # FastAPI app
-│   ├── models/          # SQLAlchemy ORM models (NEW)
-│   ├── schemas/         # Pydantic schemas (NEW)
-│   ├── database/        # Database config (NEW)
-│   └── utils/           # Config, logging utilities
-├── web-frontend/        # Vue 3 + TypeScript frontend
+├── kode/                      # 主后端代码
+│   ├── agents/                # Agent 系统 (base.py, anthropic_streaming.py)
+│   ├── context/               # 对话上下文管理
+│   ├── core/                  # 核心系统
+│   │   ├── model_manager.py   # LLM 多模型管理
+│   │   ├── permission.py      # 权限系统
+│   │   ├── oauth.py           # OAuth 认证
+│   │   └── security.py        # 安全工具
+│   ├── tools/                 # 工具实现
+│   │   ├── database_tools.py  # 数据库连接/查询工具
+│   │   ├── ontology_tools.py  # 本体构建工具
+│   │   └── [其他工具]
+│   ├── services/              # 业务服务层
+│   │   ├── conversation.py    # 对话服务 (核心)
+│   │   ├── database_manager.py
+│   │   ├── billing_service.py
+│   │   └── stripe_service.py
+│   ├── web/                   # FastAPI Web 层
+│   │   ├── main.py            # 入口 (port 8001)
+│   │   ├── api/               # REST 端点
+│   │   │   ├── chat.py
+│   │   │   ├── sse.py         # SSE 流式响应
+│   │   │   ├── database.py
+│   │   │   ├── auth.py        # OAuth 登录
+│   │   │   └── billing.py     # Stripe 计费
+│   │   └── middleware/
+│   │       ├── quota_check.py # 配额检查
+│   │       └── locale.py      # i18n
+│   ├── models/                # SQLAlchemy ORM
+│   │   ├── user.py
+│   │   ├── subscription.py
+│   │   ├── usage.py
+│   │   └── [其他模型]
+│   ├── schemas/               # Pydantic schemas
+│   ├── database/              # 数据库配置
+│   │   └── session.py
+│   ├── utils/                 # 工具类
+│   │   ├── config.py          # 配置管理
+│   │   ├── logger.py
+│   │   └── i18n.py            # 国际化
+│   └── locales/               # i18n 翻译文件
+├── ../web-frontend/           # Vue 前端 (父目录)
 │   ├── src/
-│   │   ├── components/  # NotificationContainer, MessageItem
-│   │   ├── views/       # ChatView (main interface)
-│   │   ├── stores/      # Pinia state (chat store)
-│   │   ├── services/    # API client, SSE service
-│   │   ├── composables/ # useNotification
-│   │   ├── config/      # constants.ts (DEFAULT_PROJECT_ID, etc.)
-│   │   └── router/      # Vue router
+│   │   ├── components/
+│   │   ├── views/
+│   │   ├── stores/            # Pinia 状态
+│   │   ├── services/          # API/SSE 客户端
+│   │   └── config/
 │   ├── package.json
-│   └── vite.config.ts   # Vite config with proxy setup
-├── tests/               # Test suite
-├── examples/            # Example agent definitions
-├── logs/                # Service logs (git-ignored, created by start-web.sh)
-├── pyproject.toml       # Poetry dependencies and tool config
-├── .kode.json          # Project configuration (git-ignored)
-├── .backend.pid        # Backend process ID (git-ignored)
-├── .frontend.pid       # Frontend process ID (git-ignored)
-├── WEB_STARTUP_README.md  # Detailed startup guide and troubleshooting
-├── start-web.sh        # Linux/Mac startup script
-├── start-web.ps1       # Windows startup script
-├── stop-web.sh         # Linux/Mac stop script
-└── stop-web.ps1        # Windows stop script
+│   └── vite.config.ts
+├── migrations/                # Alembic 数据库迁移
+├── schema_store/              # 数据库 schema 缓存
+├── ontology_store/            # 本体缓存
+├── scripts/                   # 辅助脚本
+├── .env                       # 环境变量 (git-ignored)
+├── .env.example               # 环境变量模板
+├── .kode.json                 # Kode 配置 (git-ignored)
+├── .kode.json.example         # 配置模板
+├── pyproject.toml             # Poetry 依赖
+├── requirements.txt           # pip 依赖 (备用)
+├── run.py                     # 启动脚本
+├── CLAUDE.md                  # 本文档
+├── BILLING_MODULE_README.md   # 计费模块文档
+└── STRIPE_SETUP_COMPLETE.md   # Stripe 设置指南
 ```
 
 ## Database & Ontology Tools **[NEW]**
@@ -441,9 +596,52 @@ Add to `.kode.json`:
 4. **Documentation**: Auto-generate data dictionaries and ER diagrams
 5. **Data Governance**: Identify quality issues and normalization opportunities
 
-## Test Files
+## Common Development Workflows
 
-- [test_run.py](test_run.py): Quick component verification without API calls
-- [test_real_api.py](test_real_api.py): Full integration test with LLM API
-- [test_database_tools.py](tests/test_database_tools.py): **[NEW]** Database and ontology tools tests
-- [verify_project.py](verify_project.py): Project structure and dependency verification
+### 添加新的 API 端点
+
+1. 在 `kode/web/api/` 创建或编辑路由文件
+2. 在 `kode/schemas/` 添加 Pydantic request/response schemas
+3. 在 `kode/services/` 实现业务逻辑
+4. 在 `kode/web/main.py` 注册路由
+5. 测试端点并更新文档
+
+### 添加新的数据库模型
+
+1. 在 `kode/models/` 创建 SQLAlchemy 模型
+2. 运行 `alembic revision --autogenerate -m "Add XXX model"`
+3. 检查生成的迁移文件，确保正确
+4. 运行 `alembic upgrade head` 应用迁移
+5. 在相关 service 中使用新模型
+
+### 添加新的 Tool
+
+1. 在 `kode/tools/` 创建工具文件，继承 `KodeTool`
+2. 定义 Pydantic input schema
+3. 实现 `_run()` 方法
+4. 在 `kode/services/conversation.py` 的 `__init__` 中注册工具
+5. 测试工具执行
+
+### 调试 SSE 流式响应
+
+1. 检查 `kode/services/conversation.py:execute_task_streaming()`
+2. 查看 `kode/agents/anthropic_streaming.py` 的流式实现
+3. 使用 `logger.info/warning` 添加日志（会输出到控制台）
+4. 前端使用浏览器 DevTools 查看 EventSource 消息
+
+### Stripe 测试
+
+使用 Stripe CLI 监听 webhook:
+```bash
+stripe listen --forward-to localhost:8001/api/billing/webhook
+```
+
+使用测试卡号: `4242 4242 4242 4242`
+
+## Test Files & Scripts
+
+- `run.py`: 主启动脚本（推荐）
+- `test_run.py`: 快速组件验证（无 API 调用）
+- `test_real_api.py`: 完整集成测试（需要 API key）
+- `tests/test_database_tools.py`: 数据库和本体工具测试
+- `scripts/`: 辅助脚本（数据初始化、迁移等）

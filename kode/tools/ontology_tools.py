@@ -18,8 +18,8 @@ from kode.utils.config import ConfigManager
 class OntologyBuilderInput(BaseModel):
     """Input schema for OntologyBuilderTool."""
 
-    schema_metadata: Dict[str, Any] = Field(
-        description="Database schema metadata from DatabaseSchemaExtractor"
+    connection_name: str = Field(
+        description="Database connection name. The tool will load schema from schema_store/{connection_name}/schema_latest.json"
     )
     use_llm_enrichment: bool = Field(
         default=False, description="Use LLM to enrich ontology with business semantics"
@@ -75,19 +75,33 @@ class OntologyBuilderTool(KodeTool):
 
     Converts technical database schema to semantic business ontology,
     enriching with business terms and relationships.
+
+    IMPORTANT: This tool loads schema from schema_store/{connection_name}/schema_latest.json.
+    You must run DatabaseSchemaExtractor first to extract and save the schema.
     """
 
     name: str = "OntologyBuilder"
-    description: str = """Build business ontology from database schema metadata.
-    Converts tables to entities/concepts, columns to properties/attributes,
-    and enriches with business semantics and inferred relationships."""
+    description: str = """Build business ontology from database schema.
+
+    Prerequisites: Must run DatabaseSchemaExtractor first to save schema to file.
+
+    This tool:
+    1. Loads schema from schema_store/{connection_name}/schema_latest.json
+    2. Converts tables to business concepts/entities
+    3. Converts columns to properties/attributes
+    4. Extracts relationships (FK constraints + inferred)
+    5. Identifies hierarchical structures
+    6. Optionally enriches with LLM-generated business semantics
+    7. Saves ontology to ontology_store/{connection_name}/
+
+    Input: connection_name (string), NOT the full schema JSON."""
 
     args_schema: Type[BaseModel] = OntologyBuilderInput
     requires_permission: bool = False
 
     def _run(
         self,
-        schema_metadata: Dict[str, Any],
+        connection_name: str,
         use_llm_enrichment: bool = False,
         add_business_terms: bool = True,
         infer_relationships: bool = True,
@@ -96,83 +110,53 @@ class OntologyBuilderTool(KodeTool):
         version: str = "auto",
     ) -> str:
         """
-        Build ontology from schema.
+        Build ontology from database schema using AI.
 
         Args:
-            schema_metadata: Database schema from extractor
-            use_llm_enrichment: Use LLM for enrichment
-            add_business_terms: Convert to business terms
-            infer_relationships: Infer implicit relationships
-            extract_hierarchies: Extract hierarchies
+            connection_name: Database connection name (loads schema from schema_store)
+            use_llm_enrichment: Use LLM for enrichment (DEPRECATED - always uses LLM now)
+            add_business_terms: Convert to business terms (DEPRECATED - LLM handles this)
+            infer_relationships: Infer implicit relationships (DEPRECATED - LLM handles this)
+            extract_hierarchies: Extract hierarchies (DEPRECATED - LLM handles this)
+            auto_save: Automatically save ontology to file
+            version: Version identifier
 
         Returns:
             Ontology as JSON
         """
         try:
-            ontology = {
-                "metadata": {
-                    "created_at": datetime.now().isoformat(),
-                    "source_database": schema_metadata.get("database"),
-                    "source_connection": schema_metadata.get("connection", {}).get("name"),
-                    "table_count": schema_metadata.get("table_count", 0),
-                },
-                "concepts": {},
-                "properties": {},
-                "relationships": [],
-                "hierarchies": [],
-            }
+            # Load schema from saved file
+            config = ConfigManager()
+            schema_path = config.get("storage.schema_path", "./schema_store")
+            schema_file = Path(schema_path) / connection_name / "schema_latest.json"
 
-            tables = schema_metadata.get("tables", {})
+            if not schema_file.exists():
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Schema file not found for connection '{connection_name}'",
+                        "expected_path": str(schema_file),
+                        "suggestion": "Run DatabaseSchemaExtractor first to extract schema",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
 
-            # Convert tables to concepts
-            for table_name, table_data in tables.items():
-                concept = self._table_to_concept(table_name, table_data, add_business_terms)
-                ontology["concepts"][table_name] = concept
+            # Load schema data
+            with open(schema_file, "r", encoding="utf-8") as f:
+                schema_data = json.load(f)
 
-                # Extract properties from columns
-                if "columns" in table_data:
-                    for column in table_data["columns"]:
-                        prop = self._column_to_property(
-                            table_name, column, add_business_terms
-                        )
-                        prop_key = f"{table_name}.{column['name']}"
-                        ontology["properties"][prop_key] = prop
+            # Unwrap schema if it has version wrapper
+            if "schema" in schema_data and isinstance(schema_data["schema"], dict):
+                schema_metadata = schema_data["schema"]
+            else:
+                schema_metadata = schema_data
 
-            # Extract explicit relationships from FK constraints
-            if "relationships" in schema_metadata:
-                for rel in schema_metadata["relationships"]:
-                    relationship = self._fk_to_relationship(rel)
-                    ontology["relationships"].append(relationship)
-
-            # Infer additional relationships
-            if infer_relationships:
-                inferred = self._infer_relationships(tables)
-                ontology["relationships"].extend(inferred)
-
-            # Extract hierarchies
-            if extract_hierarchies:
-                hierarchies = self._extract_hierarchies(tables, ontology["relationships"])
-                ontology["hierarchies"] = hierarchies
-
-            # LLM enrichment
-            if use_llm_enrichment:
-                try:
-                    ontology = self._enrich_with_llm(ontology, schema_metadata)
-                    ontology["enrichment_status"] = "completed"
-                except Exception as e:
-                    ontology["enrichment_status"] = f"failed: {str(e)}"
-
-            # Add statistics
-            ontology["statistics"] = {
-                "concept_count": len(ontology["concepts"]),
-                "property_count": len(ontology["properties"]),
-                "relationship_count": len(ontology["relationships"]),
-                "hierarchy_count": len(ontology["hierarchies"]),
-            }
+            # 核心改变：直接使用 AI 生成完整的本体，而不是传统代码转换
+            ontology = self._build_ontology_with_ai(schema_metadata, connection_name)
 
             # Auto-save ontology to file
             if auto_save:
-                connection_name = schema_metadata.get("connection", {}).get("name", "unknown")
                 save_result = self._save_ontology(ontology, connection_name, version)
                 ontology["storage"] = save_result
 
@@ -189,480 +173,289 @@ class OntologyBuilderTool(KodeTool):
                 indent=2,
             )
 
-    def _table_to_concept(
-        self, table_name: str, table_data: Dict[str, Any], add_business_terms: bool
-    ) -> Dict[str, Any]:
-        """Convert database table to ontology concept."""
-        concept = {
-            "name": table_name,
-            "type": "entity",
-            "source": "database_table",
-            "column_count": table_data.get("column_count", 0),
-        }
-
-        # Add business name (convert snake_case to Title Case)
-        if add_business_terms:
-            business_name = " ".join(word.capitalize() for word in table_name.split("_"))
-            concept["business_name"] = business_name
-
-        # Add primary key information
-        if "primary_key" in table_data:
-            concept["primary_key"] = table_data["primary_key"]["columns"]
-
-        return concept
-
-    def _column_to_property(
-        self, table_name: str, column: Dict[str, Any], add_business_terms: bool
-    ) -> Dict[str, Any]:
-        """Convert database column to ontology property."""
-        prop = {
-            "name": column["name"],
-            "concept": table_name,
-            "data_type": column["type"],
-            "nullable": column.get("nullable", True),
-            "autoincrement": column.get("autoincrement", False),
-        }
-
-        # Add business name
-        if add_business_terms:
-            business_name = " ".join(word.capitalize() for word in column["name"].split("_"))
-            prop["business_name"] = business_name
-
-        # Add default value if present
-        if column.get("default"):
-            prop["default_value"] = column["default"]
-
-        return prop
-
-    def _fk_to_relationship(self, fk: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert foreign key to ontology relationship."""
-        return {
-            "type": "foreign_key",
-            "from_concept": fk["from_table"],
-            "to_concept": fk["to_table"],
-            "from_properties": fk["from_columns"],
-            "to_properties": fk["to_columns"],
-            "constraint_name": fk.get("constraint_name"),
-            "cardinality": "many-to-one",  # Default FK cardinality
-        }
-
-    def _infer_relationships(self, tables: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Infer additional relationships beyond explicit FK constraints."""
-        inferred = []
-
-        # Look for common naming patterns that suggest relationships
-        # E.g., "user_id" column might relate to "users" table
-        for table_name, table_data in tables.items():
-            if "columns" not in table_data:
-                continue
-
-            for column in table_data["columns"]:
-                col_name = column["name"].lower()
-
-                # Pattern: column ends with "_id"
-                if col_name.endswith("_id"):
-                    potential_table = col_name[:-3]  # Remove "_id"
-
-                    # Try plural form
-                    potential_tables = [
-                        potential_table,
-                        potential_table + "s",
-                        potential_table + "es",
-                    ]
-
-                    for pot_table in potential_tables:
-                        if pot_table in tables and pot_table != table_name:
-                            inferred.append(
-                                {
-                                    "type": "inferred",
-                                    "from_concept": table_name,
-                                    "to_concept": pot_table,
-                                    "from_properties": [col_name],
-                                    "to_properties": ["id"],
-                                    "inference_reason": "naming_pattern",
-                                    "cardinality": "many-to-one",
-                                }
-                            )
-                            break
-
-        return inferred
-
-    def _extract_hierarchies(
-        self, tables: Dict[str, Any], relationships: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """
-        Extract hierarchical relationships (e.g., parent-child).
-
-        Detects hierarchies through:
-        1. Self-referencing foreign keys
-        2. Standard hierarchy column patterns (parent_id, pid, etc.)
-        3. Level/depth indicators
-        4. Category/classification structures
-        5. Order/sequence fields suggesting tree structures
-        """
-        hierarchies = []
-
-        # 1. Self-referencing relationships (explicit hierarchies)
-        for rel in relationships:
-            if rel["from_concept"] == rel["to_concept"]:
-                hierarchies.append(
-                    {
-                        "type": "self_referencing",
-                        "concept": rel["from_concept"],
-                        "parent_property": rel["to_properties"][0]
-                        if rel["to_properties"]
-                        else None,
-                        "child_property": rel["from_properties"][0]
-                        if rel["from_properties"]
-                        else None,
-                        "description": f"自引用关系: {rel['from_concept']} 表具有树形结构",
-                    }
-                )
-
-        # 2. Standard hierarchy column patterns
-        hierarchy_indicators = [
-            "parent_id",
-            "parent",
-            "pid",  # Common abbreviation
-            "superior_id",
-            "manager_id",
-            "category_id",
-            "parent_code",
-            "up_id",  # Some systems use this
-        ]
-
-        for table_name, table_data in tables.items():
-            if "columns" not in table_data:
-                continue
-
-            columns = table_data["columns"]
-            col_names = [col["name"].lower() for col in columns]
-
-            # Check for standard indicators
-            for col in columns:
-                col_name = col["name"].lower()
-                if col_name in hierarchy_indicators:
-                    hierarchies.append(
-                        {
-                            "type": "parent_child",
-                            "concept": table_name,
-                            "parent_property": col_name,
-                            "description": f"{table_name} 通过 {col_name} 字段形成层次结构",
-                        }
-                    )
-
-            # 3. Detect level/depth indicators (multi-level structures)
-            level_indicators = ["level", "depth", "tier", "rank", "grade"]
-            has_level = any(
-                any(indicator in col_name for indicator in level_indicators)
-                for col_name in col_names
-            )
-
-            if has_level:
-                level_col = next(
-                    col["name"]
-                    for col in columns
-                    if any(indicator in col["name"].lower() for indicator in level_indicators)
-                )
-                hierarchies.append(
-                    {
-                        "type": "level_based",
-                        "concept": table_name,
-                        "level_property": level_col,
-                        "description": f"{table_name} 使用 {level_col} 字段表示层级深度",
-                    }
-                )
-
-            # 4. Category/Classification structures
-            is_category_table = any(
-                keyword in table_name.lower()
-                for keyword in ["category", "class", "type", "group", "tag"]
-            )
-
-            if is_category_table:
-                # Check if has parent reference or level
-                has_parent = any(
-                    "parent" in col_name or "pid" == col_name for col_name in col_names
-                )
-                if has_parent:
-                    parent_col = next(
-                        col["name"]
-                        for col in columns
-                        if "parent" in col["name"].lower() or col["name"].lower() == "pid"
-                    )
-                    hierarchies.append(
-                        {
-                            "type": "category_hierarchy",
-                            "concept": table_name,
-                            "parent_property": parent_col,
-                            "description": f"{table_name} 是分类表,通过 {parent_col} 形成层次",
-                        }
-                    )
-
-            # 5. Tree structure indicators (path, lft/rgt for nested sets)
-            has_tree_path = any("path" in col_name for col_name in col_names)
-            has_nested_set = "lft" in col_names and "rgt" in col_names
-
-            if has_tree_path:
-                path_col = next(col["name"] for col in columns if "path" in col["name"].lower())
-                hierarchies.append(
-                    {
-                        "type": "path_based",
-                        "concept": table_name,
-                        "path_property": path_col,
-                        "description": f"{table_name} 使用路径字段 {path_col} 存储层次结构",
-                    }
-                )
-
-            if has_nested_set:
-                hierarchies.append(
-                    {
-                        "type": "nested_set",
-                        "concept": table_name,
-                        "left_property": "lft",
-                        "right_property": "rgt",
-                        "description": f"{table_name} 使用嵌套集合模型(Nested Set)存储树形结构",
-                    }
-                )
-
-            # 6. Adjacency patterns (common naming suggesting hierarchy)
-            adjacency_patterns = [
-                ("parent", "parent reference"),
-                ("superior", "superior relationship"),
-                ("belongs_to", "belonging hierarchy"),
-            ]
-
-            for pattern, desc in adjacency_patterns:
-                matching_cols = [col for col in columns if pattern in col["name"].lower()]
-                for col in matching_cols:
-                    if col["name"].lower() not in hierarchy_indicators:  # Avoid duplicates
-                        hierarchies.append(
-                            {
-                                "type": "adjacency_list",
-                                "concept": table_name,
-                                "reference_property": col["name"],
-                                "description": f"{table_name}.{col['name']} 可能表示层次关系 ({desc})",
-                            }
-                        )
-
-        # Remove duplicates (same concept + type)
-        seen = set()
-        unique_hierarchies = []
-        for h in hierarchies:
-            key = (h["concept"], h["type"])
-            if key not in seen:
-                seen.add(key)
-                unique_hierarchies.append(h)
-
-        return unique_hierarchies
-
-    def _enrich_with_llm(
-        self, ontology: Dict[str, Any], schema_metadata: Dict[str, Any]
+    def _build_ontology_with_ai(
+        self, schema_metadata: Dict[str, Any], connection_name: str
     ) -> Dict[str, Any]:
         """
-        Use LLM to enrich ontology with business semantics.
+        使用 AI 直接从数据库 schema 生成完整的业务本体。
 
-        This method uses a language model to:
-        1. Generate meaningful business descriptions for entities
-        2. Translate technical names to business terms
-        3. Infer implicit business rules
-        4. Identify domain-specific patterns
-        5. Add Chinese business names and descriptions
-
-        Args:
-            ontology: Base ontology from rule-based extraction
-            schema_metadata: Original database schema
-
-        Returns:
-            Enriched ontology with LLM-generated insights
+        这是核心方法，完全由 AI 理解业务语义并生成本体，而非规则代码。
         """
         try:
-            # Get LLM instance
+            # 准备 schema 的紧凑表示
+            schema_summary = self._prepare_schema_for_ai(schema_metadata)
+
+            # 创建 AI prompt
+            prompt = self._create_ontology_generation_prompt(schema_summary)
+
+            # 调用 AI 模型
             config_manager = ConfigManager()
             config = config_manager.get_all()
             model_manager = ModelManager(config)
-            model = model_manager.get_model("quick")  # Use quick model for enrichment
+            model = model_manager.get_model("main")  # 使用 main 模型，这个任务很重要
 
-            # Prepare context for LLM
-            concepts_summary = self._prepare_concepts_summary(ontology)
-            relationships_summary = self._prepare_relationships_summary(ontology)
-
-            # Create enrichment prompt
-            prompt = self._create_enrichment_prompt(
-                concepts_summary, relationships_summary, schema_metadata
-            )
-
-            # Call LLM
             from langchain_core.messages import HumanMessage
-
             response = model.invoke([HumanMessage(content=prompt)])
-            llm_output = response.content
+            ai_output = response.content
 
-            # Parse LLM response and apply enrichments
-            enriched_ontology = self._apply_llm_enrichments(ontology, llm_output)
+            # 解析 AI 返回的 JSON
+            ontology_data = self._extract_json_from_text(ai_output)
 
-            return enriched_ontology
+            if not ontology_data:
+                raise ValueError("AI 未返回有效的 JSON 格式本体数据")
 
-        except Exception as e:
-            # If LLM enrichment fails, return original ontology
-            ontology["enrichment_error"] = str(e)
+            # 添加元数据
+            ontology = {
+                "metadata": {
+                    "created_at": datetime.now().isoformat(),
+                    "created_by": "ai",
+                    "model": model_manager.get_current_model_name(),
+                    "source_database": schema_metadata.get("database"),
+                    "source_connection": connection_name,
+                    "table_count": schema_metadata.get("table_count", 0),
+                },
+                "concepts": ontology_data.get("concepts", {}),
+                "properties": ontology_data.get("properties", {}),
+                "relationships": ontology_data.get("relationships", []),
+                "hierarchies": ontology_data.get("hierarchies", []),
+                "domain_insights": ontology_data.get("domain_insights", {}),
+                "business_rules": ontology_data.get("business_rules", []),
+                "recommendations": ontology_data.get("recommendations", []),
+                "statistics": {
+                    "concept_count": len(ontology_data.get("concepts", {})),
+                    "property_count": len(ontology_data.get("properties", {})),
+                    "relationship_count": len(ontology_data.get("relationships", [])),
+                    "hierarchy_count": len(ontology_data.get("hierarchies", [])),
+                },
+            }
+
             return ontology
 
-    def _prepare_concepts_summary(self, ontology: Dict[str, Any]) -> str:
-        """Prepare a summary of concepts for LLM context."""
-        concepts = ontology.get("concepts", {})
-        summary_lines = []
+        except Exception as e:
+            # Fallback: 返回基本结构
+            return {
+                "metadata": {
+                    "created_at": datetime.now().isoformat(),
+                    "created_by": "error_fallback",
+                    "error": str(e),
+                },
+                "concepts": {},
+                "properties": {},
+                "relationships": [],
+                "hierarchies": [],
+            }
 
-        for concept_name, concept_data in list(concepts.items())[:20]:  # Limit to 20
-            summary_lines.append(
-                f"- {concept_name}: {concept_data.get('business_name', 'N/A')} "
-                f"({concept_data.get('column_count', 0)} columns)"
-            )
+    def _prepare_schema_for_ai(self, schema_metadata: Dict[str, Any]) -> str:
+        """
+        将数据库 schema 转换为紧凑的、AI 友好的格式。
 
-        return "\n".join(summary_lines)
+        包含：表名、列信息（名称、类型、注释）、主键、外键关系。
+        """
+        tables = schema_metadata.get("tables", {})
+        relationships = schema_metadata.get("relationships", [])
 
-    def _prepare_relationships_summary(self, ontology: Dict[str, Any]) -> str:
-        """Prepare a summary of relationships for LLM context."""
-        relationships = ontology.get("relationships", [])
-        summary_lines = []
+        lines = []
+        lines.append(f"数据库: {schema_metadata.get('database', '未知')}")
+        lines.append(f"表数量: {len(tables)}")
+        lines.append("")
 
-        for rel in relationships[:15]:  # Limit to 15
-            summary_lines.append(
-                f"- {rel['from_concept']} → {rel['to_concept']} "
-                f"({rel.get('type', 'unknown')})"
-            )
+        # 表和列信息
+        for table_name, table_data in tables.items():
+            lines.append(f"## {table_name}")
 
-        return "\n".join(summary_lines)
+            # 主键
+            if "primary_key" in table_data:
+                pk_cols = ", ".join(table_data["primary_key"].get("columns", []))
+                lines.append(f"  主键: {pk_cols}")
 
-    def _create_enrichment_prompt(
-        self,
-        concepts_summary: str,
-        relationships_summary: str,
-        schema_metadata: Dict[str, Any],
-    ) -> str:
-        """Create prompt for LLM enrichment."""
-        database_name = schema_metadata.get("database", "未知数据库")
-        table_count = schema_metadata.get("table_count", 0)
+            # 列
+            lines.append("  列:")
+            for col in table_data.get("columns", []):
+                col_info = f"    - {col['name']} ({col['type']})"
+                if col.get("comment"):
+                    col_info += f" -- {col['comment']}"
+                if not col.get("nullable", True):
+                    col_info += " [NOT NULL]"
+                if col.get("autoincrement"):
+                    col_info += " [AUTO_INCREMENT]"
+                lines.append(col_info)
 
-        prompt = f"""你是一位资深的业务分析师和数据架构师。请分析以下数据库结构，为其构建业务本体。
+            lines.append("")
 
-# 数据库信息
-- 数据库名称: {database_name}
-- 表数量: {table_count}
+        # 外键关系
+        if relationships:
+            lines.append("## 外键关系")
+            for rel in relationships:
+                lines.append(
+                    f"  {rel['from_table']}.{','.join(rel['from_columns'])} → "
+                    f"{rel['to_table']}.{','.join(rel['to_columns'])}"
+                )
 
-# 当前实体（部分）
-{concepts_summary}
+        return "\n".join(lines)
 
-# 当前关系（部分）
-{relationships_summary}
+    def _create_ontology_generation_prompt(self, schema_summary: str) -> str:
+        """创建用于本体生成的 AI prompt。"""
+        return f"""你是一位资深的 ERP 系统架构师和业务分析专家。请分析以下数据库 schema，构建一个完整的业务本体（Ontology）。
 
-# 任务
-请为每个实体提供以下信息（JSON 格式）：
+# 数据库 Schema
 
-1. **业务名称（中文）**: 准确的业务术语
-2. **业务描述**: 清晰的业务含义（50字以内）
-3. **领域分类**: 所属业务领域（如：用户管理、订单管理、财务等）
-4. **重要性**: high/medium/low
+{schema_summary}
 
-请以 JSON 格式返回，格式如下：
+# 任务要求
+
+请深入理解这个数据库的业务语义，生成一个完整的业务本体，包括：
+
+1. **Concepts（概念/实体）**: 每个表代表的业务概念
+   - technical_name: 技术名称（表名）
+   - business_name_cn: 中文业务名称
+   - business_name_en: 英文业务名称
+   - description: 业务描述（100字以内，说清楚这个概念的业务含义）
+   - domain: 所属业务领域（如：用户管理、订单管理、财务管理等）
+   - importance: 重要性 (critical/high/medium/low)
+   - primary_key: 主键字段列表
+
+2. **Properties（属性）**: 每个字段的业务含义
+   - technical_name: 技术名称（表名.字段名）
+   - business_name_cn: 中文业务名称
+   - business_name_en: 英文业务名称
+   - description: 业务含义描述
+   - data_type: 数据类型
+   - nullable: 是否可空
+   - concept: 所属概念（表名）
+
+3. **Relationships（关系）**: 表之间的业务关系
+   - from_concept: 源概念
+   - to_concept: 目标概念
+   - relationship_type: 关系类型（foreign_key/one_to_many/many_to_many/composition/aggregation）
+   - cardinality: 基数（1:1, 1:N, N:M）
+   - business_meaning: 业务含义（如："订单属于用户"、"商品属于分类"）
+   - from_properties: 源字段
+   - to_properties: 目标字段
+
+4. **Hierarchies（层次结构）**: 识别树形/层级结构
+   - concept: 概念名称
+   - type: 类型（self_referencing/category_tree/organizational_tree等）
+   - parent_property: 父节点字段
+   - description: 业务描述
+
+5. **Domain Insights（领域洞察）**:
+   - primary_domain: 主要业务领域
+   - sub_domains: 子领域列表
+   - business_scenario: 业务场景描述
+   - architecture_pattern: 架构模式（单体/微服务/领域驱动）
+
+6. **Business Rules（业务规则）**: 从 schema 推断的业务规则
+   - 唯一性约束
+   - 必填字段的业务含义
+   - 数据完整性规则
+
+7. **Recommendations（建议）**: 基于 schema 的优化建议
+
+# 输出格式
+
+请严格按照以下 JSON 格式输出，不要有任何多余的解释：
 
 ```json
 {{
-  "entities": [
-    {{
-      "technical_name": "users",
-      "business_name_cn": "用户",
-      "business_description": "系统注册用户，包含个人信息和账户状态",
-      "domain": "用户管理",
+  "concepts": {{
+    "table_name": {{
+      "technical_name": "table_name",
+      "business_name_cn": "中文名",
+      "business_name_en": "English Name",
+      "description": "详细的业务描述",
+      "domain": "业务领域",
       "importance": "high",
-      "business_rules": ["用户名唯一", "必须验证邮箱"]
-    }},
-    ...
+      "primary_key": ["id"]
+    }}
+  }},
+  "properties": {{
+    "table_name.column_name": {{
+      "technical_name": "table_name.column_name",
+      "business_name_cn": "中文属性名",
+      "business_name_en": "English Property Name",
+      "description": "属性的业务含义",
+      "data_type": "VARCHAR",
+      "nullable": false,
+      "concept": "table_name"
+    }}
+  }},
+  "relationships": [
+    {{
+      "from_concept": "orders",
+      "to_concept": "users",
+      "relationship_type": "foreign_key",
+      "cardinality": "N:1",
+      "business_meaning": "订单属于用户",
+      "from_properties": ["user_id"],
+      "to_properties": ["id"]
+    }}
+  ],
+  "hierarchies": [
+    {{
+      "concept": "categories",
+      "type": "category_tree",
+      "parent_property": "parent_id",
+      "description": "商品分类形成树形结构"
+    }}
   ],
   "domain_insights": {{
     "primary_domain": "电商平台",
     "sub_domains": ["用户管理", "订单管理", "商品管理"],
-    "architecture_pattern": "微服务/单体应用"
+    "business_scenario": "B2C电商平台，支持用户注册、商品浏览、下单购买",
+    "architecture_pattern": "单体应用"
   }},
+  "business_rules": [
+    "用户邮箱必须唯一",
+    "订单必须关联有效用户",
+    "商品价格不能为负"
+  ],
   "recommendations": [
-    "建议添加用户行为日志表",
-    "订单表应该增加状态机字段"
+    "建议为订单表添加状态字段",
+    "考虑添加用户行为日志表"
   ]
 }}
 ```
 
-只返回 JSON，不要有其他解释。"""
-
-        return prompt
-
-    def _apply_llm_enrichments(
-        self, ontology: Dict[str, Any], llm_output: str
-    ) -> Dict[str, Any]:
-        """Apply LLM-generated enrichments to ontology."""
-        try:
-            # Extract JSON from LLM output
-            llm_json = self._extract_json_from_text(llm_output)
-
-            if not llm_json:
-                return ontology
-
-            # Apply entity enrichments
-            entities = llm_json.get("entities", [])
-            for entity_info in entities:
-                tech_name = entity_info.get("technical_name")
-                if tech_name in ontology["concepts"]:
-                    concept = ontology["concepts"][tech_name]
-                    concept["business_name_cn"] = entity_info.get("business_name_cn")
-                    concept["business_description"] = entity_info.get(
-                        "business_description"
-                    )
-                    concept["domain"] = entity_info.get("domain")
-                    concept["importance"] = entity_info.get("importance", "medium")
-                    concept["business_rules"] = entity_info.get("business_rules", [])
-
-            # Add domain insights
-            if "domain_insights" in llm_json:
-                ontology["domain_insights"] = llm_json["domain_insights"]
-
-            # Add recommendations
-            if "recommendations" in llm_json:
-                ontology["recommendations"] = llm_json["recommendations"]
-
-            ontology["llm_enriched"] = True
-
-            return ontology
-
-        except Exception as e:
-            ontology["enrichment_parse_error"] = str(e)
-            return ontology
+注意：
+- 必须为每个表生成 concept
+- 必须为每个字段生成 property
+- 充分利用字段注释（comment）来理解业务含义
+- 推断隐式关系（如字段名包含 _id 后缀）
+- 识别常见的业务模式（用户-订单、分类-商品等）
+- 描述要准确、专业，体现对业务的深入理解
+"""
 
     def _extract_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
-        """Extract JSON from text that might contain markdown code blocks."""
+        """从 AI 输出中提取 JSON（可能包含 markdown 代码块）。"""
         import re
 
-        # Try to find JSON in markdown code blocks
+        # 尝试从 markdown 代码块中提取
         json_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
         matches = re.findall(json_pattern, text, re.DOTALL)
 
         if matches:
-            try:
-                return json.loads(matches[0])
-            except json.JSONDecodeError:
-                pass
+            for match in matches:
+                try:
+                    return json.loads(match)
+                except json.JSONDecodeError:
+                    continue
 
-        # Try to parse entire text as JSON
+        # 尝试直接解析整个文本
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
 
-        # Try to find JSON object in text
-        json_object_pattern = r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"
+        # 尝试查找第一个完整的 JSON 对象
+        json_object_pattern = r'\{(?:[^{}]|(?:\{[^{}]*\}))*\}'
         matches = re.findall(json_object_pattern, text, re.DOTALL)
 
         for match in matches:
             try:
-                return json.loads(match)
+                parsed = json.loads(match)
+                # 检查是否包含必要的键
+                if "concepts" in parsed or "properties" in parsed:
+                    return parsed
             except json.JSONDecodeError:
                 continue
 

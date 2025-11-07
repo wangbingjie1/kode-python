@@ -50,6 +50,14 @@ try:
     HAS_DATABASE_TOOLS = True
 except ImportError:
     HAS_DATABASE_TOOLS = False
+
+# Import visualization tools
+try:
+    from kode.tools.visualization_tools import ChartGeneratorTool
+    from kode.tools.insight_tools import InsightExtractorTool
+    HAS_VISUALIZATION_TOOLS = True
+except ImportError:
+    HAS_VISUALIZATION_TOOLS = False
 from kode.utils.config import ConfigManager
 from kode.utils.logger import setup_logger
 
@@ -124,6 +132,14 @@ class AsyncConversationService:
             # Load existing database connections from persistence
             self._load_database_connections()
 
+        # Add visualization tools if available
+        if HAS_VISUALIZATION_TOOLS:
+            self.tools.extend([
+                ChartGeneratorTool(),
+                InsightExtractorTool(),
+            ])
+            logger.info("Visualization and insight tools loaded")
+
     def _create_data_analyst_agent(self) -> AgentConfig:
         """创建唯一的数据分析 agent 配置。"""
 
@@ -142,7 +158,7 @@ class AsyncConversationService:
 - 使用 DatabaseConnect 连接数据库（PostgreSQL, MySQL, Oracle, SQL Server, SQLite）
 - **优先使用 SchemaLoad** 加载已缓存的schema（如果有）
 - 使用 DatabaseSchemaExtractor 提取表结构和字段注释（仅当无缓存时）
-- 理解 ERP 业务模块：财务、供应链、生产、销售、人力资源
+- 理解 数据分析 业务模块：财务、供应链、生产、销售、人力资源
 
 ### 2. 业务本体构建
 - **优先使用 OntologyLoad** 加载已缓存的ontology（如果有）
@@ -151,27 +167,42 @@ class AsyncConversationService:
 - 构建业务实体映射
 
 ### 3. SQL 查询和数据分析
-- 使用 ExecSQL 执行 SQL 查询（复杂 JOIN、聚合、分组）
+- 使用 DatabaseExecuteQuery 执行 SQL 查询（复杂 JOIN、聚合、分组）
 - 计算关键业务指标（KPI）：销售额、库存周转率、客户留存率等
 - 识别数据质量问题
 
-### 4. 数据洞察和建议
+### 4. AI 原生可视化分析 ⭐ 核心能力
+- **自动生成图表**：查询数据后，使用 ChartGenerator 自动生成图表配置
+  - 根据数据特征智能选择图表类型（折线图、柱状图、饼图等）
+  - 自动识别 X/Y 轴字段
+  - 生成 ECharts 配置 JSON
+- **提取关键洞察**：使用 InsightExtractor 自动发现：
+  - 趋势洞察（数据上升或下降）
+  - 异常洞察（明显偏离正常值的数据点）
+  - 对比洞察（最大值、最小值、平均值）
+  - 占比洞察（主要贡献者的比例）
+- **多模态呈现**：每次分析返回"文本解释 + 图表 + 洞察卡片"的组合
+
+### 5. 数据建议和指导
 - 发现业务趋势和模式
 - 识别异常和风险点
 - 提供可操作的业务建议
+- 推荐下一步分析方向
 
-## 标准工作流程
+## 标准工作流程（AI 原生模式）
 
 1. **检查缓存** → 使用 SchemaLoad/OntologyLoad 尝试加载已有资源
 2. **连接数据库** → DatabaseConnect（如需要）
 3. **提取 Schema** → DatabaseSchemaExtractor（仅当缓存不存在）
 4. **构建本体** → OntologyBuilder（仅当缓存不存在）
-5. **数据探索** → ExecSQL（查询样本数据）
-6. **指标计算** → 计算 KPI，识别趋势
-7. **洞察呈现** → 用业务语言解释发现
+5. **数据探索** → DatabaseExecuteQuery（查询样本数据）
+6. **自动可视化** → ChartGenerator（将查询结果转换为图表）
+7. **提取洞察** → InsightExtractor（发现数据中的关键信息）
+8. **综合呈现** → 文本 + 图表 + 洞察的完整分析报告
 
 ## 重要原则
 
+- **AI 原生体验**：查询数据后自动生成图表和洞察，而非只返回文本
 - **缓存优先**：永远先尝试加载缓存,避免重复工作
 - **业务优先**：所有分析服务于业务决策
 - **数据驱动**：结论必须基于实际数据
@@ -179,7 +210,23 @@ class AsyncConversationService:
 - **清晰表达**：用中文回复，用业务语言解释
 - **保护隐私**：不泄露敏感数据
 
-必须用中文回复和思考。""",
+## 使用可视化工具的最佳实践
+
+当执行数据查询后：
+1. 将查询结果（JSON 格式）传递给 ChartGenerator 生成图表
+2. 同时传递给 InsightExtractor 提取洞察
+3. 在文本回复中整合图表和洞察，形成完整的分析报告
+
+示例流程：
+```
+用户："上个月销售趋势"
+→ 执行 SQL 查询
+→ 调用 ChartGenerator 生成折线图
+→ 调用 InsightExtractor 提取洞察
+→ 返回：文字说明 + 图表配置 + 洞察列表 +数据源追溯
+```
+
+和业务不相干的问题，请直接拒绝。""",
             tools=["*"],  # 所有工具都可用
         )
 
@@ -388,7 +435,46 @@ class AsyncConversationService:
                 result_preview = result_str[:200] if result_str else ""
                 logger.info(f"[PROGRESS] Tool end: {tool_name}")
                 logger.info(f"[PROGRESS] Tool result preview: {result_preview}")
-                # Send progress update with tool result
+
+                # 解析可视化工具结果，发送专门的消息类型
+                if tool_name == "ChartGenerator":
+                    try:
+                        import json
+                        chart_result = json.loads(result_str)
+                        if chart_result.get("success"):
+                            # 发送 chart 类型消息
+                            await progress_queue.put({
+                                "type": "chart",
+                                "content": chart_result.get("config", {}),
+                                "metadata": {
+                                    "chart_type": chart_result.get("chart_type"),
+                                    "data_summary": chart_result.get("data_summary", {})
+                                }
+                            })
+                            logger.info(f"[CHART] Sent chart message for type: {chart_result.get('chart_type')}")
+                    except Exception as e:
+                        logger.error(f"[CHART] Failed to parse chart result: {e}")
+
+                elif tool_name == "InsightExtractor":
+                    try:
+                        import json
+                        insight_result = json.loads(result_str)
+                        if insight_result.get("success"):
+                            insights = insight_result.get("insights", [])
+                            # 发送 insight 类型消息
+                            await progress_queue.put({
+                                "type": "insight",
+                                "content": insights,
+                                "metadata": {
+                                    "total_count": insight_result.get("total_count", 0),
+                                    "data_summary": insight_result.get("data_summary", {})
+                                }
+                            })
+                            logger.info(f"[INSIGHT] Sent {len(insights)} insights")
+                    except Exception as e:
+                        logger.error(f"[INSIGHT] Failed to parse insight result: {e}")
+
+                # Send standard tool_result for all tools
                 await progress_queue.put({
                     "type": "tool_result",
                     "content": f"工具执行完成: {tool_name}",

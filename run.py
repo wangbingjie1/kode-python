@@ -76,7 +76,7 @@ if __name__ == "__main__":
         multiprocessing.freeze_support()
 
     print("=" * 60)
-    print("  Kode AI - AI原生ERP开发平台")
+    print("  Kode AI")
     print("=" * 60)
 
     # 清理端口（尝试清理，但不影响启动）

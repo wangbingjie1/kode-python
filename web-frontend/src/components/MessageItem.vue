@@ -66,6 +66,22 @@
         />
       </div>
 
+      <!-- Chart visualization -->
+      <div v-else-if="isChart" class="w-full">
+        <ChartRenderer
+          v-if="message.chart"
+          :option="message.chart.config"
+        />
+      </div>
+
+      <!-- Insights -->
+      <div v-else-if="isInsight" class="w-full">
+        <InsightCard
+          v-if="message.insights && message.insights.length > 0"
+          :insights="message.insights"
+        />
+      </div>
+
       <!-- Assistant thinking (Extended Thinking) -->
       <div v-else-if="isThinkingMessage" class="w-full">
         <details class="thinking-block group/details" :open="message.isStreaming">
@@ -144,6 +160,8 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import type { ChatMessage } from '@/stores/chat'
 import ToolCallItem from './ToolCallItem.vue'
+import ChartRenderer from './ChartRenderer.vue'
+import InsightCard from './InsightCard.vue'
 
 const props = defineProps<{
   message: ChatMessage
@@ -156,6 +174,8 @@ const isUser = computed(() => props.message.role === 'user')
 const isSystem = computed(() => props.message.role === 'system')
 const isAssistant = computed(() => props.message.role === 'assistant')
 const isTool = computed(() => props.message.role === 'tool')
+const isChart = computed(() => props.message.role === 'chart')
+const isInsight = computed(() => props.message.role === 'insight')
 const isThinkingMessage = computed(() => props.message.isStreaming && props.message.metadata?.isThinking === true)
 
 const showAvatar = computed(() => !isSystem.value)
@@ -165,6 +185,10 @@ const avatarClass = computed(() =>
     ? 'bg-gray-900 text-white'
     : isTool.value
       ? 'bg-blue-500 text-white'
+    : isChart.value
+      ? 'bg-purple-500 text-white'
+    : isInsight.value
+      ? 'bg-amber-500 text-white'
       : 'bg-gray-200 text-gray-700',
 )
 

@@ -160,14 +160,16 @@ async function handleCancelSubscription() {
 
 <style scoped>
 .billing-view {
-  min-height: 100vh;
+  height: 100vh;
   background: #f9fafb;
-  padding: 2rem;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .billing-container {
   max-width: 1200px;
   margin: 0 auto;
+  padding: 2rem;
 }
 
 h1 {
