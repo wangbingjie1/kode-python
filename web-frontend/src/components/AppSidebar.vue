@@ -113,13 +113,33 @@
 
         <!-- Database Tab -->
         <div v-else-if="activeTab === 'database'" class="content-section">
-          <h3 class="section-title">数据库</h3>
-          <div class="empty-state">
+          <h3 class="section-title">数据库连接</h3>
+          <div v-if="databaseConnections.length" class="database-list">
+            <div
+              v-for="db in databaseConnections"
+              :key="db.name"
+              class="database-item"
+              @click="openDatabase(db)"
+            >
+              <div class="db-icon">{{ getDatabaseIcon(db.db_type) }}</div>
+              <div class="db-info">
+                <div class="db-name">{{ db.name }}</div>
+                <div class="db-meta">{{ db.db_type }} · {{ db.database }}</div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="empty-state">
             <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 6c0-1.657 3.582-3 8-3s8 1.343 8 3M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3M4 18c0 1.657 3.582 3 8 3s8-1.343 8-3M4 6v12c0 1.657 3.582 3 8 3s8-1.343 8-3V6" />
             </svg>
-            <p>通过对话连接和管理数据库</p>
+            <p>暂无数据库连接</p>
           </div>
+          <router-link to="/database" class="manage-db-btn" @click="$emit('close-mobile')">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span>管理数据库</span>
+          </router-link>
         </div>
 
         <!-- Billing Tab -->
@@ -129,7 +149,7 @@
             <div class="plan-card">
               <div class="plan-name">{{ currentPlan?.display_name || '免费计划' }}</div>
               <div class="plan-price" v-if="currentPlan">
-                ${{ currentPlan.price_monthly }}/月
+                ${{ currentPlan.price }}/{{ currentPlan.billing_period === 'monthly' ? '月' : '年' }}
               </div>
               <router-link to="/billing" class="upgrade-btn" @click="$emit('close-mobile')">
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -158,29 +178,6 @@
         </div>
       </div>
 
-      <!-- Footer: User Profile Card -->
-      <footer class="sidebar-footer">
-        <div class="profile-card">
-          <div class="profile-header">
-            <div class="profile-avatar">
-              {{ userInitial }}
-            </div>
-            <div class="profile-info">
-              <div class="profile-name">{{ authStore.currentUser?.username }}</div>
-              <div class="profile-plan">{{ currentPlan?.display_name || '免费计划' }}</div>
-            </div>
-          </div>
-          <div class="profile-stats" v-if="usageSummary">
-            <div class="stat-item">
-              <div class="stat-label">消息配额</div>
-              <div class="stat-value">{{ usageSummary.message_used }} / {{ usageSummary.message_quota }}</div>
-              <div class="stat-bar">
-                <div class="stat-fill" :style="{ width: `${messagePercentage}%`, backgroundColor: getBarColor(messagePercentage) }"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
     </template>
   </aside>
 </template>
@@ -193,6 +190,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useBillingStore } from '@/stores/billing'
 import { notification } from '@/composables/useNotification'
 import LanguageSwitcher from './LanguageSwitcher.vue'
+import { listDatabaseConnections, type DatabaseConnection } from '@/services/api'
 
 interface Conversation {
   id: string
@@ -224,6 +222,7 @@ const authStore = useAuthStore()
 const billingStore = useBillingStore()
 
 const isUserMenuOpen = ref(false)
+const databaseConnections = ref<DatabaseConnection[]>([])
 
 const tabs = [
   {
@@ -254,12 +253,6 @@ const userInitial = computed(() => {
 })
 
 const currentPlan = computed(() => billingStore.currentPlan)
-const usageSummary = computed(() => billingStore.usageSummary)
-const messagePercentage = computed(() => billingStore.messageUsagePercentage)
-
-onMounted(async () => {
-  await billingStore.refreshAll()
-})
 
 function toggleUserMenu() {
   isUserMenuOpen.value = !isUserMenuOpen.value
@@ -290,11 +283,32 @@ function formatTime(dateString: string): string {
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
-function getBarColor(percentage: number): string {
-  if (percentage >= 90) return '#ef4444'
-  if (percentage >= 70) return '#f59e0b'
-  return '#10b981'
+function getDatabaseIcon(dbType: string): string {
+  const icons: Record<string, string> = {
+    postgresql: '🐘',
+    mysql: '🐬',
+    sqlite: '📁',
+    sqlserver: '🔷',
+    oracle: '🔴'
+  }
+  return icons[dbType] || '💾'
 }
+
+function openDatabase(db: DatabaseConnection) {
+  router.push('/database')
+}
+
+async function loadDatabaseConnections() {
+  try {
+    databaseConnections.value = await listDatabaseConnections()
+  } catch (error) {
+    console.error('Failed to load database connections:', error)
+  }
+}
+
+onMounted(() => {
+  loadDatabaseConnections()
+})
 
 // Close menu when clicking outside
 if (typeof document !== 'undefined') {
@@ -329,9 +343,9 @@ if (typeof document !== 'undefined') {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem;
+  padding: 0.5rem 1rem;
   border-bottom: 1px solid #eadfd3;
-  min-height: 64px;
+  min-height: 48px;
 }
 
 .collapse-btn {
@@ -675,6 +689,86 @@ if (typeof document !== 'undefined') {
   height: 1rem;
 }
 
+/* Database List */
+.database-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.database-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.database-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.db-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.db-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.db-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #322d29;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-meta {
+  font-size: 0.75rem;
+  color: #8c7763;
+  margin-top: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manage-db-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem;
+  background: rgba(255, 255, 255, 0.7);
+  color: #6d5f52;
+  border: 1px solid #eadfd3;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+  margin-top: 0.5rem;
+}
+
+.manage-db-btn:hover {
+  background: white;
+  color: #322d29;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.manage-db-btn .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
 /* Empty State */
 .empty-state {
   display: flex;
@@ -783,97 +877,6 @@ if (typeof document !== 'undefined') {
   width: 1.25rem;
   height: 1.25rem;
   color: #c58d63;
-}
-
-/* Footer: Profile Card */
-.sidebar-footer {
-  border-top: 1px solid #eadfd3;
-  padding: 1rem;
-}
-
-.profile-card {
-  background: white;
-  border: 1px solid #eadfd3;
-  border-radius: 0.75rem;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.profile-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.profile-avatar {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 1rem;
-  flex-shrink: 0;
-}
-
-.profile-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.profile-name {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #322d29;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-plan {
-  font-size: 0.75rem;
-  color: #8c7763;
-  margin-top: 0.125rem;
-}
-
-.profile-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.stat-label {
-  font-size: 0.75rem;
-  color: #8c7763;
-}
-
-.stat-value {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #322d29;
-}
-
-.stat-bar {
-  height: 0.375rem;
-  background: rgba(234, 223, 211, 0.5);
-  border-radius: 9999px;
-  overflow: hidden;
-}
-
-.stat-fill {
-  height: 100%;
-  transition: width 0.3s ease;
 }
 
 .icon {

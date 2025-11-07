@@ -3,6 +3,7 @@ import ChatView from '@/views/ChatView.vue'
 import LoginView from '@/views/LoginView.vue'
 import BillingView from '@/views/BillingView.vue'
 import ProfileView from '@/views/ProfileView.vue'
+import DatabaseView from '@/views/DatabaseView.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
@@ -48,6 +49,12 @@ const router = createRouter({
       path: '/profile',
       name: 'profile',
       component: ProfileView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/database',
+      name: 'database',
+      component: DatabaseView,
       meta: { requiresAuth: true }
     }
   ]

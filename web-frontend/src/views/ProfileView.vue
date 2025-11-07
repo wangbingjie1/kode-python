@@ -1,5 +1,5 @@
 <template>
-  <MainLayout>
+  <div class="profile-layout">
     <header class="border-b border-[#eadfd3] bg-white/70 px-5 py-5 lg:px-12">
       <div class="flex items-center justify-between gap-4">
         <div class="flex items-center gap-3">
@@ -281,14 +281,13 @@
       </div>
     </div>
     </div>
-  </MainLayout>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useBillingStore } from '@/stores/billing'
-import MainLayout from '@/layouts/MainLayout.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 
 const openSidebar = inject<() => void>('openSidebar')
@@ -387,6 +386,13 @@ async function handlePasswordChange() {
 </script>
 
 <style scoped>
+.profile-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+}
+
 .profile-view {
   flex: 1;
   overflow-y: auto;
