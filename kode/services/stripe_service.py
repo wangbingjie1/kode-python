@@ -204,15 +204,33 @@ class StripeService:
             elif event_type == "customer.subscription.deleted":
                 await self._handle_subscription_deleted(db, data)
 
-            # 其他发票相关事件（仅记录日志，不做处理）
+            # 其他不需要处理的事件（仅记录日志）
             elif event_type in [
+                # 发票相关
                 "invoice.created",
                 "invoice.finalized",
                 "invoice.paid",
                 "invoice.updated",
                 "invoice_payment.paid",
+                # 客户相关
+                "customer.created",
+                "customer.updated",
+                "customer.deleted",
+                # 订阅相关
+                "customer.subscription.created",
+                "customer.subscription.updated",
+                # 支付相关
+                "payment_intent.created",
+                "payment_intent.succeeded",
+                "payment_intent.payment_failed",
+                "payment_method.attached",
+                "payment_method.detached",
+                "payment_method.updated",
+                "charge.succeeded",
+                "charge.failed",
+                "charge.refunded",
             ]:
-                logger.info(f"Invoice event {event_type} received, no action needed")
+                logger.info(f"Event {event_type} received, no action needed")
 
             # 未处理的事件类型
             else:
