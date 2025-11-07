@@ -115,7 +115,7 @@
       </section>
 
       <!-- Chat Input -->
-      <footer class="chat-footer">
+      <footer class="chat-footer" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
         <div class="input-wrapper">
           <ChatInput
             :disabled="!isConnected"
@@ -612,7 +612,7 @@ onUnmounted(() => {
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem 1rem 8rem 1rem;
+  padding: 1.5rem 1rem 1.5rem 1rem;
   position: relative;
 }
 
@@ -687,8 +687,8 @@ onUnmounted(() => {
 
 .scroll-to-latest-btn {
   position: fixed;
-  bottom: 8rem;
-  right: 1.5rem;
+  bottom: 7.5rem;
+  right: 2rem;
   z-index: 30;
   display: flex;
   align-items: center;
@@ -715,15 +715,26 @@ onUnmounted(() => {
 }
 
 .chat-footer {
-  padding: 1rem 1.5rem 1.5rem;
-  background: white;
-  border-top: 1px solid #eadfd3;
+  position: fixed;
+  bottom: 1rem;
+  left: 280px;
+  right: 0;
+  padding: 0 1.5rem;
+  background: transparent;
+  pointer-events: none;
+  z-index: 20;
+  transition: left 0.3s ease;
+}
+
+.chat-footer.sidebar-collapsed {
+  left: 0;
 }
 
 .input-wrapper {
   max-width: 48rem;
   margin: 0 auto;
   width: 100%;
+  pointer-events: all;
 }
 
 .context-panel {
@@ -752,6 +763,10 @@ onUnmounted(() => {
 @media (max-width: 1023px) {
   .context-panel {
     display: none;
+  }
+
+  .chat-footer {
+    left: 0;
   }
 }
 </style>

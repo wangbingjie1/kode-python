@@ -2,7 +2,7 @@
   <div class="min-w-0">
     <form
       @submit.prevent="handleSubmit"
-      class="relative w-full min-w-0 rounded-xl border border-gray-300 bg-white px-4 py-3 shadow-sm transition focus-within:border-gray-400 focus-within:shadow-md"
+      class="relative w-full min-w-0 rounded-xl border border-gray-300 bg-white px-4 py-3 shadow-lg transition focus-within:border-gray-400 focus-within:shadow-xl"
     >
       <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div class="relative flex-1 min-w-0">

@@ -308,6 +308,7 @@ async function loadDatabaseConnections() {
 
 onMounted(() => {
   loadDatabaseConnections()
+  billingStore.fetchSubscription()
 })
 
 // Close menu when clicking outside

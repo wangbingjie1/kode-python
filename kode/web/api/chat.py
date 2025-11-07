@@ -6,7 +6,7 @@ REST endpoints for conversation and message management.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, and_
 from typing import List
 from datetime import datetime
 
@@ -18,6 +18,10 @@ from kode.schemas.chat import (
     MessageResponse,
 )
 from kode.web.dependencies import get_current_user
+from kode.services.billing_service import BillingService
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -50,6 +54,35 @@ async def create_conversation(
     db.add(db_conversation)
     await db.commit()
     await db.refresh(db_conversation)
+
+    # 更新会话计数（统计用户当前计费周期的总会话数）
+    try:
+        usage = await BillingService.get_current_usage(db, current_user.id)
+        if usage:
+            # 统计当前计费周期内的会话数
+            conversation_count_result = await db.execute(
+                select(func.count(Conversation.id)).where(
+                    and_(
+                        Conversation.project_id.in_(
+                            select(Project.id).where(Project.user_id == current_user.id)
+                        ),
+                        Conversation.created_at >= usage.period_start,
+                        Conversation.created_at < usage.period_end,
+                    )
+                )
+            )
+            total_conversations = conversation_count_result.scalar() or 0
+
+            # 更新使用量记录中的会话计数
+            await BillingService.increment_usage(
+                db=db,
+                user_id=current_user.id,
+                conversation_count=total_conversations,
+            )
+            logger.info(f"Updated conversation count to {total_conversations} for user {current_user.id}")
+    except Exception as e:
+        # 使用量更新失败不应该影响主流程
+        logger.warning(f"Failed to update conversation count: {e}")
 
     return db_conversation
 
@@ -127,6 +160,35 @@ async def delete_conversation(
 
     await db.delete(conversation)
     await db.commit()
+
+    # 更新会话计数（删除后重新统计）
+    try:
+        usage = await BillingService.get_current_usage(db, current_user.id)
+        if usage:
+            # 统计当前计费周期内的会话数
+            conversation_count_result = await db.execute(
+                select(func.count(Conversation.id)).where(
+                    and_(
+                        Conversation.project_id.in_(
+                            select(Project.id).where(Project.user_id == current_user.id)
+                        ),
+                        Conversation.created_at >= usage.period_start,
+                        Conversation.created_at < usage.period_end,
+                    )
+                )
+            )
+            total_conversations = conversation_count_result.scalar() or 0
+
+            # 更新使用量记录中的会话计数
+            await BillingService.increment_usage(
+                db=db,
+                user_id=current_user.id,
+                conversation_count=total_conversations,
+            )
+            logger.info(f"Updated conversation count to {total_conversations} after deletion for user {current_user.id}")
+    except Exception as e:
+        # 使用量更新失败不应该影响主流程
+        logger.warning(f"Failed to update conversation count after deletion: {e}")
 
 
 @router.get("/projects/{project_id}/conversations", response_model=List[ConversationResponse])
