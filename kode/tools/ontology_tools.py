@@ -140,7 +140,18 @@ class OntologyBuilderTool(KodeTool):
             # 核心改变：直接使用 AI 生成完整的本体，而不是传统代码转换
             database = schema_metadata.get("database", "未知")
             db_schema = schema_metadata.get("schema")
-            ontology = self._build_ontology_with_ai(schema_metadata, connection_name, database, db_schema)
+
+            # 检查是否在事件循环中
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                # 在事件循环中，使用 run_coroutine_threadsafe 或直接同步调用
+                ontology = self._build_ontology_with_ai_sync(schema_metadata, connection_name, database, db_schema)
+            except RuntimeError:
+                # 不在事件循环中，使用异步版本
+                ontology = asyncio.run(
+                    self._build_ontology_with_ai_async(schema_metadata, connection_name, database, db_schema)
+                )
 
             # Auto-save ontology to file
             if auto_save:
@@ -160,7 +171,98 @@ class OntologyBuilderTool(KodeTool):
                 indent=2,
             )
 
-    def _build_ontology_with_ai(
+    def _build_ontology_with_ai_sync(
+        self, schema_metadata: Dict[str, Any], connection_name: str, database: str, db_schema: Optional[str]
+    ) -> Dict[str, Any]:
+        """同步版本：使用串行方式构建本体（在事件循环中调用）。"""
+        try:
+            # 初始化 model manager
+            config_manager = ConfigManager()
+            config = config_manager.get_all()
+            model_manager = ModelManager(config)
+            model = model_manager.get_model("main")
+            model.temperature = 0.0
+            model.max_tokens = 64000
+
+            from langchain_core.messages import HumanMessage
+            import time
+
+            # ========== 阶段 1: 全局架构扫描 ==========
+            logger.info("阶段1开始：全局架构扫描")
+            t1_start = time.time()
+            schema_skeleton = self._extract_schema_skeleton(schema_metadata)
+            global_context = self._ai_analyze_global_architecture(
+                schema_skeleton, connection_name, database, db_schema, model
+            )
+            t1_elapsed = time.time() - t1_start
+            logger.info(f"阶段1完成：识别到 {len(global_context.get('business_domains', {}))} 个业务域（耗时 {t1_elapsed:.2f}s）")
+
+            # ========== 阶段 2: 分域详细构建（串行模式，避免嵌套事件循环） ==========
+            logger.info("阶段2开始：分域详细构建（串行模式）")
+            t2_start = time.time()
+            domain_ontologies = {}
+            tables = schema_metadata.get("tables", {})
+
+            for domain_name, table_names in global_context.get("business_domains", {}).items():
+                domain_schema = {t: tables[t] for t in table_names if t in tables}
+
+                t_domain_start = time.time()
+                domain_ont = self._ai_build_domain_ontology(
+                    domain_name=domain_name,
+                    domain_schema=domain_schema,
+                    global_context=global_context,
+                    connection_name=connection_name,
+                    database=database,
+                    db_schema=db_schema,
+                    model=model
+                )
+                t_domain_elapsed = time.time() - t_domain_start
+                domain_ontologies[domain_name] = domain_ont
+                logger.info(f"阶段2：{domain_name} 完成（{len(table_names)} 个表，耗时 {t_domain_elapsed:.2f}s）")
+
+            t2_elapsed = time.time() - t2_start
+            logger.info(f"阶段2总计：{len(domain_ontologies)} 个域，总耗时 {t2_elapsed:.2f}s（串行）")
+
+            # ========== 阶段 3: 跨域关系融合 ==========
+            logger.info("阶段3开始：跨域关系融合")
+            t3_start = time.time()
+            cross_domain_insights = self._ai_refine_cross_domain_relationships(
+                domain_ontologies=domain_ontologies,
+                global_context=global_context,
+                connection_name=connection_name,
+                model=model
+            )
+            t3_elapsed = time.time() - t3_start
+            logger.info(f"阶段3完成：补充了 {len(cross_domain_insights.get('relationships', []))} 个跨域关系（耗时 {t3_elapsed:.2f}s）")
+
+            # 合并所有结果
+            final_ontology = self._merge_ontologies(
+                domain_ontologies=domain_ontologies,
+                cross_domain_insights=cross_domain_insights,
+                global_context=global_context,
+                schema_metadata=schema_metadata,
+                connection_name=connection_name,
+                model_manager=model_manager
+            )
+
+            logger.info(f"本体构建完成：{final_ontology['statistics']['concept_count']} 个概念")
+            return final_ontology
+
+        except Exception as e:
+            logger.error(f"本体构建失败: {str(e)}")
+            return {
+                "metadata": {
+                    "created_at": datetime.now().isoformat(),
+                    "created_by": "error_fallback",
+                    "error": str(e),
+                },
+                "concepts": {},
+                "properties": {},
+                "relationships": [],
+                "hierarchies": [],
+            }
+
+    async def _build_ontology_with_ai_async(
         self, schema_metadata: Dict[str, Any], connection_name: str, database: str, db_schema: Optional[str]
     ) -> Dict[str, Any]:
         """
@@ -183,46 +285,47 @@ class OntologyBuilderTool(KodeTool):
             model.max_tokens = 64000  # 使用最大可用值
 
             from langchain_core.messages import HumanMessage
+            import time
 
             # ========== 阶段 1: 全局架构扫描 ==========
             logger.info("阶段1开始：全局架构扫描")
+            t1_start = time.time()
             schema_skeleton = self._extract_schema_skeleton(schema_metadata)
             global_context = self._ai_analyze_global_architecture(
                 schema_skeleton, connection_name, database, db_schema, model
             )
-            logger.info(f"阶段1完成：识别到 {len(global_context.get('business_domains', {}))} 个业务域")
+            t1_elapsed = time.time() - t1_start
+            logger.info(f"阶段1完成：识别到 {len(global_context.get('business_domains', {}))} 个业务域（耗时 {t1_elapsed:.2f}s）")
 
-            # ========== 阶段 2: 分域详细构建 ==========
-            logger.info("阶段2开始：分域详细构建")
-            domain_ontologies = {}
+            # ========== 阶段 2: 分域详细构建（并行优化） ==========
+            logger.info("阶段2开始：分域详细构建（并行模式）")
+            t2_start = time.time()
             tables = schema_metadata.get("tables", {})
 
-            for domain_name, table_names in global_context.get("business_domains", {}).items():
-                # 提取该域的详细 schema
-                domain_schema = {t: tables[t] for t in table_names if t in tables}
+            # 并行构建所有域（直接 await，不用 asyncio.run）
+            domain_ontologies = await self._build_domains_parallel(
+                global_context=global_context,
+                tables=tables,
+                connection_name=connection_name,
+                database=database,
+                db_schema=db_schema,
+                model=model
+            )
 
-                # 携带全局上下文构建该域本体
-                domain_ont = self._ai_build_domain_ontology(
-                    domain_name=domain_name,
-                    domain_schema=domain_schema,
-                    global_context=global_context,
-                    connection_name=connection_name,
-                    database=database,
-                    db_schema=db_schema,
-                    model=model
-                )
-                domain_ontologies[domain_name] = domain_ont
-                logger.info(f"阶段2：{domain_name} 完成（{len(table_names)} 个表）")
+            t2_elapsed = time.time() - t2_start
+            logger.info(f"阶段2总计：{len(domain_ontologies)} 个域，总耗时 {t2_elapsed:.2f}s（并行加速）")
 
             # ========== 阶段 3: 跨域关系融合 ==========
             logger.info("阶段3开始：跨域关系融合")
+            t3_start = time.time()
             cross_domain_insights = self._ai_refine_cross_domain_relationships(
                 domain_ontologies=domain_ontologies,
                 global_context=global_context,
                 connection_name=connection_name,
                 model=model
             )
-            logger.info(f"阶段3完成：补充了 {len(cross_domain_insights.get('relationships', []))} 个跨域关系")
+            t3_elapsed = time.time() - t3_start
+            logger.info(f"阶段3完成：补充了 {len(cross_domain_insights.get('relationships', []))} 个跨域关系（耗时 {t3_elapsed:.2f}s）")
 
             # 合并所有结果
             final_ontology = self._merge_ontologies(
@@ -504,38 +607,39 @@ Schema: {db_schema or "默认"}
 """
 
     def _extract_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
-        """从 AI 输出中提取 JSON（可能包含 markdown 代码块）。"""
-        import re
-
-        # 尝试从 markdown 代码块中提取（非贪婪匹配，处理大JSON）
-        json_pattern = r"```(?:json)?\s*(\{.*\})\s*```"
-        matches = re.findall(json_pattern, text, re.DOTALL)
-
-        if matches:
-            # 从最长的匹配开始尝试（通常是完整的JSON）
-            for match in sorted(matches, key=len, reverse=True):
-                try:
-                    return json.loads(match)
-                except json.JSONDecodeError as e:
-                    logger.debug(f"JSON解析失败: {str(e)}, 尝试下一个匹配")
-                    continue
-
-        # 尝试直接解析整个文本
+        """从 AI 输出中提取 JSON（优化版本，快速失败）。"""
+        # 策略1：直接解析（最快）
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
 
-        # 尝试找到第一个{到最后一个}之间的内容（处理嵌套JSON）
+        # 策略2：查找 { } 边界（常见情况）
         start_idx = text.find('{')
         end_idx = text.rfind('}')
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
             try:
                 potential_json = text[start_idx:end_idx+1]
                 parsed = json.loads(potential_json)
+                # 验证是本体JSON
                 if "concepts" in parsed or "properties" in parsed or "business_domains" in parsed:
                     return parsed
             except json.JSONDecodeError:
+                pass
+
+        # 策略3：markdown 代码块（最后尝试，只匹配第一个）
+        if "```" in text:
+            # 简单提取，不用正则
+            try:
+                code_start = text.find("```")
+                if code_start != -1:
+                    # 跳过语言标识（json）
+                    json_start = text.find("\n", code_start) + 1
+                    code_end = text.find("```", json_start)
+                    if code_end != -1:
+                        json_text = text[json_start:code_end].strip()
+                        return json.loads(json_text)
+            except (json.JSONDecodeError, ValueError):
                 pass
 
         logger.warning(f"无法提取JSON，文本长度: {len(text)}, 前200字符: {text[:200]}")
@@ -582,10 +686,10 @@ Schema: {db_schema or "默认"}
             with open(version_file, "w", encoding="utf-8") as f:
                 json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
 
-            # Update latest pointer
+            # Update latest pointer (使用 copy 而不是重复写入)
+            import shutil
             latest_file = conn_dir / "ontology_latest.json"
-            with open(latest_file, "w", encoding="utf-8") as f:
-                json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
+            shutil.copy2(version_file, latest_file)
 
             return {
                 "saved": True,
@@ -671,6 +775,134 @@ Schema: {db_schema or "默认"}
                 "insights": "自动分批"
             }
         return result
+
+    async def _build_domains_parallel(
+        self,
+        global_context: Dict[str, Any],
+        tables: Dict[str, Any],
+        connection_name: str,
+        database: str,
+        db_schema: Optional[str],
+        model
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        并行构建所有业务域的本体（核心性能优化）。
+
+        使用 asyncio.gather() 同时调用多个域的 LLM API，
+        显著降低总耗时（从串行 N×6s 降低到 max(6s) × ceiling(N/并发数)）。
+        """
+        import asyncio
+        import time
+
+        async def build_single_domain(domain_name: str, table_names: List[str]) -> tuple:
+            """异步构建单个域。"""
+            t_start = time.time()
+            # 提取该域的详细 schema
+            domain_schema = {t: tables[t] for t in table_names if t in tables}
+
+            # 异步调用 AI 构建本体
+            domain_ont = await self._ai_build_domain_ontology_async(
+                domain_name=domain_name,
+                domain_schema=domain_schema,
+                global_context=global_context,
+                connection_name=connection_name,
+                database=database,
+                db_schema=db_schema,
+                model=model
+            )
+
+            t_elapsed = time.time() - t_start
+            logger.info(f"阶段2：{domain_name} 完成（{len(table_names)} 个表，耗时 {t_elapsed:.2f}s）")
+            return domain_name, domain_ont
+
+        # 创建所有域的任务
+        tasks = [
+            build_single_domain(domain_name, table_names)
+            for domain_name, table_names in global_context.get("business_domains", {}).items()
+        ]
+
+        # 并行执行（限制并发数为 5，避免 API 限流）
+        from asyncio import Semaphore
+        semaphore = Semaphore(5)  # 最多同时 5 个并发请求
+
+        async def bounded_task(task):
+            async with semaphore:
+                return await task
+
+        results = await asyncio.gather(*[bounded_task(task) for task in tasks])
+
+        # 转换为字典
+        return {domain_name: ontology for domain_name, ontology in results}
+
+    async def _ai_build_domain_ontology_async(
+        self,
+        domain_name: str,
+        domain_schema: Dict[str, Any],
+        global_context: Dict[str, Any],
+        connection_name: str,
+        database: str,
+        db_schema: Optional[str],
+        model
+    ) -> Dict[str, Any]:
+        """阶段2：为业务域构建详细本体（异步版本）。"""
+        from langchain_core.messages import HumanMessage
+
+        domain_schema_text = self._prepare_domain_schema(domain_schema)
+        prompt = f"""你是ERP架构师。为业务域 "{domain_name}" 构建详细本体。
+
+# 全局上下文
+架构: {global_context.get('architecture_pattern')}
+所有域: {list(global_context.get('business_domains', {}).keys())}
+全局关系: {json.dumps(global_context.get('inferred_relationships', [])[:5], ensure_ascii=False)}
+
+# 当前域: {domain_name}
+{domain_schema_text}
+
+# 任务
+为 "{domain_name}" 构建本体：
+1. **Concepts**: 每个表（technical_name, business_name_cn, business_name_en, description, domain, importance, primary_key, data_source）
+2. **Properties**: 每个字段（technical_name, business_name_cn, business_name_en, description, data_type, nullable, concept, data_source）
+3. **Relationships**: 域内+跨域关系
+4. **Hierarchies**: 层次结构
+5. **Uncertainties**: 不确定性
+
+# 输出格式
+```json
+{{
+  "concepts": {{}},
+  "properties": {{}},
+  "relationships": [],
+  "hierarchies": [],
+  "domain_insights": {{}},
+  "uncertainties": []
+}}
+```
+**重要**：必须为该域的每个表生成concept，包含跨域关系。只返回JSON。不要其他任何文字解释"""
+
+        # 使用异步 API 调用
+        response = await model.ainvoke([HumanMessage(content=prompt)])
+        ontology_data = self._extract_json_from_text(response.content)
+
+        if not ontology_data or "concepts" not in ontology_data:
+            logger.error(f"域 {domain_name} 生成失败，AI输出前500字符: {response.content[:500]}")
+            return {
+                "concepts": {},
+                "properties": {},
+                "relationships": [],
+                "hierarchies": [],
+                "domain_insights": {},
+                "uncertainties": []
+            }
+
+        # 补充缺失的字段
+        return {
+            "concepts": ontology_data.get("concepts", {}),
+            "properties": ontology_data.get("properties", {}),
+            "relationships": ontology_data.get("relationships", []),
+            "hierarchies": ontology_data.get("hierarchies", []),
+            "domain_insights": ontology_data.get("domain_insights", {}),
+            "uncertainties": ontology_data.get("uncertainties", [])
+        }
 
     def _ai_build_domain_ontology(self, domain_name: str, domain_schema: Dict[str, Any],
                                   global_context: Dict[str, Any], connection_name: str,
@@ -949,9 +1181,10 @@ class OntologyManagerTool(KodeTool):
             with open(version_file, "w", encoding="utf-8") as f:
                 json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
 
+            # 使用 copy 而不是重复写入
+            import shutil
             latest_file = conn_dir / "ontology_latest.json"
-            with open(latest_file, "w", encoding="utf-8") as f:
-                json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
+            shutil.copy2(version_file, latest_file)
 
             return json.dumps(
                 {
