@@ -479,7 +479,8 @@ async function executeQuery() {
   border-radius: 0.375rem;
   background: #f9fafb;
   padding: 0.75rem;
-  overflow-x: auto;
+  max-height: 400px;
+  overflow: auto;
 }
 
 .code-block.is-error {
@@ -499,6 +500,26 @@ async function executeQuery() {
 
 .code-block.is-error pre {
   color: #991b1b;
+}
+
+/* 自定义滚动条样式 */
+.code-block::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.code-block::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+.code-block::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.code-block::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 /* Expand transition */

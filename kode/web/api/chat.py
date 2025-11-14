@@ -19,11 +19,86 @@ from kode.schemas.chat import (
 )
 from kode.web.dependencies import get_current_user
 from kode.services.billing_service import BillingService
+from kode.web.middleware.quota_check import check_user_quota
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def verify_project_ownership(
+    project_id: str, user_id: str, db: AsyncSession
+) -> Project:
+    """
+    验证项目所有权
+
+    Args:
+        project_id: 项目 ID
+        user_id: 用户 ID
+        db: 数据库会话
+
+    Returns:
+        Project: 项目对象
+
+    Raises:
+        HTTPException: 如果项目不存在或不属于用户
+    """
+    result = await db.execute(
+        select(Project).where(
+            and_(
+                Project.id == project_id,
+                Project.user_id == user_id
+            )
+        )
+    )
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to access this project",
+        )
+
+    return project
+
+
+async def verify_conversation_ownership(
+    conversation_id: str, user_id: str, db: AsyncSession
+) -> Conversation:
+    """
+    验证对话所有权（通过 Conversation -> Project -> User 链）
+
+    Args:
+        conversation_id: 对话 ID
+        user_id: 用户 ID
+        db: 数据库会话
+
+    Returns:
+        Conversation: 对话对象
+
+    Raises:
+        HTTPException: 如果对话不存在或不属于用户
+    """
+    result = await db.execute(
+        select(Conversation)
+        .join(Project, Conversation.project_id == Project.id)
+        .where(
+            and_(
+                Conversation.id == conversation_id,
+                Project.user_id == user_id
+            )
+        )
+    )
+    conversation = result.scalar_one_or_none()
+
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to access this conversation",
+        )
+
+    return conversation
 
 
 @router.post("/conversations", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
@@ -33,17 +108,13 @@ async def create_conversation(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new conversation"""
-    # Verify project exists
-    project_result = await db.execute(
-        select(Project).where(Project.id == conversation.project_id)
-    )
-    project = project_result.scalar_one_or_none()
+    # Check quota before creating conversation
+    await check_user_quota(current_user.id, db)
 
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Project {conversation.project_id} not found",
-        )
+    # Verify project exists and belongs to current user
+    project = await verify_project_ownership(
+        conversation.project_id, current_user.id, db
+    )
 
     # Create conversation
     db_conversation = Conversation(
@@ -94,16 +165,10 @@ async def get_conversation(
     db: AsyncSession = Depends(get_db),
 ):
     """Get conversation by ID"""
-    result = await db.execute(
-        select(Conversation).where(Conversation.id == conversation_id)
+    # Verify conversation exists and belongs to current user
+    conversation = await verify_conversation_ownership(
+        conversation_id, current_user.id, db
     )
-    conversation = result.scalar_one_or_none()
-
-    if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found",
-        )
 
     return conversation
 
@@ -116,17 +181,10 @@ async def get_conversation_messages(
     db: AsyncSession = Depends(get_db),
 ):
     """Get messages for a conversation"""
-    # Verify conversation exists
-    conversation_result = await db.execute(
-        select(Conversation).where(Conversation.id == conversation_id)
+    # Verify conversation exists and belongs to current user
+    conversation = await verify_conversation_ownership(
+        conversation_id, current_user.id, db
     )
-    conversation = conversation_result.scalar_one_or_none()
-
-    if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found",
-        )
 
     # Get messages
     messages_result = await db.execute(
@@ -147,16 +205,10 @@ async def delete_conversation(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a conversation"""
-    result = await db.execute(
-        select(Conversation).where(Conversation.id == conversation_id)
+    # Verify conversation exists and belongs to current user
+    conversation = await verify_conversation_ownership(
+        conversation_id, current_user.id, db
     )
-    conversation = result.scalar_one_or_none()
-
-    if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found",
-        )
 
     await db.delete(conversation)
     await db.commit()
@@ -198,17 +250,10 @@ async def list_project_conversations(
     db: AsyncSession = Depends(get_db),
 ):
     """List all conversations for a project"""
-    # Verify project exists
-    project_result = await db.execute(
-        select(Project).where(Project.id == project_id)
+    # Verify project exists and belongs to current user
+    project = await verify_project_ownership(
+        project_id, current_user.id, db
     )
-    project = project_result.scalar_one_or_none()
-
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Project {project_id} not found",
-        )
 
     # Get conversations
     result = await db.execute(

@@ -8,10 +8,12 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
+import os
 
 from kode.utils.logger import setup_logger
 from kode.utils.config import ConfigManager
 from kode.web.middleware.locale import LocaleMiddleware
+from kode.web.middleware.quota_check import QuotaCheckMiddleware
 
 # Setup logger
 logger = setup_logger(__name__)
@@ -23,14 +25,20 @@ app = FastAPI(
     version="0.2.0",
 )
 
-# CORS middleware
+# CORS middleware - 使用环境变量配置允许的源
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+logger.info(f"CORS allowed origins: {CORS_ORIGINS}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Configure based on environment
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
     allow_headers=["*"],
 )
+
+# Quota check middleware (配额检查)
+app.add_middleware(QuotaCheckMiddleware)
 
 # Locale middleware (for i18n support)
 app.add_middleware(LocaleMiddleware)
@@ -160,19 +168,17 @@ async def create_default_data():
                 db.add(project)
                 logger.info("Created default project")
 
-            # Create default plans (类似 Cursor 的套餐体系)
+            # Create default plans（纯 token 计费模式）
             result = await db.execute(select(Plan).where(Plan.name == "free"))
             if not result.scalar_one_or_none():
                 free_plan = Plan(
                     name="free",
                     display_name="免费版",
-                    description="体验 AI 助手的基础功能",
+                    description="体验 AI 助手的基础功能（按 Token 计费）",
                     price=0.0,
                     billing_period="monthly",
-                    token_quota=100000,  # 10万 tokens/月
-                    message_quota=50,  # 50 条消息/月
-                    conversation_quota=3,  # 3 个对话
-                    database_connection_quota=0,
+                    token_quota=100000,  # 【计费依据】10万 tokens/月
+                    database_connection_quota=0,  # 【硬限制】基础设施限制
                     database_access=False,
                     advanced_analysis=False,
                     ontology_building=False,
@@ -187,13 +193,11 @@ async def create_default_data():
                 pro_plan = Plan(
                     name="pro",
                     display_name="专业版",
-                    description="适合个人开发者和小团队",
+                    description="适合个人开发者和小团队（按 Token 计费）",
                     price=99.0,  # 99元/月
                     billing_period="monthly",
-                    token_quota=2000000,  # 200万 tokens/月
-                    message_quota=1000,  # 1000 条消息/月
-                    conversation_quota=50,  # 50 个对话
-                    database_connection_quota=5,  # 5 个数据库连接
+                    token_quota=2000000,  # 【计费依据】200万 tokens/月
+                    database_connection_quota=5,  # 【硬限制】5 个数据库连接
                     database_access=True,
                     advanced_analysis=True,
                     ontology_building=True,
@@ -208,13 +212,11 @@ async def create_default_data():
                 enterprise_plan = Plan(
                     name="enterprise",
                     display_name="企业版",
-                    description="适合大型团队和企业客户",
+                    description="适合大型团队和企业客户（按 Token 计费）",
                     price=499.0,  # 499元/月
                     billing_period="monthly",
-                    token_quota=10000000,  # 1000万 tokens/月
-                    message_quota=10000,  # 10000 条消息/月
-                    conversation_quota=500,  # 500 个对话
-                    database_connection_quota=50,  # 50 个数据库连接
+                    token_quota=10000000,  # 【计费依据】1000万 tokens/月
+                    database_connection_quota=50,  # 【硬限制】50 个数据库连接
                     database_access=True,
                     advanced_analysis=True,
                     ontology_building=True,

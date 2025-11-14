@@ -22,6 +22,7 @@ class User(Base):
     email = Column(String(100), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=True)  # OAuth登录时可为空
     is_active = Column(Boolean, default=True)
+    role = Column(String(20), default="user", nullable=False)  # user, admin
 
     # OAuth相关字段
     auth_provider = Column(String(20), default="local")  # local, google, github等
@@ -33,12 +34,8 @@ class User(Base):
 
     # Relationships
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
-    conversations = relationship(
-        "Conversation",
-        secondary="projects",
-        back_populates="user",
-        viewonly=True,
-    )
+    # Note: Access conversations through user.projects[i].conversations
+    # 不要使用 secondary="projects" 的错误定义，因为 projects 不是多对多中间表
 
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username})>"

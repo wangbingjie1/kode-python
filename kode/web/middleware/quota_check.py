@@ -53,8 +53,8 @@ class QuotaCheckMiddleware:
                         response = JSONResponse(
                             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                             content={
-                                "detail": "配额已用尽，请升级套餐或等待下个计费周期",
-                                "error_code": "QUOTA_EXCEEDED",
+                                "detail": "Token 配额已用尽，请升级套餐或等待下个计费周期",
+                                "error_code": "TOKEN_QUOTA_EXCEEDED",
                             },
                         )
                         await response(scope, receive, send)
@@ -82,8 +82,8 @@ async def check_user_quota(user_id: str, db: AsyncSession) -> bool:
     if not has_quota:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="配额已用尽，请升级套餐或等待下个计费周期",
-            headers={"X-Error-Code": "QUOTA_EXCEEDED"},
+            detail="Token 配额已用尽，请升级套餐或等待下个计费周期",
+            headers={"X-Error-Code": "TOKEN_QUOTA_EXCEEDED"},
         )
 
     return True

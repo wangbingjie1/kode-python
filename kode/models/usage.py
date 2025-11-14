@@ -25,11 +25,9 @@ class Usage(Base):
     period_start = Column(DateTime, nullable=False, index=True)
     period_end = Column(DateTime, nullable=False)
 
-    # 使用量统计
-    token_count = Column(Integer, default=0)  # Token 使用量
-    message_count = Column(Integer, default=0)  # 消息条数
-    conversation_count = Column(Integer, default=0)  # 当前对话数
-    database_query_count = Column(Integer, default=0)  # 数据库查询次数
+    # 使用量统计（纯 Token 计费模式）
+    token_count = Column(Integer, default=0)  # 【计费依据】Token 使用量（唯一扣费项）
+    database_query_count = Column(Integer, default=0)  # 【仅统计】数据库查询次数
 
     # 记录时间
     created_at = Column(DateTime, default=datetime.utcnow)

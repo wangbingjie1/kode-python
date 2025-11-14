@@ -369,7 +369,12 @@ async def get_database_schema(name: str):
 
 @router.get("/ontologies", response_model=List[Dict[str, Any]])
 async def list_ontologies():
-    """List all stored ontologies"""
+    """
+    List all stored ontologies from all database connections.
+
+    Returns:
+        List of ontology metadata including connection name, version, statistics, etc.
+    """
     try:
         # Get ontology storage path from config
         ontology_path = Path("./ontology_store")
@@ -377,20 +382,32 @@ async def list_ontologies():
             return []
 
         ontologies = []
-        for file_path in ontology_path.glob("*.json"):
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    ontologies.append({
-                        "name": data.get("name"),
-                        "version": data.get("version"),
-                        "created_at": data.get("created_at"),
-                        "entity_count": len(data.get("entities", [])),
-                        "relationship_count": len(data.get("relationships", [])),
-                    })
-            except Exception as e:
-                logger.warning(f"Error reading ontology file {file_path}: {e}")
+        # Each connection has its own directory
+        for conn_dir in ontology_path.iterdir():
+            if not conn_dir.is_dir():
                 continue
+
+            # Look for ontology_latest.json
+            latest_file = conn_dir / "ontology_latest.json"
+            if latest_file.exists():
+                try:
+                    with open(latest_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+
+                        ontology = data.get("ontology", {})
+                        ontologies.append({
+                            "connection_name": data.get("connection_name"),
+                            "version": data.get("version"),
+                            "created_at": data.get("created_at"),
+                            "concept_count": len(ontology.get("concepts", {})),
+                            "property_count": len(ontology.get("properties", {})),
+                            "relationship_count": len(ontology.get("relationships", [])),
+                            "uncertainty_count": len(ontology.get("uncertainties", [])),
+                            "has_domain_insights": "domain_insights" in ontology,
+                        })
+                except Exception as e:
+                    logger.warning(f"Error reading ontology file {latest_file}: {e}")
+                    continue
 
         return ontologies
 
@@ -403,16 +420,29 @@ async def list_ontologies():
 
 
 @router.get("/ontologies/{name}", response_model=Dict[str, Any])
-async def get_ontology(name: str):
-    """Get a specific ontology"""
+async def get_ontology(name: str, version: str = "latest"):
+    """
+    Get a specific ontology for a database connection.
+
+    Args:
+        name: Database connection name
+        version: Ontology version (default: "latest")
+
+    Returns:
+        Full ontology data including concepts, properties, relationships, etc.
+    """
     try:
-        ontology_path = Path("./ontology_store")
-        file_path = ontology_path / f"{name}.json"
+        ontology_path = Path("./ontology_store") / name
+
+        if version == "latest":
+            file_path = ontology_path / "ontology_latest.json"
+        else:
+            file_path = ontology_path / f"ontology_{version}.json"
 
         if not file_path.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Ontology '{name}' not found",
+                detail=f"Ontology for connection '{name}' (version '{version}') not found. Please build ontology first.",
             )
 
         with open(file_path, "r", encoding="utf-8") as f:

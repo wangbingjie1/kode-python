@@ -50,12 +50,7 @@ export const useBillingStore = defineStore('billing', () => {
     return Math.min(100, (token_used / token_quota) * 100)
   })
 
-  const messageUsagePercentage = computed(() => {
-    if (!usageSummary.value) return 0
-    const { message_used, message_quota } = usageSummary.value
-    if (message_quota === 0) return 0
-    return Math.min(100, (message_used / message_quota) * 100)
-  })
+  // messageUsagePercentage 已移除（纯 Token 计费）
 
   // Actions
   async function fetchPlans() {
@@ -175,7 +170,6 @@ export const useBillingStore = defineStore('billing', () => {
     isSubscriptionActive,
     isQuotaExceeded,
     tokenUsagePercentage,
-    messageUsagePercentage,
 
     // Actions
     fetchPlans,

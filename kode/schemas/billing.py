@@ -36,11 +36,9 @@ class PlanBase(BaseModel):
 
 
 class PlanCreate(PlanBase):
-    """创建套餐 Schema"""
-    token_quota: int = Field(..., ge=0)
-    message_quota: int = Field(..., ge=0)
-    conversation_quota: int = Field(..., ge=0)
-    database_connection_quota: int = Field(default=0, ge=0)
+    """创建套餐 Schema（纯 Token 计费）"""
+    token_quota: int = Field(..., ge=0, description="Token 配额（唯一计费项）")
+    database_connection_quota: int = Field(default=0, ge=0, description="数据库连接数限制")
     database_access: bool = False
     advanced_analysis: bool = False
     ontology_building: bool = False
@@ -50,14 +48,12 @@ class PlanCreate(PlanBase):
 
 
 class PlanUpdate(BaseModel):
-    """更新套餐 Schema"""
+    """更新套餐 Schema（纯 Token 计费）"""
     display_name: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
     price: Optional[float] = Field(None, ge=0)
-    token_quota: Optional[int] = Field(None, ge=0)
-    message_quota: Optional[int] = Field(None, ge=0)
-    conversation_quota: Optional[int] = Field(None, ge=0)
-    database_connection_quota: Optional[int] = Field(None, ge=0)
+    token_quota: Optional[int] = Field(None, ge=0, description="Token 配额")
+    database_connection_quota: Optional[int] = Field(None, ge=0, description="数据库连接数限制")
     database_access: Optional[bool] = None
     advanced_analysis: Optional[bool] = None
     ontology_building: Optional[bool] = None
@@ -68,11 +64,9 @@ class PlanUpdate(BaseModel):
 
 
 class PlanResponse(PlanBase):
-    """套餐响应 Schema"""
+    """套餐响应 Schema（纯 Token 计费）"""
     id: str
     token_quota: int
-    message_quota: int
-    conversation_quota: int
     database_connection_quota: int
     database_access: bool
     advanced_analysis: bool
@@ -125,15 +119,13 @@ class SubscriptionCancel(BaseModel):
 # ============= Usage Schemas =============
 
 class UsageResponse(BaseModel):
-    """使用量响应 Schema"""
+    """使用量响应 Schema（纯 Token 计费）"""
     id: str
     user_id: str
     subscription_id: Optional[str]
     period_start: datetime
     period_end: datetime
     token_count: int
-    message_count: int
-    conversation_count: int
     database_query_count: int
     created_at: datetime
     updated_at: datetime
@@ -143,17 +135,12 @@ class UsageResponse(BaseModel):
 
 
 class UsageSummary(BaseModel):
-    """使用量摘要 Schema"""
+    """使用量摘要 Schema（纯 Token 计费）"""
     current_period_start: datetime
     current_period_end: datetime
     token_used: int
     token_quota: int
     token_remaining: int
-    message_used: int
-    message_quota: int
-    message_remaining: int
-    conversation_count: int
-    conversation_quota: int
     database_query_count: int
     is_quota_exceeded: bool
 

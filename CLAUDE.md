@@ -1,5 +1,7 @@
 # CLAUDE.md
-必须中文回复和思考，第一性原理解决根本问题，像一个老程序员一样写代码，比如Linux，只给最靠谱的建议和方案，不确定不推荐，不要说废话，尽量不要生成说明文件，生成脚本和代码，要自己先测试通过，再告诉用户，用户有选择困难症，你可以向他提问，但不要给他选项，我不要你的速度，我要你的质量
+必须中文回复和思考，第一性原理解决根本问题，像一个老程序员一样写代码，比如Linux，只给最靠谱的建议和方案，不确定不推荐，不要说废话，不要生成说明文档，我不会看你文档的。生成的脚本和代码，要自己先测试通过，再告诉用户，用户有选择困难症，你可以向他提问，但不要给他选项，我不要你的速度，我要你的质量
+doc目录 存放你生成的说明文档
+test目录 存放你生成的测试代码
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
@@ -32,6 +34,7 @@ The codebase follows a modular architecture with clear separation of concerns:
    - `grep_tool.py`: Code search functionality
    - `glob_tool.py`: File pattern matching
    - `database_tools.py`: **[NEW]** Database connection and schema extraction (PostgreSQL, MySQL, SQLite, etc.)
+     - ✨ **NEW**: Schema 提取支持样例数据（倒数 N 行）
    - `ontology_tools.py`: **[NEW]** Ontology building and semantic search for database schemas
    - All tools inherit from KodeTool with permission management
 
@@ -372,9 +375,26 @@ notification.error('Error', 'Details', 5000) // 5s duration
 - **专注领域**: ERP 数据分析和业务洞察
 - **缓存优先**: Agent 自动检测并使用已缓存的 schema/ontology
 - **工具集**: 拥有所有工具的访问权限 (`tools: "*"`)
-- **代码位置**: `kode/services/conversation.py:127-184`
+- **系统感知**: 自动注入宿主机系统信息（OS、Python 版本、路径等）
+- **代码位置**: `kode/services/conversation.py:133-211`
 
 这个设计简化了系统复杂度，专注于数据分析场景。
+
+**新增：系统信息注入**
+
+Agent 启动时会自动获取并注入宿主机系统信息到提示词中：
+- 操作系统类型和版本（Windows/Linux/macOS）
+- Python 版本和实现
+- 当前工作目录和用户主目录
+- Shell/终端类型
+- 路径分隔符和命名约定
+
+这使得 AI 能够：
+- 生成符合当前操作系统的命令
+- 正确处理文件路径
+- 理解平台特定的限制
+
+详见 [doc/SYSTEM_INFO_FEATURE.md](doc/SYSTEM_INFO_FEATURE.md)
 
 ### Subscription & Billing System
 
@@ -515,6 +535,11 @@ Kode now supports connecting to databases and building business ontologies for i
 - `DatabaseTestConnectionTool`: Verify connection health
 - `DatabaseSchemaExtractorTool`: Extract complete schema metadata (tables, columns, constraints, relationships)
   - **✨ NEW**: Extracts table and column COMMENT/备注 information (critical for ontology building)
+  - **✨ NEW**: 支持样例数据提取（倒数 N 行），帮助 AI 理解数据结构
+    - 默认提取每个表倒数 5 行
+    - 可通过 `include_sample_data` 和 `sample_row_limit` 参数控制
+    - 自动处理多种数据库类型（PostgreSQL/MySQL/SQLite/SQL Server/Oracle）
+    - 智能排序（按主键倒序）
   - Supports PostgreSQL, MySQL, Oracle, SQL Server (not SQLite)
 - `DatabaseExecuteQueryTool`: **✨ NEW** Execute SQL queries on connected databases
   - SELECT queries: Read-only, returns results with configurable row limit
@@ -586,6 +611,7 @@ Add to `.kode.json`:
 - **[Database Tools Guide](docs/DATABASE_TOOLS_GUIDE.md)**: Complete usage guide with examples
 - **[Database Tools Design](docs/database_tools_design.md)**: Architecture and design decisions
 - **[COMMENT Extraction Guide](docs/COMMENT_EXTRACTION.md)**: ✨ NEW - How to extract and use database field comments
+- **[Sample Data Feature](SAMPLE_DATA_FEATURE.md)**: ✨ NEW - Schema 样例数据提取功能详解
 - **[Test Suite](tests/test_database_tools.py)**: Comprehensive tests for all database tools
 
 ### Use Cases

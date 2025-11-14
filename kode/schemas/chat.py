@@ -42,6 +42,7 @@ class MessageResponse(BaseModel):
     class Config:
         from_attributes = True
         populate_by_name = True  # Allow using both 'metadata' and 'message_metadata'
+        by_alias = True  # 序列化时使用别名 'metadata' 而不是 'message_metadata'
 
 
 class WebSocketMessage(BaseModel):

@@ -26,6 +26,7 @@ class AgentConfig:
     max_iterations: int = 15
     max_execution_time: Optional[float] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    betas: List[str] = field(default_factory=lambda: [])
 
     @classmethod
     def from_markdown(cls, content: str, config_vars: Optional[Dict[str, Any]] = None) -> "AgentConfig":

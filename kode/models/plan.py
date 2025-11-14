@@ -25,11 +25,9 @@ class Plan(Base):
     price = Column(Float, nullable=False)  # 价格（元/月）
     billing_period = Column(String(20), default="monthly")  # monthly, yearly
 
-    # 配额限制
-    token_quota = Column(Integer, nullable=False)  # 每月 Token 额度
-    message_quota = Column(Integer, nullable=False)  # 每月消息条数限制
-    conversation_quota = Column(Integer, nullable=False)  # 同时保持的对话数限制
-    database_connection_quota = Column(Integer, default=0)  # 数据库连接数限制
+    # 配额限制（纯 Token 计费模式）
+    token_quota = Column(Integer, nullable=False)  # 【计费依据】每月 Token 额度（唯一扣费项）
+    database_connection_quota = Column(Integer, default=0)  # 【硬性限制】数据库连接数限制（基础设施限制）
 
     # 功能开关
     database_access = Column(Boolean, default=False)  # 是否支持数据库连接

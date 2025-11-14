@@ -204,7 +204,7 @@ class BillingService:
         period_end: datetime,
     ) -> Usage:
         """
-        创建使用量记录。
+        创建使用量记录（纯 Token 计费）。
 
         Args:
             db: 数据库会话
@@ -222,8 +222,6 @@ class BillingService:
             period_start=period_start,
             period_end=period_end,
             token_count=0,
-            message_count=0,
-            conversation_count=0,
             database_query_count=0,
         )
 
@@ -272,19 +270,15 @@ class BillingService:
         db: AsyncSession,
         user_id: str,
         token_count: int = 0,
-        message_count: int = 0,
-        conversation_count: int = 0,
         database_query_count: int = 0,
     ) -> Usage:
         """
-        增加用户使用量。
+        增加用户使用量（纯 Token 计费）。
 
         Args:
             db: 数据库会话
             user_id: 用户 ID
             token_count: 增加的 Token 数量
-            message_count: 增加的消息数量
-            conversation_count: 增加的对话数量
             database_query_count: 增加的数据库查询次数
 
         Returns:
@@ -315,8 +309,6 @@ class BillingService:
 
         # 增加使用量
         usage.token_count += token_count
-        usage.message_count += message_count
-        usage.conversation_count = max(usage.conversation_count, conversation_count)
         usage.database_query_count += database_query_count
 
         await db.commit()
@@ -360,16 +352,11 @@ class BillingService:
                 period_end=subscription.end_date,
             )
 
-        # 计算剩余配额
+        # 计算剩余配额（只按 token 扣费）
         token_remaining = max(0, plan.token_quota - usage.token_count)
-        message_remaining = max(0, plan.message_quota - usage.message_count)
 
-        # 检查是否超额
-        is_quota_exceeded = (
-            usage.token_count >= plan.token_quota
-            or usage.message_count >= plan.message_quota
-            or usage.conversation_count >= plan.conversation_quota
-        )
+        # 检查是否超额（只检查 token）
+        is_quota_exceeded = usage.token_count >= plan.token_quota
 
         return UsageSummary(
             current_period_start=usage.period_start,
@@ -377,11 +364,6 @@ class BillingService:
             token_used=usage.token_count,
             token_quota=plan.token_quota,
             token_remaining=token_remaining,
-            message_used=usage.message_count,
-            message_quota=plan.message_quota,
-            message_remaining=message_remaining,
-            conversation_count=usage.conversation_count,
-            conversation_quota=plan.conversation_quota,
             database_query_count=usage.database_query_count,
             is_quota_exceeded=is_quota_exceeded,
         )

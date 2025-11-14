@@ -99,6 +99,52 @@ class AnthropicStreamingAgent:
 
         return anthropic_tools
 
+    def _build_context_budget_info(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cache_creation_tokens: int,
+        cache_read_tokens: int,
+        iteration: int
+    ) -> str:
+        """
+        Build context budget information for the agent.
+
+        This provides the agent with awareness of its token usage and remaining capacity.
+
+        Args:
+            input_tokens: Total input tokens used so far
+            output_tokens: Total output tokens used so far
+            cache_creation_tokens: Total cache creation tokens
+            cache_read_tokens: Total cache read tokens
+            iteration: Current iteration number
+
+        Returns:
+            Formatted budget information string
+        """
+        # Calculate totals
+        total_tokens_used = input_tokens + output_tokens
+        context_limit = 2000000  # Anthropic's context window for Claude Sonnet 4.5
+        remaining_tokens = context_limit - total_tokens_used
+
+        # Calculate percentage used
+        usage_percentage = (total_tokens_used / context_limit) * 100 if context_limit > 0 else 0
+
+        # Build budget info message
+        budget_lines = [f"## 🔋你的剩余注意力百分比：{100 - usage_percentage:.1f}%"]
+
+        # Add warnings based on usage
+        if usage_percentage >= 70:
+            budget_lines.append("⚠️ **注意**: 注意力上下文使用已超过70%，你的注意力已经开始涣散。")
+
+        budget_lines.append("")
+        budget_lines.append("**重要**: 你需要自主管理自己的上下文使用情况，并在必要时采取措施：")
+        budget_lines.append("- 剩余30%时候，调用上下文工具压缩上下文")
+        budget_lines.append("- 剩余10%时候，提醒用户开启新对话")
+        budget_lines.append("")
+
+        return "\n".join(budget_lines)
+
     def _trim_messages_for_context(self, messages: List[Dict], max_context_tokens: int = 150000) -> List[Dict]:
         """
         Trim messages to fit within token limit.
@@ -107,6 +153,7 @@ class AnthropicStreamingAgent:
         1. Keep system messages and first user message
         2. Keep last N messages that fit within limit
         3. Truncate long tool results (keep only first/last parts)
+        4. CRITICAL: Maintain tool_use/tool_result pairing integrity
 
         Args:
             messages: List of message dicts
@@ -135,6 +182,20 @@ class AnthropicStreamingAgent:
                 return total
             return estimate_tokens(str(content))
 
+        def has_tool_use(msg: Dict) -> bool:
+            """Check if message contains tool_use blocks."""
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                return any(isinstance(item, dict) and item.get("type") == "tool_use" for item in content)
+            return False
+
+        def has_tool_result(msg: Dict) -> bool:
+            """Check if message contains tool_result blocks."""
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                return any(isinstance(item, dict) and item.get("type") == "tool_result" for item in content)
+            return False
+
         # Calculate total tokens
         total_tokens = sum(estimate_message_tokens(msg) for msg in messages)
 
@@ -143,18 +204,29 @@ class AnthropicStreamingAgent:
 
         logger.warning(f"Context too large ({total_tokens} tokens), trimming to {max_context_tokens}")
 
-        # Strategy: Keep recent messages, trim oldest tool results
+        # Strategy: Keep recent messages, maintain tool_use/tool_result pairing
         trimmed = []
         current_tokens = 0
+        skip_next_tool_result = False
 
         # Process messages in reverse (keep most recent)
-        for msg in reversed(messages):
+        for i, msg in enumerate(reversed(messages)):
             msg_tokens = estimate_message_tokens(msg)
 
             # Always keep the last user message
             if not trimmed:
+                # If it's a tool_result without corresponding tool_use, we need to skip it
+                if has_tool_result(msg):
+                    logger.warning("Last message contains tool_result without tool_use, skipping")
+                    continue
                 trimmed.append(msg)
                 current_tokens += msg_tokens
+                continue
+
+            # Check if this is a tool_result that should be skipped
+            if skip_next_tool_result and has_tool_result(msg):
+                logger.info(f"Skipping tool_result message (no corresponding tool_use)")
+                skip_next_tool_result = False
                 continue
 
             # Trim tool results if too large
@@ -174,8 +246,12 @@ class AnthropicStreamingAgent:
                 msg_tokens = estimate_message_tokens(msg)
 
             if current_tokens + msg_tokens > max_context_tokens:
-                # Skip this message
-                logger.info(f"Skipping message (would exceed limit): role={msg.get('role')}, tokens={msg_tokens}")
+                # If skipping a tool_use message, mark to skip corresponding tool_result
+                if has_tool_use(msg):
+                    skip_next_tool_result = True
+                    logger.info(f"Skipping tool_use message (would exceed limit), will skip corresponding tool_result")
+                else:
+                    logger.info(f"Skipping message (would exceed limit): role={msg.get('role')}, tokens={msg_tokens}")
                 continue
 
             trimmed.append(msg)
@@ -184,8 +260,35 @@ class AnthropicStreamingAgent:
         # Reverse back to original order
         trimmed.reverse()
 
-        logger.info(f"Trimmed context: {len(messages)} -> {len(trimmed)} messages, {total_tokens} -> {current_tokens} tokens")
-        return trimmed
+        # Final validation: ensure no orphaned tool_results or tool_uses
+        validated = []
+        last_had_tool_use = False
+
+        for i, msg in enumerate(trimmed):
+            # Check if this tool_result has a corresponding tool_use
+            if has_tool_result(msg):
+                if not last_had_tool_use:
+                    logger.warning(f"Removing orphaned tool_result message at position {len(validated)}")
+                    continue  # Skip orphaned tool_result
+
+            # Check if this tool_use will have a corresponding tool_result
+            if has_tool_use(msg):
+                # Look ahead to see if next message has tool_result
+                has_following_result = False
+                if i + 1 < len(trimmed):
+                    next_msg = trimmed[i + 1]
+                    if has_tool_result(next_msg):
+                        has_following_result = True
+
+                if not has_following_result:
+                    logger.warning(f"Removing orphaned tool_use message at position {len(validated)}")
+                    continue  # Skip orphaned tool_use
+
+            validated.append(msg)
+            last_had_tool_use = has_tool_use(msg)
+
+        logger.info(f"Trimmed context: {len(messages)} -> {len(validated)} messages, {total_tokens} -> {current_tokens} tokens")
+        return validated
 
     async def stream_response(
         self,
@@ -216,6 +319,12 @@ class AnthropicStreamingAgent:
         iteration = 0
         tool_calls_history = []
 
+        # Token usage tracking
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_cache_creation_tokens = 0
+        total_cache_read_tokens = 0
+
         while iteration < max_iterations:
             iteration += 1
 
@@ -230,6 +339,29 @@ class AnthropicStreamingAgent:
                 else:
                     self.on_iteration(iteration)
 
+            # Calculate and inject context budget information
+            context_budget_info = self._build_context_budget_info(
+                total_input_tokens, total_output_tokens,
+                total_cache_creation_tokens, total_cache_read_tokens,
+                iteration
+            )
+
+            # Prepend budget info to system prompt for this iteration
+            enhanced_system_prompt = f"{context_budget_info}\n\n{self.system_prompt}"
+
+            # ===== Prompt Caching Support =====
+            # 使用 Anthropic 的 Prompt Caching 功能来缓存系统提示词和工具定义
+            # 参考: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+
+            # 将 system prompt 转换为支持缓存的格式
+            system_with_cache = [
+                {
+                    "type": "text",
+                    "text": enhanced_system_prompt,
+                    "cache_control": {"type": "ephemeral"}  # 标记为可缓存
+                }
+            ]
+
             # Stream response from Anthropic
             full_text = ""
             content_blocks = []
@@ -241,11 +373,42 @@ class AnthropicStreamingAgent:
                 thinking_budget = 5000  # Budget for thinking tokens
                 output_tokens = max(self.max_tokens, thinking_budget + 4096)  # Ensure enough for output
 
+                # ===== 请求内容日志 =====
+                logger.info(f"\n{'='*80}")
+                logger.info(f"[API 请求] 迭代 {iteration}")
+                logger.info(f"{'='*80}")
+
+                # 显示用户最新输入
+                if messages:
+                    last_user_msg = None
+                    for msg in reversed(messages):
+                        if msg.get("role") == "user":
+                            last_user_msg = msg
+                            break
+                    if last_user_msg:
+                        user_content = str(last_user_msg.get("content", ""))
+                        logger.info(f"\n[用户输入]")
+                        if len(user_content) > 200:
+                            logger.info(f"{user_content[:200]}...")
+                        else:
+                            logger.info(f"{user_content}")
+
+                # Token 组成估算
+                system_tokens = len(enhanced_system_prompt) // 4
+                tools_tokens = sum(len(str(t)) for t in self.anthropic_tools) // 4
+                history_tokens = sum(len(str(m.get('content', ''))) for m in messages) // 4
+
+                logger.info(f"\n[Token 组成估算]")
+                logger.info(f"  系统提示词: ~{system_tokens:,} tokens")
+                logger.info(f"  工具定义:   ~{tools_tokens:,} tokens")
+                logger.info(f"  对话历史:   ~{history_tokens:,} tokens")
+                logger.info(f"  预计输入:   ~{system_tokens + tools_tokens + history_tokens:,} tokens")
+
                 async with self.client.messages.stream(
                     model=self.model,
                     max_tokens=output_tokens,
                     temperature=1.0,  # Required for Extended Thinking
-                    system=self.system_prompt,
+                    system=system_with_cache,  # ← 使用缓存优化的系统提示词
                     messages=messages,
                     tools=self.anthropic_tools if self.anthropic_tools else anthropic.NOT_GIVEN,
                     thinking={
@@ -298,6 +461,65 @@ class AnthropicStreamingAgent:
                     final_message = await stream.get_final_message()
                     content_blocks = final_message.content
 
+                    # Extract token usage from response
+                    usage = getattr(final_message, 'usage', None)
+                    if usage:
+                        input_tokens = getattr(usage, 'input_tokens', 0)
+                        output_tokens = getattr(usage, 'output_tokens', 0)
+                        cache_creation = getattr(usage, 'cache_creation_input_tokens', 0) or 0
+                        cache_read = getattr(usage, 'cache_read_input_tokens', 0) or 0
+
+                        # Accumulate totals
+                        total_input_tokens += input_tokens
+                        total_output_tokens += output_tokens
+                        total_cache_creation_tokens += cache_creation
+                        total_cache_read_tokens += cache_read
+
+                        # ===== 实际 Token 使用统计 =====
+                        logger.info(f"\n{'='*80}")
+                        logger.info(f"[Token 使用] 迭代 {iteration}")
+                        logger.info(f"{'='*80}")
+
+                        # 本次调用
+                        logger.info(f"\n本次 API 调用:")
+                        logger.info(f"  输入 tokens:  {input_tokens:,}")
+                        if cache_creation > 0:
+                            logger.info(f"    ├─ 缓存创建: {cache_creation:,} tokens (首次，1.25× 价格)")
+                        if cache_read > 0:
+                            logger.info(f"    ├─ 缓存读取: {cache_read:,} tokens (节省 90%!)")
+                        regular_input = input_tokens - cache_creation - cache_read
+                        if regular_input > 0:
+                            logger.info(f"    └─ 常规输入: {regular_input:,} tokens")
+                        logger.info(f"  输出 tokens:  {output_tokens:,}")
+                        logger.info(f"  本次总计:     {input_tokens + output_tokens:,} tokens")
+
+                        # 累计统计
+                        logger.info(f"\n对话累计:")
+                        logger.info(f"  累计输入:  {total_input_tokens:,} tokens")
+                        logger.info(f"  累计输出:  {total_output_tokens:,} tokens")
+                        logger.info(f"  总计:      {total_input_tokens + total_output_tokens:,} tokens")
+
+                        # 缓存效果
+                        if cache_read > 0:
+                            savings_pct = (cache_read / input_tokens) * 90  # 90% 节省
+                            logger.info(f"\n缓存节省: ~{savings_pct:.1f}% (读取了 {cache_read:,} tokens)")
+
+                        logger.info(f"{'='*80}\n")
+
+                        # Yield token usage event for this iteration
+                        yield {
+                            "type": "token_usage",
+                            "content": "",
+                            "metadata": {
+                                "iteration": iteration,
+                                "input_tokens": input_tokens,
+                                "output_tokens": output_tokens,
+                                "total_tokens": input_tokens + output_tokens,
+                                "cache_creation_input_tokens": cache_creation,
+                                "cache_read_input_tokens": cache_read,
+                            }
+                        }
+
             except Exception as e:
                 logger.error(f"Error streaming from Anthropic: {e}", exc_info=True)
                 yield {
@@ -324,6 +546,13 @@ class AnthropicStreamingAgent:
                     "metadata": {
                         "iterations": iteration,
                         "tool_calls": tool_calls_history,
+                        "token_usage": {
+                            "total_input_tokens": total_input_tokens,
+                            "total_output_tokens": total_output_tokens,
+                            "total_tokens": total_input_tokens + total_output_tokens,
+                            "cache_creation_input_tokens": total_cache_creation_tokens,
+                            "cache_read_input_tokens": total_cache_read_tokens,
+                        }
                     }
                 }
                 return
@@ -406,6 +635,101 @@ class AnthropicStreamingAgent:
                         })
 
                     except Exception as e:
+                        # Special handling for UserInputRequired exception
+                        from kode.exceptions import UserInputRequired
+                        if isinstance(e, UserInputRequired):
+                            logger.info(f"[User Input Required] {e.question}")
+
+                            # IMPORTANT: Register tool instance in global session manager
+                            # This allows POST /api/sse/chat/{conversation_id}/user-response to find it
+                            try:
+                                from kode.web.api.sse import user_input_session_manager
+                                # conversation_id is passed via _current_conversation_id attribute
+                                conversation_id = getattr(self, '_current_conversation_id', None)
+                                if conversation_id:
+                                    user_input_session_manager.register_pending_input(
+                                        conversation_id, e.tool_instance
+                                    )
+                                    logger.info(f"[User Input] Registered pending input for conversation {conversation_id}")
+                                else:
+                                    logger.warning("[User Input] No conversation_id available for registration")
+                            except ImportError:
+                                logger.warning("[User Input] Could not import user_input_session_manager")
+
+                            # Yield special SSE event for user input
+                            yield {
+                                "type": "user_input_required",
+                                "content": e.question,
+                                "metadata": {
+                                    "tool_name": tool_name,
+                                    "tool_use_id": tool_use_id,
+                                    "question_data": e.to_dict(),
+                                }
+                            }
+
+                            # Wait for user response (tool instance has _wait_for_response method)
+                            if hasattr(e.tool_instance, '_wait_for_response'):
+                                try:
+                                    user_answer = await e.tool_instance._wait_for_response()
+                                    logger.info(f"[User Input Received] {user_answer}")
+
+                                    # Yield user response event
+                                    yield {
+                                        "type": "user_input_received",
+                                        "content": user_answer,
+                                        "metadata": {
+                                            "tool_name": tool_name,
+                                            "question": e.question,
+                                        }
+                                    }
+
+                                    # Add user answer as tool result
+                                    tool_results.append({
+                                        "type": "tool_result",
+                                        "tool_use_id": tool_use_id,
+                                        "content": user_answer,
+                                    })
+
+                                    # Track in history
+                                    tool_calls_history.append({
+                                        "name": tool_name,
+                                        "args": tool_args,
+                                        "result": user_answer[:500],
+                                        "user_interaction": True,
+                                    })
+
+                                    # Continue to next tool
+                                    continue
+
+                                except Exception as wait_error:
+                                    logger.error(f"Error waiting for user response: {wait_error}")
+                                    error_msg = f"Failed to get user response: {str(wait_error)}"
+
+                                    yield {
+                                        "type": "tool_result",
+                                        "content": error_msg,
+                                        "metadata": {
+                                            "tool_name": tool_name,
+                                            "status": "error",
+                                            "error": error_msg
+                                        }
+                                    }
+
+                                    tool_results.append({
+                                        "type": "tool_result",
+                                        "tool_use_id": tool_use_id,
+                                        "content": error_msg,
+                                        "is_error": True,
+                                    })
+
+                                    tool_calls_history.append({
+                                        "name": tool_name,
+                                        "args": tool_args,
+                                        "error": error_msg,
+                                    })
+                                    continue
+
+                        # Regular exception handling
                         error_msg = f"Error executing tool {tool_name}: {str(e)}"
                         logger.error(error_msg, exc_info=True)
 
@@ -471,5 +795,12 @@ class AnthropicStreamingAgent:
             "metadata": {
                 "iterations": iteration,
                 "tool_calls": tool_calls_history,
+                "token_usage": {
+                    "total_input_tokens": total_input_tokens,
+                    "total_output_tokens": total_output_tokens,
+                    "total_tokens": total_input_tokens + total_output_tokens,
+                    "cache_creation_input_tokens": total_cache_creation_tokens,
+                    "cache_read_input_tokens": total_cache_read_tokens,
+                }
             }
         }

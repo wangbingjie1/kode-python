@@ -4,11 +4,12 @@ SSE (Server-Sent Events) API Routes
 Provides real-time streaming of AI responses using SSE instead of WebSocket.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Dict, Any
+from pydantic import BaseModel
 import json
 import logging
 
@@ -23,6 +24,69 @@ from kode.core.security import verify_token
 
 logger = setup_logger(__name__)
 router = APIRouter()
+
+
+# ============================================================
+# Global session manager for pending user inputs
+# ============================================================
+class UserInputSessionManager:
+    """
+    管理等待用户输入的会话。
+
+    当 Agent 调用 AskUserTool 时，会在这里注册等待的工具实例。
+    前端通过 POST 端点提交答案后，通过此管理器注入响应。
+    """
+    def __init__(self):
+        self._pending_sessions: Dict[str, Any] = {}  # conversation_id -> tool_instance
+
+    def register_pending_input(self, conversation_id: str, tool_instance: Any):
+        """注册等待用户输入的会话"""
+        self._pending_sessions[conversation_id] = tool_instance
+        logger.info(f"[UserInputSession] Registered pending input for conversation {conversation_id}")
+
+    def get_pending_input(self, conversation_id: str) -> Optional[Any]:
+        """获取等待中的工具实例"""
+        return self._pending_sessions.get(conversation_id)
+
+    def remove_pending_input(self, conversation_id: str):
+        """移除已完成的会话"""
+        if conversation_id in self._pending_sessions:
+            del self._pending_sessions[conversation_id]
+            logger.info(f"[UserInputSession] Removed pending input for conversation {conversation_id}")
+
+    async def submit_user_response(self, conversation_id: str, response_data: Dict[str, Any]) -> bool:
+        """
+        提交用户响应到等待中的工具实例。
+
+        Returns:
+            True if response was submitted successfully, False if no pending session
+        """
+        tool_instance = self.get_pending_input(conversation_id)
+        if not tool_instance:
+            logger.warning(f"[UserInputSession] No pending input found for conversation {conversation_id}")
+            return False
+
+        # Inject response into tool instance
+        if hasattr(tool_instance, '_set_user_response'):
+            await tool_instance._set_user_response(response_data)
+            self.remove_pending_input(conversation_id)
+            return True
+        else:
+            logger.error(f"[UserInputSession] Tool instance does not have _set_user_response method")
+            return False
+
+
+# Global instance
+user_input_session_manager = UserInputSessionManager()
+
+
+# ============================================================
+# Pydantic models for API
+# ============================================================
+class UserInputResponse(BaseModel):
+    """用户输入响应模型"""
+    answer: Any  # 可以是 str, bool, list[str] 等
+    question_type: str = "text"  # text, select, multiselect, confirm
 
 
 async def get_user_from_token_or_header(
@@ -92,6 +156,13 @@ async def event_generator(
     from kode.database.session import async_session_maker
 
     assistant_content = ""  # 收集完整的 AI 回复
+    messages_to_save = []  # 收集需要保存的所有消息 (包括 chart, insight 等)
+
+    # ✨ 收集真实的 token 使用量（来自 Anthropic API）
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_cache_creation_tokens = 0
+    total_cache_read_tokens = 0
 
     try:
         async for chunk in conversation_service.execute_task_streaming(
@@ -105,9 +176,68 @@ async def event_generator(
             chunk_type = chunk.get('type')
             logger.info(f"[SSE] Sending chunk: type={chunk_type}")
 
+            # Handle user_input_required event (special case)
+            if chunk_type == "user_input_required":
+                metadata = chunk.get("metadata", {})
+                question_data = metadata.get("question_data", {})
+
+                # Extract tool instance from exception (if available in metadata)
+                # This should be set by anthropic_streaming.py when catching UserInputRequired
+                # For now, we'll register the conversation as pending and wait
+                logger.info(f"[SSE] User input required: {question_data.get('question')}")
+
+                # Send event to frontend immediately
+                event_data = json.dumps(chunk, ensure_ascii=False)
+                yield f"data: {event_data}\n\n"
+
+                # Note: The tool instance is already waiting via asyncio.Event
+                # We don't need to register it here, it's managed in anthropic_streaming.py
+                continue
+
+            # ✨ 收集真实的 token 统计（来自 Anthropic API）
+            if chunk_type == "token_usage":
+                metadata = chunk.get("metadata", {})
+                total_input_tokens += metadata.get("input_tokens", 0)
+                total_output_tokens += metadata.get("output_tokens", 0)
+                total_cache_creation_tokens += metadata.get("cache_creation_input_tokens", 0)
+                total_cache_read_tokens += metadata.get("cache_read_input_tokens", 0)
+                logger.info(
+                    f"[SSE Token] Iteration {metadata.get('iteration')}: "
+                    f"input={metadata.get('input_tokens')}, "
+                    f"output={metadata.get('output_tokens')}, "
+                    f"cache_creation={metadata.get('cache_creation_input_tokens')}, "
+                    f"cache_read={metadata.get('cache_read_input_tokens')}"
+                )
+
             # Collect assistant response content
             if chunk_type == "chunk":
                 assistant_content += chunk.get("content", "")
+
+            # Collect chart messages for persistence
+            elif chunk_type == "chart":
+                messages_to_save.append({
+                    "role": "chart",
+                    "content": "",
+                    "metadata": {
+                        "chart_type": chunk.get("metadata", {}).get("chart_type"),
+                        "chart_config": chunk.get("content"),  # ECharts config
+                        "data_summary": chunk.get("metadata", {}).get("data_summary")
+                    }
+                })
+                logger.info(f"[SSE] Collected chart message for saving")
+
+            # Collect insight messages for persistence
+            elif chunk_type == "insight":
+                messages_to_save.append({
+                    "role": "insight",
+                    "content": "",
+                    "metadata": {
+                        "insights": chunk.get("content"),  # List of insights
+                        "total_count": chunk.get("metadata", {}).get("total_count"),
+                        "data_summary": chunk.get("metadata", {}).get("data_summary")
+                    }
+                })
+                logger.info(f"[SSE] Collected insight message for saving")
 
             # Log tool call details for debugging
             if chunk_type in ('tool_call', 'tool_result'):
@@ -122,9 +252,10 @@ async def event_generator(
             event_data = json.dumps(chunk, ensure_ascii=False)
             yield f"data: {event_data}\n\n"
 
-        # Save assistant message to database (create new session)
-        if assistant_content:
-            async with async_session_maker() as db:
+        # Save all messages to database (create new session)
+        async with async_session_maker() as db:
+            # Save assistant message
+            if assistant_content:
                 assistant_message = Message(
                     conversation_id=conversation_id,
                     role="assistant",
@@ -132,23 +263,76 @@ async def event_generator(
                     metadata={}
                 )
                 db.add(assistant_message)
-                await db.commit()
                 logger.info(f"[SSE] Saved assistant message to conversation {conversation_id}")
 
-                # 更新使用量统计
-                # 估算 token 数量（简化版：1 token ≈ 4 字符）
-                estimated_tokens = len(task_content + assistant_content) // 4
-                try:
-                    await BillingService.increment_usage(
-                        db=db,
-                        user_id=user_id,
-                        token_count=estimated_tokens,
-                        message_count=1,  # 一次对话
-                    )
-                    logger.info(f"[SSE] Updated usage: ~{estimated_tokens} tokens, 1 message")
-                except Exception as e:
-                    # 使用量更新失败不应该影响主流程
-                    logger.warning(f"[SSE] Failed to update usage: {e}")
+            # Save chart/insight messages
+            for msg_data in messages_to_save:
+                message = Message(
+                    conversation_id=conversation_id,
+                    role=msg_data["role"],
+                    content=msg_data["content"],
+                    metadata=msg_data["metadata"]
+                )
+                db.add(message)
+                logger.info(f"[SSE] Saved {msg_data['role']} message to conversation {conversation_id}")
+
+            await db.commit()
+
+            # ✨ 更新使用量统计（使用真实的 Anthropic API token 数据）
+            actual_tokens = total_input_tokens + total_output_tokens
+
+            # 💰 计算真实成本（Anthropic 定价，< 200K tokens）
+            # 参考: https://www.anthropic.com/pricing
+            regular_input_tokens = total_input_tokens - total_cache_creation_tokens - total_cache_read_tokens
+            regular_input_cost = regular_input_tokens * 3 / 1_000_000  # $3/MTok
+            cache_creation_cost = total_cache_creation_tokens * 3.75 / 1_000_000  # $3.75/MTok (1.25×)
+            cache_read_cost = total_cache_read_tokens * 0.30 / 1_000_000  # $0.30/MTok (节省90%)
+            output_cost = total_output_tokens * 15 / 1_000_000  # $15/MTok
+
+            actual_cost = regular_input_cost + cache_creation_cost + cache_read_cost + output_cost
+
+            # 计算无缓存的成本（对比）
+            no_cache_input_cost = (regular_input_tokens + total_cache_creation_tokens + total_cache_read_tokens) * 3 / 1_000_000
+            no_cache_cost = no_cache_input_cost + output_cost
+
+            # 节省的成本和百分比
+            cost_savings = no_cache_cost - actual_cost
+            savings_percentage = (cost_savings / no_cache_cost * 100) if no_cache_cost > 0 else 0
+
+            try:
+                await BillingService.increment_usage(
+                    db=db,
+                    user_id=user_id,
+                    token_count=actual_tokens,
+                    database_query_count=0,
+                )
+
+                # 详细的开发日志（包含成本信息）
+                logger.info(
+                    f"\n{'='*80}\n"
+                    f"[SSE Usage Summary] Conversation {conversation_id}\n"
+                    f"{'='*80}\n"
+                    f"📊 Token 统计:\n"
+                    f"  常规输入:   {regular_input_tokens:>8,} tokens × $3.00/MTok  = ${regular_input_cost:>8.6f}\n"
+                    f"  缓存创建:   {total_cache_creation_tokens:>8,} tokens × $3.75/MTok  = ${cache_creation_cost:>8.6f}\n"
+                    f"  缓存读取:   {total_cache_read_tokens:>8,} tokens × $0.30/MTok  = ${cache_read_cost:>8.6f}\n"
+                    f"  输出生成:   {total_output_tokens:>8,} tokens × $15.00/MTok = ${output_cost:>8.6f}\n"
+                    f"  ─────────────────────────────────────────────────────────────\n"
+                    f"  总输入:     {total_input_tokens:>8,} tokens\n"
+                    f"  总输出:     {total_output_tokens:>8,} tokens\n"
+                    f"  总计:       {actual_tokens:>8,} tokens\n"
+                    f"\n"
+                    f"💰 成本分析:\n"
+                    f"  实际成本:   ${actual_cost:.6f}\n"
+                    f"  无缓存成本: ${no_cache_cost:.6f}\n"
+                    f"  节省:       ${cost_savings:.6f} ({savings_percentage:.1f}%)\n"
+                    f"\n"
+                    f"📦 用户配额扣除: {actual_tokens:,} tokens (简化计费)\n"
+                    f"{'='*80}"
+                )
+            except Exception as e:
+                # 使用量更新失败不应该影响主流程
+                logger.warning(f"[SSE] Failed to update usage: {e}")
 
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done', 'content': '', 'metadata': {}})}\n\n"
@@ -308,3 +492,78 @@ async def send_message_sse(
             "X-Accel-Buffering": "no",
         }
     )
+
+
+@router.post("/chat/{conversation_id}/user-response")
+async def submit_user_response(
+    conversation_id: str,
+    response: UserInputResponse = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    接收用户对交互式提问的响应。
+
+    当 Agent 调用 AskUserTool 后，前端会收到 'user_input_required' 事件。
+    用户提交答案后，前端调用此端点将答案注入到等待中的工具实例。
+
+    **Request Body**:
+    ```json
+    {
+      "answer": "用户的回答" | true | false | ["选项1", "选项2"],
+      "question_type": "text" | "select" | "multiselect" | "confirm"
+    }
+    ```
+
+    **Returns**:
+    ```json
+    {
+      "success": true,
+      "message": "用户响应已提交"
+    }
+    ```
+
+    **Flow**:
+    1. Agent 调用 AskUserTool
+    2. 异常被捕获，工具实例注册到全局 session manager
+    3. SSE 发送 'user_input_required' 事件到前端
+    4. 前端渲染问题界面，用户作答
+    5. 前端调用此端点提交答案
+    6. 答案注入到工具实例，asyncio.Event.set() 被调用
+    7. Agent 继续执行
+    """
+    # Verify conversation exists and user has access
+    result = await db.execute(
+        select(Conversation).where(Conversation.id == conversation_id)
+    )
+    conversation = result.scalar_one_or_none()
+
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found"
+        )
+
+    # TODO: Verify user owns this conversation (add owner_id to Conversation model)
+
+    # Submit response to session manager
+    logger.info(f"[User Response] Received for conversation {conversation_id}: {response.dict()}")
+
+    success = await user_input_session_manager.submit_user_response(
+        conversation_id,
+        response.dict()
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No pending user input found for this conversation. The question may have already timed out."
+        )
+
+    logger.info(f"[User Response] Successfully submitted for conversation {conversation_id}")
+
+    return {
+        "success": True,
+        "message": "用户响应已提交",
+        "conversation_id": conversation_id,
+    }

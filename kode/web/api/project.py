@@ -12,8 +12,11 @@ from typing import List
 from kode.database.session import get_db
 from kode.models import Project, User
 from kode.schemas.project import ProjectCreate, ProjectResponse
+from kode.web.dependencies import get_current_user
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
@@ -84,6 +87,46 @@ async def list_projects(
     projects = result.scalars().all()
 
     return projects
+
+
+@router.get("/projects/user/default", response_model=ProjectResponse)
+async def get_or_create_default_project(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取或创建当前用户的默认项目
+
+    如果用户没有任何项目，自动创建一个默认项目
+    如果用户有项目，返回最近使用的项目
+    """
+    # 查找用户的所有项目
+    result = await db.execute(
+        select(Project)
+        .where(Project.user_id == current_user.id)
+        .order_by(Project.updated_at.desc())
+    )
+    existing_project = result.scalar_one_or_none()
+
+    if existing_project:
+        # 用户已有项目，返回最近使用的项目
+        return existing_project
+
+    # 用户没有项目，创建默认项目
+    logger.info(f"Creating default project for user {current_user.id}")
+    default_project = Project(
+        name="默认项目",
+        description="默认工作空间",
+        user_id=current_user.id,
+        config={},
+    )
+
+    db.add(default_project)
+    await db.commit()
+    await db.refresh(default_project)
+
+    logger.info(f"Created default project {default_project.id} for user {current_user.id}")
+    return default_project
 
 
 @router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from logging import log
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
@@ -10,7 +11,9 @@ from pydantic import BaseModel, Field
 from kode.tools.base import KodeTool
 from kode.core.model_manager import ModelManager
 from kode.utils.config import ConfigManager
+from kode.utils.logger import setup_logger
 
+logger = setup_logger(__name__)
 
 # ==================== Tool Input Schemas ====================
 
@@ -37,17 +40,6 @@ class OntologyBuilderInput(BaseModel):
     version: str = Field(default="auto", description="Version identifier (auto = timestamp)")
 
 
-class OntologyStorageInput(BaseModel):
-    """Input schema for OntologyStorageTool."""
-
-    ontology: Dict[str, Any] = Field(description="Ontology data to store")
-    storage_path: str = Field(
-        default="./ontology_store", description="Path to store ontology files"
-    )
-    version: str = Field(default="v1.0", description="Ontology version identifier")
-    format: str = Field(default="json", description="Storage format: json, rdf, owl")
-
-
 class OntologySearchInput(BaseModel):
     """Input schema for OntologySearchTool."""
 
@@ -57,13 +49,6 @@ class OntologySearchInput(BaseModel):
         default="semantic", description="Search type: semantic, exact, fuzzy"
     )
     top_k: int = Field(default=5, description="Number of results to return")
-
-
-class OntologyLoadInput(BaseModel):
-    """Input schema for OntologyLoadTool."""
-
-    connection_name: str = Field(description="Connection name to load ontology for")
-    version: str = Field(default="latest", description="Version to load (latest or specific version)")
 
 
 # ==================== Ontology Tools ====================
@@ -153,7 +138,9 @@ class OntologyBuilderTool(KodeTool):
                 schema_metadata = schema_data
 
             # 核心改变：直接使用 AI 生成完整的本体，而不是传统代码转换
-            ontology = self._build_ontology_with_ai(schema_metadata, connection_name)
+            database = schema_metadata.get("database", "未知")
+            db_schema = schema_metadata.get("schema")
+            ontology = self._build_ontology_with_ai(schema_metadata, connection_name, database, db_schema)
 
             # Auto-save ontology to file
             if auto_save:
@@ -174,64 +161,84 @@ class OntologyBuilderTool(KodeTool):
             )
 
     def _build_ontology_with_ai(
-        self, schema_metadata: Dict[str, Any], connection_name: str
+        self, schema_metadata: Dict[str, Any], connection_name: str, database: str, db_schema: Optional[str]
     ) -> Dict[str, Any]:
         """
-        使用 AI 直接从数据库 schema 生成完整的业务本体。
+        使用三阶段 AI 分批构建完整业务本体，确保上下文完整性。
 
-        这是核心方法，完全由 AI 理解业务语义并生成本体，而非规则代码。
+        阶段1：全局架构扫描 - 识别业务域和顶层关系
+        阶段2：分域详细构建 - 在全局上下文下生成各域本体
+        阶段3：跨域关系融合 - 补充和精炼跨域关系
+
+        这种方法解决了单次生成因 token 限制导致的表缺失问题，
+        同时保持了全局业务理解的完整性。
         """
         try:
-            # 准备 schema 的紧凑表示
-            schema_summary = self._prepare_schema_for_ai(schema_metadata)
-
-            # 创建 AI prompt
-            prompt = self._create_ontology_generation_prompt(schema_summary)
-
-            # 调用 AI 模型
+            # 初始化 model manager
             config_manager = ConfigManager()
             config = config_manager.get_all()
             model_manager = ModelManager(config)
-            model = model_manager.get_model("main")  # 使用 main 模型，这个任务很重要
+            model = model_manager.get_model("main")
+            model.temperature = 0.0
+            model.max_tokens = 64000  # 使用最大可用值
 
             from langchain_core.messages import HumanMessage
-            response = model.invoke([HumanMessage(content=prompt)])
-            ai_output = response.content
 
-            # 解析 AI 返回的 JSON
-            ontology_data = self._extract_json_from_text(ai_output)
+            # ========== 阶段 1: 全局架构扫描 ==========
+            logger.info("阶段1开始：全局架构扫描")
+            schema_skeleton = self._extract_schema_skeleton(schema_metadata)
+            global_context = self._ai_analyze_global_architecture(
+                schema_skeleton, connection_name, database, db_schema, model
+            )
+            logger.info(f"阶段1完成：识别到 {len(global_context.get('business_domains', {}))} 个业务域")
 
-            if not ontology_data:
-                raise ValueError("AI 未返回有效的 JSON 格式本体数据")
+            # ========== 阶段 2: 分域详细构建 ==========
+            logger.info("阶段2开始：分域详细构建")
+            domain_ontologies = {}
+            tables = schema_metadata.get("tables", {})
 
-            # 添加元数据
-            ontology = {
-                "metadata": {
-                    "created_at": datetime.now().isoformat(),
-                    "created_by": "ai",
-                    "model": model_manager.get_current_model_name(),
-                    "source_database": schema_metadata.get("database"),
-                    "source_connection": connection_name,
-                    "table_count": schema_metadata.get("table_count", 0),
-                },
-                "concepts": ontology_data.get("concepts", {}),
-                "properties": ontology_data.get("properties", {}),
-                "relationships": ontology_data.get("relationships", []),
-                "hierarchies": ontology_data.get("hierarchies", []),
-                "domain_insights": ontology_data.get("domain_insights", {}),
-                "business_rules": ontology_data.get("business_rules", []),
-                "recommendations": ontology_data.get("recommendations", []),
-                "statistics": {
-                    "concept_count": len(ontology_data.get("concepts", {})),
-                    "property_count": len(ontology_data.get("properties", {})),
-                    "relationship_count": len(ontology_data.get("relationships", [])),
-                    "hierarchy_count": len(ontology_data.get("hierarchies", [])),
-                },
-            }
+            for domain_name, table_names in global_context.get("business_domains", {}).items():
+                # 提取该域的详细 schema
+                domain_schema = {t: tables[t] for t in table_names if t in tables}
 
-            return ontology
+                # 携带全局上下文构建该域本体
+                domain_ont = self._ai_build_domain_ontology(
+                    domain_name=domain_name,
+                    domain_schema=domain_schema,
+                    global_context=global_context,
+                    connection_name=connection_name,
+                    database=database,
+                    db_schema=db_schema,
+                    model=model
+                )
+                domain_ontologies[domain_name] = domain_ont
+                logger.info(f"阶段2：{domain_name} 完成（{len(table_names)} 个表）")
+
+            # ========== 阶段 3: 跨域关系融合 ==========
+            logger.info("阶段3开始：跨域关系融合")
+            cross_domain_insights = self._ai_refine_cross_domain_relationships(
+                domain_ontologies=domain_ontologies,
+                global_context=global_context,
+                connection_name=connection_name,
+                model=model
+            )
+            logger.info(f"阶段3完成：补充了 {len(cross_domain_insights.get('relationships', []))} 个跨域关系")
+
+            # 合并所有结果
+            final_ontology = self._merge_ontologies(
+                domain_ontologies=domain_ontologies,
+                cross_domain_insights=cross_domain_insights,
+                global_context=global_context,
+                schema_metadata=schema_metadata,
+                connection_name=connection_name,
+                model_manager=model_manager
+            )
+
+            logger.info(f"本体构建完成：{final_ontology['statistics']['concept_count']} 个概念")
+            return final_ontology
 
         except Exception as e:
+            logger.error(f"本体构建失败: {str(e)}")
             # Fallback: 返回基本结构
             return {
                 "metadata": {
@@ -249,7 +256,9 @@ class OntologyBuilderTool(KodeTool):
         """
         将数据库 schema 转换为紧凑的、AI 友好的格式。
 
-        包含：表名、列信息（名称、类型、注释）、主键、外键关系。
+        包含：表名、列信息（名称、类型、注释、默认值）、主键、唯一约束、外键关系。
+
+        增强版本：补充了默认值和唯一约束，以完整保留业务规则信息。
         """
         tables = schema_metadata.get("tables", {})
         relationships = schema_metadata.get("relationships", [])
@@ -261,7 +270,7 @@ class OntologyBuilderTool(KodeTool):
 
         # 表和列信息
         for table_name, table_data in tables.items():
-            lines.append(f"## {table_name}")
+            lines.append(f"## {table_name} -- {table_data.get('comment', '')}")
 
             # 主键
             if "primary_key" in table_data:
@@ -278,7 +287,20 @@ class OntologyBuilderTool(KodeTool):
                     col_info += " [NOT NULL]"
                 if col.get("autoincrement"):
                     col_info += " [AUTO_INCREMENT]"
+                # ✨ 新增：默认值（重要的业务初始状态）
+                if col.get("default") and str(col["default"]).lower() != "null":
+                    col_info += f" [DEFAULT: {col['default']}]"
                 lines.append(col_info)
+
+            # ✨ 新增：唯一约束（重要的业务规则）
+            if table_data.get("indexes"):
+                unique_indexes = [idx for idx in table_data["indexes"] if idx.get("unique")]
+                if unique_indexes:
+                    lines.append("  唯一约束:")
+                    for idx in unique_indexes:
+                        idx_cols = ", ".join(idx.get("columns", []))
+                        idx_name = idx.get("name", "unnamed")
+                        lines.append(f"    - {idx_cols} ({idx_name})")
 
             lines.append("")
 
@@ -293,11 +315,15 @@ class OntologyBuilderTool(KodeTool):
 
         return "\n".join(lines)
 
-    def _create_ontology_generation_prompt(self, schema_summary: str) -> str:
+    def _create_ontology_generation_prompt(self, schema_summary: str, connection_name: str, database: str, db_schema: Optional[str]) -> str:
         """创建用于本体生成的 AI prompt。"""
         return f"""你是一位资深的 ERP 系统架构师和业务分析专家。请分析以下数据库 schema，构建一个完整的业务本体（Ontology）。
 
 # 数据库 Schema
+
+连接名称: {connection_name}
+数据库: {database}
+Schema: {db_schema or "默认"}
 
 {schema_summary}
 
@@ -313,6 +339,11 @@ class OntologyBuilderTool(KodeTool):
    - domain: 所属业务领域（如：用户管理、订单管理、财务管理等）
    - importance: 重要性 (critical/high/medium/low)
    - primary_key: 主键字段列表
+   - data_source: 数据来源信息
+     - connection_name: 数据库连接名称
+     - database: 数据库名称
+     - schema: Schema名称（可选）
+     - table_name: 表名
 
 2. **Properties（属性）**: 每个字段的业务含义
    - technical_name: 技术名称（表名.字段名）
@@ -322,6 +353,12 @@ class OntologyBuilderTool(KodeTool):
    - data_type: 数据类型
    - nullable: 是否可空
    - concept: 所属概念（表名）
+   - data_source: 数据来源信息
+     - connection_name: 数据库连接名称
+     - database: 数据库名称
+     - schema: Schema名称（可选）
+     - table_name: 表名
+     - column_name: 字段名
 
 3. **Relationships（关系）**: 表之间的业务关系
    - from_concept: 源概念
@@ -349,11 +386,18 @@ class OntologyBuilderTool(KodeTool):
    - 必填字段的业务含义
    - 数据完整性规则
 
-7. **Recommendations（建议）**: 基于 schema 的优化建议
+7. **Uncertainties（不确定性列表）**: 基于 schema 分析得出的困扰点和不利于分析的因素
+   - type: 不确定性类型（schema_ambiguity/missing_constraint/naming_confusion/business_logic_unclear/data_quality_concern）
+   - category: 分类（数据模型/业务逻辑/命名规范/数据质量/关系推断）
+   - priority: 优先级（high/medium/low）
+   - entity: 相关实体（表名或 "整体"）
+   - question: 具体的疑问或困扰描述
+   - context: 产生困扰的上下文信息
+   - impact: 影响范围描述
 
 # 输出格式
 
-请严格按照以下 JSON 格式输出，不要有任何多余的解释：
+请严格按照以下 JSON 格式输出，不要有任何多余的文字解释，直接输出 JSON 字符串：
 
 ```json
 {{
@@ -365,7 +409,13 @@ class OntologyBuilderTool(KodeTool):
       "description": "详细的业务描述",
       "domain": "业务领域",
       "importance": "high",
-      "primary_key": ["id"]
+      "primary_key": ["id"],
+      "data_source": {{
+        "connection_name": "{connection_name}",
+        "database": "{database}",
+        "schema": "{db_schema or ""}",
+        "table_name": "table_name"
+      }}
     }}
   }},
   "properties": {{
@@ -376,7 +426,14 @@ class OntologyBuilderTool(KodeTool):
       "description": "属性的业务含义",
       "data_type": "VARCHAR",
       "nullable": false,
-      "concept": "table_name"
+      "concept": "table_name",
+      "data_source": {{
+        "connection_name": "{connection_name}",
+        "database": "{database}",
+        "schema": "{db_schema or ""}",
+        "table_name": "table_name",
+        "column_name": "column_name"
+      }}
     }}
   }},
   "relationships": [
@@ -409,9 +466,25 @@ class OntologyBuilderTool(KodeTool):
     "订单必须关联有效用户",
     "商品价格不能为负"
   ],
-  "recommendations": [
-    "建议为订单表添加状态字段",
-    "考虑添加用户行为日志表"
+  "uncertainties": [
+    {{
+      "type": "missing_constraint",
+      "category": "数据模型",
+      "priority": "high",
+      "entity": "orders",
+      "question": "订单表有多个，无法区分",
+      "context": "订单表order，platform_trade_order",
+      "impact": "影响订单状态管理、订单查询、业务分析等核心功能"
+    }},
+    {{
+      "type": "schema_ambiguity",
+      "category": "业务逻辑",
+      "priority": "medium",
+      "entity": "整体",
+      "question": "缺少用户行为日志表，无法进行用户行为分析",
+      "context": "当前 schema 仅有业务实体表（用户、订单、商品），缺少日志/事件表",
+      "impact": "限制了用户行为分析、推荐系统、安全审计等高级功能"
+    }}
   ]
 }}
 ```
@@ -423,21 +496,28 @@ class OntologyBuilderTool(KodeTool):
 - 推断隐式关系（如字段名包含 _id 后缀）
 - 识别常见的业务模式（用户-订单、分类-商品等）
 - 描述要准确、专业，体现对业务的深入理解
+- **重点关注不确定性（uncertainties）**：
+  * 仔细分析 schema 中的模糊点、缺失约束、命名不清晰等问题
+  * 从数据分析师/架构师的角度思考：哪些地方会让你困惑？哪些信息缺失会阻碍业务分析？
+  * 每个不确定性必须包含具体的 question（疑问）、context（上下文）、suggestions（解决建议）
+  * 优先级判断：high（严重影响数据分析和业务理解）、medium（有一定影响）、low（轻微影响）
 """
 
     def _extract_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
         """从 AI 输出中提取 JSON（可能包含 markdown 代码块）。"""
         import re
 
-        # 尝试从 markdown 代码块中提取
-        json_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
+        # 尝试从 markdown 代码块中提取（非贪婪匹配，处理大JSON）
+        json_pattern = r"```(?:json)?\s*(\{.*\})\s*```"
         matches = re.findall(json_pattern, text, re.DOTALL)
 
         if matches:
-            for match in matches:
+            # 从最长的匹配开始尝试（通常是完整的JSON）
+            for match in sorted(matches, key=len, reverse=True):
                 try:
                     return json.loads(match)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
+                    logger.debug(f"JSON解析失败: {str(e)}, 尝试下一个匹配")
                     continue
 
         # 尝试直接解析整个文本
@@ -446,19 +526,19 @@ class OntologyBuilderTool(KodeTool):
         except json.JSONDecodeError:
             pass
 
-        # 尝试查找第一个完整的 JSON 对象
-        json_object_pattern = r'\{(?:[^{}]|(?:\{[^{}]*\}))*\}'
-        matches = re.findall(json_object_pattern, text, re.DOTALL)
-
-        for match in matches:
+        # 尝试找到第一个{到最后一个}之间的内容（处理嵌套JSON）
+        start_idx = text.find('{')
+        end_idx = text.rfind('}')
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
             try:
-                parsed = json.loads(match)
-                # 检查是否包含必要的键
-                if "concepts" in parsed or "properties" in parsed:
+                potential_json = text[start_idx:end_idx+1]
+                parsed = json.loads(potential_json)
+                if "concepts" in parsed or "properties" in parsed or "business_domains" in parsed:
                     return parsed
             except json.JSONDecodeError:
-                continue
+                pass
 
+        logger.warning(f"无法提取JSON，文本长度: {len(text)}, 前200字符: {text[:200]}")
         return None
 
     def _save_ontology(
@@ -520,100 +600,421 @@ class OntologyBuilderTool(KodeTool):
                 "error": str(e),
             }
 
+    def _extract_schema_skeleton(self, schema_metadata: Dict[str, Any]) -> str:
+        """提取 schema 骨架（轻量级）用于阶段1。"""
+        tables = schema_metadata.get("tables", {})
+        lines = [f"数据库: {schema_metadata.get('database', '未知')}", f"总表数: {len(tables)}\n"]
 
-class OntologyStorageTool(KodeTool):
+        for table_name, table_data in sorted(tables.items()):
+            comment = table_data.get("comment", "")
+            lines.append(f"{table_name} -- {comment}")
+            pk_cols = []
+            if "primary_key" in table_data:
+                pk_cols = table_data["primary_key"].get("columns", [])
+            key_fields = [col["name"] for col in table_data.get("columns", [])
+                         if col["name"] in pk_cols or col["name"].endswith("_id")]
+            if key_fields:
+                lines.append(f"  关键字段: {', '.join(key_fields)}")
+        return "\n".join(lines)
+
+    def _ai_analyze_global_architecture(self, schema_skeleton: str, connection_name: str,
+                                       database: str, db_schema: Optional[str], model) -> Dict[str, Any]:
+        """阶段1：AI 分析全局架构。"""
+        from langchain_core.messages import HumanMessage
+
+        prompt = f"""你是数据库架构师。分析以下数据库，识别业务域和关系。
+
+# 数据库概览
+连接: {connection_name}
+数据库: {database}
+Schema: {db_schema or "默认"}
+
+{schema_skeleton}
+
+# 任务
+1. **业务域（Business Domains）**: 按功能将表分组
+2. **推断关系**: 基于字段名（xxx_id）推断表关系
+3. **架构模式**: 整体业务模式（SaaS/电商/ERP等）
+4. **核心流程**: 主要业务流程
+
+# 输出格式
+```json
+{{
+  "business_domains": {{
+    "域名1": ["table1", "table2"],
+    "域名2": ["table3", "table4"]
+  }},
+  "inferred_relationships": [
+    {{"from_table": "order", "from_field": "user_id", "to_table": "user", "to_field": "id",
+      "confidence": "high", "business_meaning": "订单属于用户"}}
+  ],
+  "architecture_pattern": "架构模式描述",
+  "core_processes": ["流程1", "流程2"],
+  "insights": "业务洞察"
+}}
+```
+只返回JSON。不要任何文字说明"""
+
+        response = model.invoke([HumanMessage(content=prompt)])
+        result = self._extract_json_from_text(response.content)
+        if not result:
+            logger.warning("阶段1失败，使用简单分批")
+            tables = [line.split("--")[0].strip() for line in schema_skeleton.split("\n")
+                     if line and not line.startswith("数据库") and not line.startswith("总表数") and not line.startswith("  ")]
+            batch_size = 25
+            result = {
+                "business_domains": {f"批次{i//batch_size+1}": tables[i:i+batch_size]
+                                    for i in range(0, len(tables), batch_size)},
+                "inferred_relationships": [],
+                "architecture_pattern": "未知",
+                "core_processes": [],
+                "insights": "自动分批"
+            }
+        return result
+
+    def _ai_build_domain_ontology(self, domain_name: str, domain_schema: Dict[str, Any],
+                                  global_context: Dict[str, Any], connection_name: str,
+                                  database: str, db_schema: Optional[str], model) -> Dict[str, Any]:
+        """阶段2：为业务域构建详细本体（携带全局上下文）。"""
+        from langchain_core.messages import HumanMessage
+
+        domain_schema_text = self._prepare_domain_schema(domain_schema)
+        prompt = f"""你是ERP架构师。为业务域 "{domain_name}" 构建详细本体。
+
+# 全局上下文
+架构: {global_context.get('architecture_pattern')}
+所有域: {list(global_context.get('business_domains', {}).keys())}
+全局关系: {json.dumps(global_context.get('inferred_relationships', [])[:5], ensure_ascii=False)}
+
+# 当前域: {domain_name}
+{domain_schema_text}
+
+# 任务
+为 "{domain_name}" 构建本体：
+1. **Concepts**: 每个表（technical_name, business_name_cn, business_name_en, description, domain, importance, primary_key, data_source）
+2. **Properties**: 每个字段（technical_name, business_name_cn, business_name_en, description, data_type, nullable, concept, data_source）
+3. **Relationships**: 域内+跨域关系
+4. **Hierarchies**: 层次结构
+5. **Uncertainties**: 不确定性
+
+# 输出格式
+```json
+{{
+  "concepts": {{}},
+  "properties": {{}},
+  "relationships": [],
+  "hierarchies": [],
+  "domain_insights": {{}},
+  "uncertainties": []
+}}
+```
+**重要**：必须为该域的每个表生成concept，包含跨域关系。只返回JSON。不要其他任何文字解释"""
+
+        response = model.invoke([HumanMessage(content=prompt)])
+        ontology_data = self._extract_json_from_text(response.content)
+        if not ontology_data or "concepts" not in ontology_data:
+            logger.error(f"域 {domain_name} 生成失败，AI输出前500字符: {response.content[:500]}")
+            return {"concepts": {}, "properties": {}, "relationships": [], "hierarchies": [],
+                   "domain_insights": {}, "uncertainties": []}
+
+        # 补充缺失的字段
+        result = {
+            "concepts": ontology_data.get("concepts", {}),
+            "properties": ontology_data.get("properties", {}),  # 保留AI生成的properties
+            "relationships": ontology_data.get("relationships", []),
+            "hierarchies": ontology_data.get("hierarchies", []),
+            "domain_insights": ontology_data.get("domain_insights", {}),
+            "uncertainties": ontology_data.get("uncertainties", [])
+        }
+        return result
+
+    def _prepare_domain_schema(self, domain_schema: Dict[str, Any]) -> str:
+        """为域准备详细schema文本（含样例数据智能摘要）。"""
+        lines = []
+        for table_name, table_data in sorted(domain_schema.items()):
+            lines.append(f"## {table_name} -- {table_data.get('comment', '')}")
+            if "primary_key" in table_data:
+                lines.append(f"  主键: {', '.join(table_data['primary_key'].get('columns', []))}")
+            lines.append("  列:")
+            for col in table_data.get("columns", []):
+                col_info = f"    - {col['name']} ({col['type']})"
+                if col.get("comment"):
+                    col_info += f" -- {col['comment']}"
+                if not col.get("nullable", True):
+                    col_info += " [NOT NULL]"
+                if col.get("default") and str(col["default"]).lower() != "null":
+                    col_info += f" [DEFAULT: {col['default']}]"
+                lines.append(col_info)
+            if table_data.get("indexes"):
+                unique_indexes = [idx for idx in table_data["indexes"] if idx.get("unique")]
+                if unique_indexes:
+                    lines.append("  唯一约束:")
+                    for idx in unique_indexes:
+                        lines.append(f"    - {', '.join(idx.get('columns', []))}")
+
+            # 添加样例数据（直接给AI所有数据）
+            sample_data = table_data.get("sample_data", {})
+            if sample_data and sample_data.get("rows"):
+                rows = sample_data["rows"]
+                row_count = sample_data.get("row_count", len(rows))
+                lines.append(f"  样例数据({row_count}条):")
+                for row in rows:
+                    lines.append(f"    {json.dumps(row, ensure_ascii=False)}")
+
+            lines.append("")
+        return "\n".join(lines)
+
+    def _ai_refine_cross_domain_relationships(self, domain_ontologies: Dict[str, Dict[str, Any]],
+                                             global_context: Dict[str, Any], connection_name: str,
+                                             model) -> Dict[str, Any]:
+        """阶段3：精炼跨域关系。"""
+        from langchain_core.messages import HumanMessage
+
+        domain_summary = {name: {"concepts": list(ont.get("concepts", {}).keys()),
+                                "concept_count": len(ont.get("concepts", {})),
+                                "relationships": ont.get("relationships", [])}
+                         for name, ont in domain_ontologies.items()}
+
+        prompt = f"""你是业务架构师。审查并完善跨域关系和全局业务规则。
+
+# 全局上下文
+{json.dumps(global_context, indent=2, ensure_ascii=False)}
+
+# 各域摘要
+{json.dumps(domain_summary, indent=2, ensure_ascii=False)}
+
+# 任务
+1. **补充跨域关系**: 检查遗漏的跨域关系（如 order.user_id -> user.id）
+2. **全局业务规则**: 跨域约束
+3. **全局层次结构**: 跨域层级（如：公司 -> 部门 -> 员工）
+4. **业务洞察**: 整体模式
+
+# 输出格式
+```json
+{{
+  "relationships": [{{"from_concept": "order", "to_concept": "user", "relationship_type": "foreign_key",
+                     "cardinality": "N:1", "business_meaning": "订单属于用户", "from_properties": ["user_id"],
+                     "to_properties": ["id"], "cross_domain": true}}],
+  "global_business_rules": [],
+  "global_hierarchies": [],
+  "global_insights": {{"primary_domain": "", "business_scenario": "", "architecture_pattern": ""}}
+}}
+```
+只返回JSON。"""
+
+        response = model.invoke([HumanMessage(content=prompt)])
+        result = self._extract_json_from_text(response.content)
+        if not result:
+            logger.warning("阶段3失败")
+            return {"relationships": [], "global_business_rules": [], "global_hierarchies": [], "global_insights": {}}
+        return result
+
+    def _merge_ontologies(self, domain_ontologies: Dict[str, Dict[str, Any]], cross_domain_insights: Dict[str, Any],
+                         global_context: Dict[str, Any], schema_metadata: Dict[str, Any],
+                         connection_name: str, model_manager) -> Dict[str, Any]:
+        """合并所有域的本体+跨域洞察。"""
+        all_concepts, all_properties, all_relationships, all_hierarchies, all_uncertainties = {}, {}, [], [], []
+
+        for ont in domain_ontologies.values():
+            all_concepts.update(ont.get("concepts", {}))
+            all_properties.update(ont.get("properties", {}))
+            all_relationships.extend(ont.get("relationships", []))
+            all_hierarchies.extend(ont.get("hierarchies", []))
+            all_uncertainties.extend(ont.get("uncertainties", []))
+
+        all_relationships.extend(cross_domain_insights.get("relationships", []))
+        all_hierarchies.extend(cross_domain_insights.get("global_hierarchies", []))
+        global_business_rules = cross_domain_insights.get("global_business_rules", [])
+
+        domain_insights = cross_domain_insights.get("global_insights", {})
+        if not domain_insights:
+            domain_insights = {
+                "primary_domain": global_context.get("architecture_pattern", "未知"),
+                "sub_domains": list(domain_ontologies.keys()),
+                "business_scenario": global_context.get("insights", ""),
+                "architecture_pattern": global_context.get("architecture_pattern", "未知")
+            }
+
+        return {
+            "metadata": {
+                "created_at": datetime.now().isoformat(),
+                "created_by": "ai_three_phase",
+                "model": model_manager.get_current_model_name(),
+                "source_database": schema_metadata.get("database"),
+                "source_connection": connection_name,
+                "table_count": schema_metadata.get("table_count", 0),
+                "build_method": "three_phase_batched",
+                "phase1_domains": len(global_context.get("business_domains", {})),
+                "phase2_domains": len(domain_ontologies),
+                "phase3_cross_relations": len(cross_domain_insights.get("relationships", []))
+            },
+            "concepts": all_concepts,
+            "properties": all_properties,
+            "relationships": all_relationships,
+            "hierarchies": all_hierarchies,
+            "domain_insights": domain_insights,
+            "business_rules": global_business_rules,
+            "uncertainties": all_uncertainties,
+            "recommendations": [],
+            "statistics": {
+                "concept_count": len(all_concepts),
+                "property_count": len(all_properties),
+                "relationship_count": len(all_relationships),
+                "hierarchy_count": len(all_hierarchies),
+                "uncertainty_count": len(all_uncertainties),
+            },
+        }
+
+
+class OntologyManagerInput(BaseModel):
+    """Input schema for OntologyManagerTool (unified storage and load)."""
+
+    operation: str = Field(description="Operation: 'save' or 'load'")
+    connection_name: str = Field(description="Database connection name")
+    ontology: Optional[Dict[str, Any]] = Field(default=None, description="Ontology data (for save)")
+    version: str = Field(default="latest", description="Version (for load) or 'auto' (for save)")
+
+
+class OntologyManagerTool(KodeTool):
     """
-    Store and version ontology models.
+    Manage ontology storage: save and load operations in one tool.
 
-    Supports multiple storage formats and versioning.
+    Unified tool for storing and retrieving ontologies.
     """
 
-    name: str = "OntologyStorage"
-    description: str = """Store ontology to persistent storage with versioning.
-    Supports JSON, RDF, and OWL formats. Creates versioned snapshots."""
+    name: str = "OntologyManager"
+    description: str = """Manage ontology storage (save/load).
+    - save: Store ontology with versioning
+    - load: Retrieve cached ontology (faster than rebuilding)"""
 
-    args_schema: Type[BaseModel] = OntologyStorageInput
-    requires_permission: bool = True
+    args_schema: Type[BaseModel] = OntologyManagerInput
+    requires_permission: bool = False
 
     def _run(
         self,
-        ontology: Dict[str, Any],
-        storage_path: str = "./ontology_store",
-        version: str = "v1.0",
-        format: str = "json",
+        operation: str,
+        connection_name: str,
+        ontology: Optional[Dict[str, Any]] = None,
+        version: str = "latest",
     ) -> str:
         """
-        Store ontology.
+        Manage ontology storage.
 
         Args:
-            ontology: Ontology data
-            storage_path: Storage directory
+            operation: 'save' or 'load'
+            connection_name: Connection name
+            ontology: Ontology data (for save)
             version: Version identifier
-            format: Storage format
 
         Returns:
-            Storage status message
+            Operation result as JSON
         """
-        try:
-            storage_dir = Path(storage_path)
-            storage_dir.mkdir(parents=True, exist_ok=True)
+        if operation == "save":
+            return self._save_ontology(ontology, connection_name, version)
+        elif operation == "load":
+            return self._load_ontology(connection_name, version)
+        else:
+            return json.dumps(
+                {"status": "error", "message": f"Invalid operation: {operation}"},
+                indent=2,
+            )
 
-            # Add version metadata
+    def _save_ontology(
+        self, ontology: Optional[Dict[str, Any]], connection_name: str, version: str
+    ) -> str:
+        """Save ontology to storage."""
+        if not ontology:
+            return json.dumps(
+                {"status": "error", "message": "Ontology data is required for save"},
+                indent=2,
+            )
+
+        try:
+            config = ConfigManager()
+            storage_path = config.get("storage.ontology_path", "./ontology_store")
+            conn_dir = Path(storage_path) / connection_name
+            conn_dir.mkdir(parents=True, exist_ok=True)
+
+            if version == "auto" or version == "latest":
+                version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
             ontology_with_meta = {
                 "version": version,
                 "stored_at": datetime.now().isoformat(),
-                "format": format,
+                "connection_name": connection_name,
                 "ontology": ontology,
             }
 
-            if format == "json":
-                file_path = storage_dir / f"ontology_{version}.json"
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
+            version_file = conn_dir / f"ontology_{version}.json"
+            with open(version_file, "w", encoding="utf-8") as f:
+                json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
 
-                # Also save latest version
-                latest_path = storage_dir / "ontology_latest.json"
-                with open(latest_path, "w", encoding="utf-8") as f:
-                    json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
+            latest_file = conn_dir / "ontology_latest.json"
+            with open(latest_file, "w", encoding="utf-8") as f:
+                json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
 
-                return json.dumps(
-                    {
-                        "status": "success",
-                        "message": f"Ontology stored successfully",
-                        "version": version,
-                        "format": format,
-                        "path": str(file_path),
-                        "latest_path": str(latest_path),
-                    },
-                    indent=2,
-                )
-
-            elif format in ["rdf", "owl"]:
-                return json.dumps(
-                    {
-                        "status": "warning",
-                        "message": f"{format.upper()} format not yet implemented",
-                        "suggestion": "Use JSON format for now",
-                    },
-                    indent=2,
-                )
-
-            else:
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"Unsupported format: {format}",
-                    },
-                    indent=2,
-                )
+            return json.dumps(
+                {
+                    "status": "success",
+                    "message": "Ontology saved",
+                    "version": version,
+                    "path": str(version_file),
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
 
         except Exception as e:
             return json.dumps(
-                {
-                    "status": "error",
-                    "message": f"Failed to store ontology: {str(e)}",
-                },
-                indent=2,
+                {"status": "error", "message": f"Save failed: {str(e)}"}, indent=2
+            )
+
+    def _load_ontology(self, connection_name: str, version: str) -> str:
+        """Load ontology from storage."""
+        try:
+            config = ConfigManager()
+            storage_path = config.get("storage.ontology_path", "./ontology_store")
+            conn_dir = Path(storage_path) / connection_name
+
+            if not conn_dir.exists():
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"No ontology for '{connection_name}'",
+                        "suggestion": "Build ontology first",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            if version == "latest":
+                ontology_file = conn_dir / "ontology_latest.json"
+            else:
+                ontology_file = conn_dir / f"ontology_{version}.json"
+
+            if not ontology_file.exists():
+                available = [f.stem.replace("ontology_", "") for f in conn_dir.glob("ontology_v*.json")]
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Version '{version}' not found",
+                        "available": available,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            with open(ontology_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            data["loaded_from_cache"] = True
+            data["loaded_at"] = datetime.now().isoformat()
+
+            return json.dumps(data, indent=2, ensure_ascii=False)
+
+        except Exception as e:
+            return json.dumps(
+                {"status": "error", "message": f"Load failed: {str(e)}"}, indent=2
             )
 
 
@@ -671,24 +1072,17 @@ class OntologySearchTool(KodeTool):
 
             results = {"concepts": [], "properties": [], "relationships": []}
 
-            if search_type == "exact":
-                # Exact match search
-                results = self._exact_search(ontology, query_lower)
+            # if search_type == "exact":
+            #     # Exact match search
+            #     results = self._semantic_search(ontology, query_lower)
 
-            elif search_type == "fuzzy":
-                # Fuzzy match search
-                results = self._fuzzy_search(ontology, query_lower, top_k)
+            # elif search_type == "fuzzy":
+            #     # Fuzzy match search
+            #     results = self._semantic_search(ontology, query_lower, top_k)
 
-            elif search_type == "semantic":
-                # TODO: Implement semantic search with embeddings
-                return json.dumps(
-                    {
-                        "status": "warning",
-                        "message": "Semantic search not yet implemented",
-                        "suggestion": "Use 'exact' or 'fuzzy' search type",
-                    },
-                    indent=2,
-                )
+            # elif search_type == "semantic":
+                # Semantic search with embeddings (ChromaDB)
+            results = self._semantic_search(ontology, query, top_k, ontology_path)
 
             return json.dumps(
                 {
@@ -737,9 +1131,15 @@ class OntologySearchTool(KodeTool):
         # Simple fuzzy matching based on substring and word matching
         concept_scores = []
         for concept_name, concept_data in ontology.get("concepts", {}).items():
-            score = self._calculate_fuzzy_score(
-                query, [concept_name, concept_data.get("business_name", "")]
-            )
+            # Search in multiple fields: technical name, business names (CN/EN), description
+            search_targets = [
+                concept_name,
+                concept_data.get("business_name_cn", ""),
+                concept_data.get("business_name_en", ""),
+                concept_data.get("description", ""),
+                concept_data.get("domain", "")
+            ]
+            score = self._calculate_fuzzy_score(query, search_targets)
             if score > 0:
                 concept_scores.append((score, concept_data))
 
@@ -750,9 +1150,15 @@ class OntologySearchTool(KodeTool):
         # Similar for properties
         property_scores = []
         for prop_key, prop_data in ontology.get("properties", {}).items():
-            score = self._calculate_fuzzy_score(
-                query, [prop_key, prop_data.get("business_name", "")]
-            )
+            # Search in multiple fields
+            search_targets = [
+                prop_key,
+                prop_data.get("business_name_cn", ""),
+                prop_data.get("business_name_en", ""),
+                prop_data.get("description", ""),
+                prop_data.get("domain", "")
+            ]
+            score = self._calculate_fuzzy_score(query, search_targets)
             if score > 0:
                 property_scores.append((score, prop_data))
 
@@ -762,9 +1168,16 @@ class OntologySearchTool(KodeTool):
         return results
 
     def _calculate_fuzzy_score(self, query: str, targets: List[str]) -> float:
-        """Calculate simple fuzzy match score."""
+        """
+        Calculate fuzzy match score with support for multi-keyword queries.
+
+        Supports both English word matching and Chinese substring matching.
+        """
         score = 0.0
-        query_words = set(query.lower().split())
+        query_lower = query.lower()
+
+        # Split query into words (for English) and keep original for Chinese char matching
+        query_words = set(query_lower.split())
 
         for target in targets:
             if not target:
@@ -772,99 +1185,534 @@ class OntologySearchTool(KodeTool):
 
             target_lower = target.lower()
 
-            # Exact match: highest score
-            if query == target_lower:
-                score += 10.0
+            # Strategy 1: Exact match (highest priority)
+            if query_lower == target_lower:
+                score += 100.0
+                continue
 
-            # Substring match
-            elif query in target_lower:
-                score += 5.0
+            # Strategy 2: Full substring match (high priority)
+            if query_lower in target_lower:
+                score += 50.0
+                continue
 
-            # Word overlap
+            # Strategy 3: Word/token overlap (for multi-keyword queries)
             target_words = set(target_lower.split())
-            overlap = len(query_words & target_words)
-            if overlap > 0:
-                score += overlap * 2.0
+            word_overlap = len(query_words & target_words)
+            if word_overlap > 0:
+                # Score proportional to overlap ratio
+                score += word_overlap * 10.0
+
+            # Strategy 4: Bidirectional substring matching (支持中文复合词匹配)
+            # Check if query words contain target OR target contains query words
+            for query_word in query_words:
+                # 查询词包含目标 (e.g., "订单金额" contains "订单")
+                if query_word in target_lower:
+                    score += 15.0
+                # 目标包含查询词 (e.g., "订单" in "订单金额")
+                elif target_lower in query_word:
+                    score += 12.0
 
         return score
 
-
-class OntologyLoadTool(KodeTool):
-    """
-    Load previously built ontology from storage.
-
-    Use this tool to retrieve cached ontology instead of rebuilding.
-    """
-
-    name: str = "OntologyLoad"
-    description: str = """Load previously built business ontology from storage.
-    This is much faster than rebuilding ontology. Use this when you need ontology
-    information and suspect it may have been built before."""
-
-    args_schema: Type[BaseModel] = OntologyLoadInput
-    requires_permission: bool = False
-
-    def _run(self, connection_name: str, version: str = "latest") -> str:
+    def _semantic_search(
+        self, ontology: Dict[str, Any], query: str, top_k: int, ontology_path: str
+    ) -> Dict[str, List]:
         """
-        Load ontology from storage.
+        Semantic search using ChromaDB vector embeddings.
 
         Args:
-            connection_name: Connection name
-            version: Version to load (latest or specific)
+            ontology: Ontology data structure
+            query: Search query
+            top_k: Number of results to return
+            ontology_path: Path to ontology storage (used for ChromaDB persistence)
 
         Returns:
-            Ontology data as JSON
+            Dictionary with concepts and properties matching the query
         """
         try:
-            config = ConfigManager()
-            storage_path = config.get("storage.ontology_path", "./ontology_store")
-            conn_dir = Path(storage_path) / connection_name
+            import chromadb
+            from chromadb.config import Settings
+        except ImportError:
+            logger.warning("ChromaDB not installed, falling back to fuzzy search")
+            return self._fuzzy_search(ontology, query.lower(), top_k)
 
-            if not conn_dir.exists():
+        try:
+            # Initialize ChromaDB client with persistence
+            chroma_dir = Path(ontology_path) / ".chroma"
+            chroma_dir.mkdir(exist_ok=True)
+
+            client = chromadb.PersistentClient(
+                path=str(chroma_dir),
+                settings=Settings(anonymized_telemetry=False)
+            )
+
+            # Get or create collections for concepts and properties
+            concepts_collection = client.get_or_create_collection(
+                name="ontology_concepts",
+                metadata={"hnsw:space": "cosine"}  # Use cosine similarity
+            )
+
+            properties_collection = client.get_or_create_collection(
+                name="ontology_properties",
+                metadata={"hnsw:space": "cosine"}
+            )
+
+            # Check if we need to index (collection is empty)
+            if concepts_collection.count() == 0:
+                self._index_ontology_to_chroma(
+                    ontology, concepts_collection, properties_collection
+                )
+
+            # Search concepts
+            concept_count = concepts_collection.count()
+            concept_results = None
+            if concept_count > 0:
+                concept_results = concepts_collection.query(
+                    query_texts=[query],
+                    n_results=min(top_k, concept_count)
+                )
+
+            # Search properties
+            property_count = properties_collection.count()
+            property_results = None
+            if property_count > 0:
+                property_results = properties_collection.query(
+                    query_texts=[query],
+                    n_results=min(top_k, property_count)
+                )
+
+            # Parse results and retrieve full ontology data
+            results: Dict[str, List] = {"concepts": [], "properties": [], "relationships": []}
+
+            # Add concepts
+            if concept_results and concept_results["ids"] and concept_results["ids"][0]:
+                for concept_id in concept_results["ids"][0]:
+                    if concept_id in ontology.get("concepts", {}):
+                        results["concepts"].append(ontology["concepts"][concept_id])
+
+            # Add properties
+            if property_results and property_results["ids"] and property_results["ids"][0]:
+                for prop_id in property_results["ids"][0]:
+                    if prop_id in ontology.get("properties", {}):
+                        results["properties"].append(ontology["properties"][prop_id])
+
+            return results
+
+        except Exception as e:
+            logger.warning(f"Semantic search failed: {e}, falling back to fuzzy search")
+            return self._fuzzy_search(ontology, query.lower(), top_k)
+
+    def _index_ontology_to_chroma(
+        self,
+        ontology: Dict[str, Any],
+        concepts_collection,
+        properties_collection
+    ):
+        """
+        Index ontology data into ChromaDB collections.
+
+        Args:
+            ontology: Ontology data structure
+            concepts_collection: ChromaDB collection for concepts
+            properties_collection: ChromaDB collection for properties
+        """
+        # Index concepts
+        concept_ids = []
+        concept_docs = []
+        concept_metadatas = []
+
+        for concept_name, concept_data in ontology.get("concepts", {}).items():
+            concept_ids.append(concept_name)
+
+            # Create rich text representation for embedding
+            doc_text = f"{concept_data.get('business_name_cn', '')} {concept_data.get('business_name_en', '')} {concept_data.get('description', '')} {concept_data.get('domain', '')}"
+            concept_docs.append(doc_text)
+
+            concept_metadatas.append({
+                "technical_name": concept_name,
+                "business_name": concept_data.get("business_name_cn", ""),
+                "domain": concept_data.get("domain", "")
+            })
+
+        if concept_ids:
+            concepts_collection.add(
+                ids=concept_ids,
+                documents=concept_docs,
+                metadatas=concept_metadatas
+            )
+
+        # Index properties
+        property_ids = []
+        property_docs = []
+        property_metadatas = []
+
+        for prop_key, prop_data in ontology.get("properties", {}).items():
+            property_ids.append(prop_key)
+
+            # Create rich text representation
+            doc_text = f"{prop_data.get('business_name_cn', '')} {prop_data.get('business_name_en', '')} {prop_data.get('description', '')} {prop_data.get('domain', '')}"
+            property_docs.append(doc_text)
+
+            property_metadatas.append({
+                "property_key": prop_key,
+                "business_name": prop_data.get("business_name_cn", ""),
+                "domain": prop_data.get("domain", "")
+            })
+
+        if property_ids:
+            properties_collection.add(
+                ids=property_ids,
+                documents=property_docs,
+                metadatas=property_metadatas
+            )
+
+        logger.info(f"Indexed {len(concept_ids)} concepts and {len(property_ids)} properties to ChromaDB")
+
+
+# OntologyLoadTool removed - merged into OntologyManagerTool
+
+
+# ==================== Ontology Quality and Uncertainty Tools ====================
+
+
+class OntologyQualityScoreInput(BaseModel):
+    """Input schema for OntologyQualityScoreTool."""
+
+    connection_name: str = Field(
+        description="Database connection name to evaluate ontology quality"
+    )
+
+
+class OntologyQualityScoreTool(KodeTool):
+    """
+    Evaluate ontology quality with multiple metrics.
+
+    Calculates completeness, consistency, richness, and uncertainty rate
+    to provide an overall quality score.
+    """
+
+    name: str = "OntologyQualityScore"
+    description: str = """Evaluate the quality of a stored ontology with detailed metrics.
+    Returns completeness, consistency, richness scores and identifies areas for improvement."""
+
+    args_schema: Type[BaseModel] = OntologyQualityScoreInput
+    requires_permission: bool = False
+
+    def _run(self, connection_name: str) -> str:
+        """
+        Evaluate ontology quality.
+
+        Args:
+            connection_name: Database connection name
+
+        Returns:
+            Quality evaluation results as JSON
+        """
+        try:
+            # Load ontology
+            ontology_path = Path("./ontology_store") / connection_name / "ontology_latest.json"
+
+            if not ontology_path.exists():
                 return json.dumps(
                     {
                         "status": "error",
-                        "message": f"No ontology found for connection '{connection_name}'",
-                        "suggestion": "Use OntologyBuilder to build ontology first",
+                        "message": f"Ontology for connection '{connection_name}' not found",
                     },
                     indent=2,
                     ensure_ascii=False,
                 )
 
-            # Load specific version or latest
-            if version == "latest":
-                ontology_file = conn_dir / "ontology_latest.json"
-            else:
-                ontology_file = conn_dir / f"ontology_{version}.json"
-
-            if not ontology_file.exists():
-                # List available versions
-                available = list(conn_dir.glob("ontology_v*.json"))
-                available_versions = [f.stem.replace("ontology_", "") for f in available]
-
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"Ontology version '{version}' not found",
-                        "available_versions": available_versions,
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-
-            with open(ontology_file, "r", encoding="utf-8") as f:
+            with open(ontology_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            data["loaded_from_cache"] = True
-            data["loaded_at"] = datetime.now().isoformat()
+            ontology = data.get("ontology", {})
+            concepts = ontology.get("concepts", {})
+            properties = ontology.get("properties", {})
+            relationships = ontology.get("relationships", [])
+            uncertainties = ontology.get("uncertainties", [])
 
-            return json.dumps(data, indent=2, ensure_ascii=False)
+            # Calculate quality metrics
+            completeness_score = self._calculate_completeness(concepts, properties)
+            consistency_score = self._calculate_consistency(concepts, properties)
+            richness_score = self._calculate_richness(concepts, properties, relationships)
+            uncertainty_rate = len(uncertainties) / max(len(concepts), 1)
+
+            # Overall score (weighted average)
+            overall_score = (
+                completeness_score * 0.35 +
+                consistency_score * 0.25 +
+                richness_score * 0.25 +
+                (1 - min(uncertainty_rate, 1)) * 0.15
+            )
+
+            # Identify issues
+            issues = []
+            recommendations = []
+
+            if completeness_score < 0.7:
+                issues.append("部分概念缺少中文名称或描述")
+                recommendations.append("补充缺失的业务名称和描述信息")
+
+            if consistency_score < 0.7:
+                issues.append("命名规范不一致")
+                recommendations.append("统一命名风格（如统一使用下划线或驼峰命名）")
+
+            if richness_score < 0.5:
+                issues.append("业务语义信息不够丰富")
+                recommendations.append("添加更多业务规则和领域洞察")
+
+            if uncertainty_rate > 0.3:
+                issues.append(f"存在 {len(uncertainties)} 个未解决的不确定性问题")
+                recommendations.append("使用 AskUser 工具向用户确认不确定性问题")
+
+            result = {
+                "status": "success",
+                "connection_name": connection_name,
+                "version": data.get("version"),
+                "overall_score": round(overall_score, 2),
+                "metrics": {
+                    "completeness": round(completeness_score, 2),
+                    "consistency": round(consistency_score, 2),
+                    "richness": round(richness_score, 2),
+                    "uncertainty_rate": round(uncertainty_rate, 2),
+                },
+                "statistics": {
+                    "concept_count": len(concepts),
+                    "property_count": len(properties),
+                    "relationship_count": len(relationships),
+                    "uncertainty_count": len(uncertainties),
+                },
+                "issues": issues,
+                "recommendations": recommendations,
+                "quality_level": self._get_quality_level(overall_score),
+            }
+
+            return json.dumps(result, indent=2, ensure_ascii=False)
 
         except Exception as e:
             return json.dumps(
                 {
                     "status": "error",
-                    "message": f"Failed to load ontology: {str(e)}",
+                    "message": f"Failed to evaluate ontology quality: {str(e)}",
                 },
                 indent=2,
+                ensure_ascii=False,
+            )
+
+    def _calculate_completeness(self, concepts: Dict, properties: Dict) -> float:
+        """Calculate completeness score (0-1)."""
+        total_items = len(concepts) + len(properties)
+        if total_items == 0:
+            return 0.0
+
+        complete_items = 0
+
+        # Check concepts
+        for concept in concepts.values():
+            has_cn_name = bool(concept.get("business_name_cn"))
+            has_description = bool(concept.get("description"))
+            has_domain = bool(concept.get("domain"))
+
+            if has_cn_name and has_description and has_domain:
+                complete_items += 1
+
+        # Check properties
+        for prop in properties.values():
+            has_cn_name = bool(prop.get("business_name_cn"))
+            has_description = bool(prop.get("description"))
+
+            if has_cn_name and has_description:
+                complete_items += 1
+
+        return complete_items / total_items
+
+    def _calculate_consistency(self, concepts: Dict, properties: Dict) -> float:
+        """Calculate naming consistency score (0-1)."""
+        all_names = [c.get("technical_name", "") for c in concepts.values()]
+        all_names.extend([p.split(".")[0] for p in properties.keys()])
+
+        if not all_names:
+            return 1.0
+
+        # Check naming patterns
+        snake_case_count = sum(1 for name in all_names if "_" in name and name.islower())
+        camel_case_count = sum(1 for name in all_names if name[0].islower() and any(c.isupper() for c in name))
+
+        total = len(all_names)
+        dominant_style_count = max(snake_case_count, camel_case_count)
+
+        return dominant_style_count / total if total > 0 else 1.0
+
+    def _calculate_richness(self, concepts: Dict, properties: Dict, relationships: List) -> float:
+        """Calculate semantic richness score (0-1)."""
+        if not concepts:
+            return 0.0
+
+        richness_score = 0.0
+
+        # Business rules weight: 0.3
+        has_business_rules = any(
+            concept.get("business_rules") for concept in concepts.values()
+        )
+        if has_business_rules:
+            richness_score += 0.3
+
+        # Relationships weight: 0.4
+        relationship_ratio = len(relationships) / len(concepts)
+        richness_score += min(relationship_ratio / 2, 0.4)
+
+        # Domain insights weight: 0.3
+        has_domain = sum(1 for c in concepts.values() if c.get("domain"))
+        domain_ratio = has_domain / len(concepts)
+        richness_score += domain_ratio * 0.3
+
+        return min(richness_score, 1.0)
+
+    def _get_quality_level(self, score: float) -> str:
+        """Get quality level description."""
+        if score >= 0.9:
+            return "优秀 (Excellent)"
+        elif score >= 0.75:
+            return "良好 (Good)"
+        elif score >= 0.6:
+            return "中等 (Fair)"
+        elif score >= 0.4:
+            return "较差 (Poor)"
+        else:
+            return "很差 (Very Poor)"
+
+
+class OntologyUncertaintyResolverInput(BaseModel):
+    """Input schema for OntologyUncertaintyResolverTool."""
+
+    connection_name: str = Field(
+        description="Database connection name"
+    )
+    uncertainty_index: int = Field(
+        description="Index of the uncertainty to resolve (0-based)"
+    )
+    resolution: str = Field(
+        description="User's answer/resolution to the uncertainty question"
+    )
+
+
+class OntologyUncertaintyResolverTool(KodeTool):
+    """
+    Resolve uncertainties in ontology by recording user answers.
+
+    This tool helps close the loop on AI-identified uncertainties by
+    capturing user clarifications and updating the ontology accordingly.
+    """
+
+    name: str = "OntologyUncertaintyResolver"
+    description: str = """Resolve an uncertainty in the ontology by recording user's answer.
+    Updates the ontology to mark the uncertainty as resolved and incorporates the clarification."""
+
+    args_schema: Type[BaseModel] = OntologyUncertaintyResolverInput
+    requires_permission: bool = False
+
+    def _run(
+        self,
+        connection_name: str,
+        uncertainty_index: int,
+        resolution: str
+    ) -> str:
+        """
+        Resolve an uncertainty.
+
+        Args:
+            connection_name: Database connection name
+            uncertainty_index: Index of uncertainty to resolve
+            resolution: User's clarification/answer
+
+        Returns:
+            Result as JSON
+        """
+        try:
+            # Load ontology
+            ontology_dir = Path("./ontology_store") / connection_name
+            ontology_path = ontology_dir / "ontology_latest.json"
+
+            if not ontology_path.exists():
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Ontology for connection '{connection_name}' not found",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            with open(ontology_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            ontology = data.get("ontology", {})
+            uncertainties = ontology.get("uncertainties", [])
+
+            if uncertainty_index < 0 or uncertainty_index >= len(uncertainties):
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Invalid uncertainty index: {uncertainty_index}. Valid range: 0-{len(uncertainties)-1}",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            # Get the uncertainty
+            uncertainty = uncertainties[uncertainty_index]
+
+            # Mark as resolved
+            uncertainty["status"] = "resolved"
+            uncertainty["resolution"] = resolution
+            uncertainty["resolved_at"] = datetime.now().isoformat()
+
+            # Save updated ontology with new version
+            version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+            data["version"] = version
+            data["updated_at"] = datetime.now().isoformat()
+
+            # Save new version
+            versioned_path = ontology_dir / f"ontology_{version}.json"
+            with open(versioned_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+            # Update latest
+            with open(ontology_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+            logger.info(
+                f"Resolved uncertainty {uncertainty_index} for connection '{connection_name}' "
+                f"(saved as {version})"
+            )
+
+            # Count remaining uncertainties
+            remaining_uncertainties = [u for u in uncertainties if u.get("status") != "resolved"]
+
+            result = {
+                "status": "success",
+                "connection_name": connection_name,
+                "version": version,
+                "resolved_uncertainty": {
+                    "index": uncertainty_index,
+                    "type": uncertainty.get("type"),
+                    "entity": uncertainty.get("entity"),
+                    "question": uncertainty.get("question"),
+                    "resolution": resolution,
+                },
+                "remaining_uncertainties": len(remaining_uncertainties),
+                "message": f"已解决不确定性 #{uncertainty_index}。剩余 {len(remaining_uncertainties)} 个未解决问题。",
+            }
+
+            return json.dumps(result, indent=2, ensure_ascii=False)
+
+        except Exception as e:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Failed to resolve uncertainty: {str(e)}",
+                },
+                indent=2,
+                ensure_ascii=False,
             )

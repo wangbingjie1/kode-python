@@ -6,23 +6,22 @@ from .file_tools import FileReadTool, FileWriteTool, FileEditTool
 from .grep_tool import GrepTool
 from .glob_tool import GlobTool
 from .memory_tools import MemoryReadTool, MemoryWriteTool
-from .web_tools import URLFetcherTool, WebSearchTool
-from .notebook_tools import NotebookReadTool, NotebookEditTool
+
 from .advanced_tools import MultiEditTool, TodoWriteTool, TaskTool
 from .database_tools import (
     DatabaseConnectTool,
-    DatabaseTestConnectionTool,
-    DatabaseDisconnectTool,
-    DatabaseListConnectionsTool,
     DatabaseSchemaExtractorTool,
+    DatabaseExecuteQueryTool,
 )
 from .ontology_tools import (
     OntologyBuilderTool,
-    OntologyStorageTool,
+    OntologyManagerTool,
     OntologySearchTool,
+    OntologyQualityScoreTool,
+    OntologyUncertaintyResolverTool,
 )
+from .interaction_tools import AskUserTool
 from .visualization_tools import ChartGeneratorTool
-from .insight_tools import InsightExtractorTool
 
 __all__ = [
     # Base
@@ -39,26 +38,21 @@ __all__ = [
     # Memory
     "MemoryReadTool",
     "MemoryWriteTool",
-    # Web
-    "URLFetcherTool",
-    "WebSearchTool",
-    # Notebooks
-    "NotebookReadTool",
-    "NotebookEditTool",
     # Advanced
     "TodoWriteTool",
     "TaskTool",
-    # Database
+    # Database (optimized: removed Test/Disconnect/List)
     "DatabaseConnectTool",
-    "DatabaseTestConnectionTool",
-    "DatabaseDisconnectTool",
-    "DatabaseListConnectionsTool",
     "DatabaseSchemaExtractorTool",
-    # Ontology
+    "DatabaseExecuteQueryTool",
+    # Ontology (optimized: merged Storage+Load -> Manager)
     "OntologyBuilderTool",
-    "OntologyStorageTool",
+    "OntologyManagerTool",
     "OntologySearchTool",
+    "OntologyQualityScoreTool",
+    "OntologyUncertaintyResolverTool",
+    # Interaction
+    "AskUserTool",
     # Visualization
     "ChartGeneratorTool",
-    "InsightExtractorTool",
 ]

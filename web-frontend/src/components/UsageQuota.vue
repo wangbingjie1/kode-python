@@ -1,30 +1,28 @@
 <template>
   <div class="usage-quota" v-if="usageSummary">
     <div class="quota-header">
-      <h4>配额使用情况</h4>
+      <h4>Token 用量（按 Token 计费）</h4>
       <span class="plan-badge">{{ currentPlan?.display_name || '未订阅' }}</span>
     </div>
 
     <div class="quota-items">
-      <!-- Token 使用量 -->
+      <!-- Token 使用量（主要计费指标）-->
       <div class="quota-item">
         <div class="quota-label">
-          <span>Token 使用</span>
+          <span><strong>Token 额度</strong></span>
           <span class="quota-text">{{ formatNumber(usageSummary.token_used) }} / {{ formatNumber(usageSummary.token_quota) }}</span>
         </div>
         <div class="progress-bar">
           <div class="progress-fill" :style="{ width: `${tokenPercentage}%`, backgroundColor: getProgressColor(tokenPercentage) }"></div>
         </div>
+        <div class="quota-hint">本周期剩余：{{ formatNumber(usageSummary.token_remaining) }} tokens</div>
       </div>
 
-      <!-- 消息使用量 -->
-      <div class="quota-item">
+      <!-- 消息使用量（仅统计）-->
+      <div class="quota-item stats-only">
         <div class="quota-label">
-          <span>消息数量</span>
-          <span class="quota-text">{{ usageSummary.message_used }} / {{ usageSummary.message_quota }}</span>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: `${messagePercentage}%`, backgroundColor: getProgressColor(messagePercentage) }"></div>
+          <span class="stats-label">消息数（仅统计）</span>
+          <span class="quota-text-secondary">{{ usageSummary.message_used }} 条</span>
         </div>
       </div>
     </div>
@@ -33,7 +31,7 @@
       <svg class="warning-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
-      <span>配额已用尽，请升级套餐</span>
+      <span>Token 配额已用尽，请升级套餐</span>
       <router-link to="/billing" class="upgrade-link">立即升级</router-link>
     </div>
   </div>
@@ -49,7 +47,6 @@ const usageSummary = computed(() => billingStore.usageSummary)
 const currentPlan = computed(() => billingStore.currentPlan)
 const isQuotaExceeded = computed(() => billingStore.isQuotaExceeded)
 const tokenPercentage = computed(() => billingStore.tokenUsagePercentage)
-const messagePercentage = computed(() => billingStore.messageUsagePercentage)
 
 function formatNumber(num: number): string {
   if (num >= 1000000) {
@@ -167,4 +164,28 @@ function getProgressColor(percentage: number): string {
 .upgrade-link:hover {
   text-decoration: underline;
 }
+
+/* 新增样式 */
+.quota-hint {
+  font-size: 0.75rem;
+  color: #78695c;
+  margin-top: 0.25rem;
+}
+
+.stats-only {
+  opacity: 0.7;
+  border-top: 1px dashed #eadfd3;
+  padding-top: 0.75rem;
+}
+
+.stats-label {
+  font-size: 0.75rem;
+  color: #78695c;
+}
+
+.quota-text-secondary {
+  font-size: 0.75rem;
+  color: #78695c;
+}
 </style>
+

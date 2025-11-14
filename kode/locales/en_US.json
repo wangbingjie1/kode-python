@@ -34,7 +34,7 @@
     "affected_rows": "Affected {rows} rows"
   },
   "middleware": {
-    "quota_exceeded": "Quota exceeded. Please upgrade your plan or wait for the next billing cycle"
+    "quota_exceeded": "Token quota exceeded. Please upgrade your plan or wait for the next billing cycle"
   },
   "startup": {
     "starting": "Starting Kode Web Service",

@@ -42,13 +42,7 @@ class GrepTool(KodeTool):
     """
 
     name: str = "Grep"
-    description: str = """Powerful search tool for finding patterns in code.
-- Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")
-- Filter files with glob parameter (e.g., "*.js", "**/*.py")
-- Output modes: content (matching lines), files_with_matches (file paths), count (match counts)
-- Use multiline=True for patterns spanning multiple lines
-- Pattern syntax uses ripgrep - literal braces need escaping
-- ALWAYS use Grep for search - NEVER use grep as bash command"""
+    description: str = """Search code with regex patterns. Supports glob filtering and multiline matching."""
     args_schema: Type[BaseModel] = GrepInput
     requires_permission: bool = False
 

@@ -25,12 +25,7 @@ class GlobTool(KodeTool):
     """
 
     name: str = "Glob"
-    description: str = """Fast file pattern matching tool.
-- Supports glob patterns like "**/*.js" or "src/**/*.ts"
-- Returns matching file paths sorted by modification time
-- Use this when you need to find files by name patterns
-- Works with any codebase size
-- DO NOT use 'find' command via Bash - use this tool instead"""
+    description: str = """Find files by pattern (e.g., **/*.py). Returns paths sorted by modification time."""
     args_schema: Type[BaseModel] = GlobInput
     requires_permission: bool = False
 
@@ -51,13 +46,36 @@ class GlobTool(KodeTool):
             # Sort by modification time (most recent first)
             matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
-            # Format results
-            results = [str(p.relative_to(search_path)) for p in matches if p.is_file()]
+            # Format results with file size
+            results = []
+            for p in matches:
+                if p.is_file():
+                    file_size = p.stat().st_size
+
+                    # Format size appropriately
+                    if file_size < 1024:
+                        size_str = f"{file_size} B"
+                    elif file_size < 1024 * 1024:
+                        size_str = f"{file_size / 1024:.1f} KB"
+                    else:
+                        size_str = f"{file_size / (1024 * 1024):.1f} MB"
+
+                    # Indicate large files with warning emoji
+                    warning = " ⚠️" if file_size > 50_000 else ""
+
+                    relative_path = str(p.relative_to(search_path))
+                    results.append(f"{relative_path} ({size_str}){warning}")
 
             if not results:
                 return f"No files found matching pattern: {pattern}"
 
-            return "\n".join(results)
+            # Add summary header
+            total_size = sum(p.stat().st_size for p in matches if p.is_file())
+            total_size_kb = total_size / 1024
+            header = f"Found {len(results)} file(s), total size: {total_size_kb:.1f} KB\n"
+            header += "⚠️ = Large file (>50KB), consider using Grep for targeted search\n\n"
+
+            return header + "\n".join(results)
 
         except Exception as e:
             return f"Error finding files: {str(e)}"

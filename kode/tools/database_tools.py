@@ -2,12 +2,13 @@
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 
 from kode.services.database_manager import DatabaseConnection, db_manager
 from kode.tools.base import KodeTool
@@ -63,15 +64,12 @@ class DatabaseSchemaExtractorInput(BaseModel):
     include_indexes: bool = Field(default=True, description="Include index information")
     include_relationships: bool = Field(default=True, description="Include foreign key relationships")
     include_statistics: bool = Field(default=False, description="Include table statistics")
+    include_sample_data: bool = Field(default=True, description="Include last 5 rows of sample data")
+    sample_row_limit: int = Field(default=5, description="Number of sample rows to extract (default 5)")
     auto_save: bool = Field(default=True, description="Automatically save schema to file")
     version: str = Field(default="auto", description="Version identifier (auto = timestamp)")
+    enable_progress: bool = Field(default=True, description="Enable progress callbacks for streaming")
 
-
-class SchemaLoadInput(BaseModel):
-    """Input schema for SchemaLoadTool."""
-
-    connection_name: str = Field(description="Connection name to load schema for")
-    version: str = Field(default="latest", description="Version to load (latest or specific version)")
 
 
 class DatabaseExecuteQueryInput(BaseModel):
@@ -189,138 +187,15 @@ class DatabaseConnectTool(KodeTool):
             )
 
 
-class DatabaseTestConnectionTool(KodeTool):
-    """Test an existing database connection."""
-
-    name: str = "DatabaseTestConnection"
-    description: str = "Test an existing database connection to verify it's working correctly."
-
-    args_schema: Type[BaseModel] = DatabaseTestConnectionInput
-    requires_permission: bool = False  # Read-only operation
-
-    def _run(self, connection_name: str) -> str:
-        """
-        Test database connection.
-
-        Args:
-            connection_name: Connection name to test
-
-        Returns:
-            Test result message
-        """
-        try:
-            result = db_manager.test_connection(connection_name)
-            return json.dumps(result, indent=2)
-
-        except Exception as e:
-            return json.dumps(
-                {
-                    "status": "error",
-                    "message": f"Failed to test connection: {str(e)}",
-                },
-                indent=2,
-            )
-
-
-class DatabaseDisconnectTool(KodeTool):
-    """Disconnect and remove a database connection."""
-
-    name: str = "DatabaseDisconnect"
-    description: str = "Disconnect from a database and remove the connection configuration."
-
-    args_schema: Type[BaseModel] = DatabaseDisconnectInput
-    requires_permission: bool = True
-
-    def _run(self, connection_name: str) -> str:
-        """
-        Disconnect from database.
-
-        Args:
-            connection_name: Connection name to disconnect
-
-        Returns:
-            Disconnection status message
-        """
-        try:
-            if db_manager.remove_connection(connection_name):
-                return json.dumps(
-                    {
-                        "status": "success",
-                        "message": f"Successfully disconnected from '{connection_name}'",
-                    },
-                    indent=2,
-                )
-            else:
-                return json.dumps(
-                    {
-                        "status": "warning",
-                        "message": f"Connection '{connection_name}' not found",
-                    },
-                    indent=2,
-                )
-
-        except Exception as e:
-            return json.dumps(
-                {
-                    "status": "error",
-                    "message": f"Failed to disconnect: {str(e)}",
-                },
-                indent=2,
-            )
-
-
-class DatabaseListConnectionsTool(KodeTool):
-    """List all available database connections."""
-
-    name: str = "DatabaseListConnections"
-    description: str = "List all configured database connections."
-
-    args_schema: Type[BaseModel] = DatabaseListConnectionsInput
-    requires_permission: bool = False
-
-    def _run(self) -> str:
-        """
-        List all connections.
-
-        Returns:
-            List of connection names and details
-        """
-        try:
-            connection_names = db_manager.list_connections()
-
-            if not connection_names:
-                return json.dumps(
-                    {
-                        "status": "success",
-                        "message": "No database connections configured",
-                        "connections": [],
-                    },
-                    indent=2,
-                )
-
-            connections = []
-            for name in connection_names:
-                conn = db_manager.get_connection(name)
-                if conn:
-                    connections.append(conn.to_dict())
-
-            return json.dumps(
-                {
-                    "status": "success",
-                    "message": f"Found {len(connections)} connection(s)",
-                    "connections": connections,
-                },
-                indent=2,
-            )
-
-        except Exception as e:
-            return json.dumps(
-                {
-                    "status": "error",
-                    "message": f"Failed to list connections: {str(e)}",
-                },
-                indent=2,
-            )
+# ==================== Removed Tools (Optimized) ====================
+# The following tools have been removed to reduce token usage:
+#
+# 1. DatabaseTestConnectionTool - Redundant, DatabaseConnectTool already tests connection (line 160)
+# 2. DatabaseDisconnectTool - Unnecessary, connection pool manages lifecycle automatically
+# 3. DatabaseListConnectionsTool - Redundant, frontend UI already lists connections via API
+#
+# Removed ~250 tokens total
+# ===================================================================
 
 
 class DatabaseSchemaExtractorTool(KodeTool):
@@ -329,15 +204,42 @@ class DatabaseSchemaExtractorTool(KodeTool):
     """
 
     name: str = "DatabaseSchemaExtractor"
-    description: str = """Extract complete database schema metadata including:
-    - Table definitions and column metadata
-    - Primary keys and foreign keys
-    - Indexes and constraints
-    - Foreign key relationships
-    - Optional table statistics"""
+    description: str = """Extract database schema metadata and save to file.
+
+    返回概要信息(表列表、列数、关系数等),完整 schema 自动保存到文件。
+
+    IMPORTANT: 此工具只返回 schema 概要,不返回完整数据(避免上下文溢出)。
+    如需查看完整 schema,使用 FileRead 读取返回的 file_path。
+
+    提取内容包括:
+    - 表定义和列元数据(数据类型、注释、默认值)
+    - 主键和外键约束
+    - 索引信息
+    - 表间关系图
+    - 可选的样例数据(每表前5行)
+
+    适用场景: 数据库探索、本体构建、数据分析。"""
 
     args_schema: Type[BaseModel] = DatabaseSchemaExtractorInput
     requires_permission: bool = False  # Read-only operation
+
+    # 进度回调函数（由外部设置）
+    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+
+    def _emit_progress(self, message: str, current: int, total: int, metadata: Dict[str, Any] = None):
+        """发送进度更新"""
+        if self.progress_callback:
+            try:
+                self.progress_callback({
+                    "type": "progress",
+                    "message": message,
+                    "current": current,
+                    "total": total,
+                    "percentage": int((current / total) * 100) if total > 0 else 0,
+                    "metadata": metadata or {}
+                })
+            except Exception:
+                pass  # 忽略回调错误
 
     def _run(
         self,
@@ -348,8 +250,11 @@ class DatabaseSchemaExtractorTool(KodeTool):
         include_indexes: bool = True,
         include_relationships: bool = True,
         include_statistics: bool = False,
+        include_sample_data: bool = True,
+        sample_row_limit: int = 5,
         auto_save: bool = True,
         version: str = "auto",
+        enable_progress: bool = True,
     ) -> str:
         """
         Extract database schema.
@@ -362,6 +267,8 @@ class DatabaseSchemaExtractorTool(KodeTool):
             include_indexes: Include indexes
             include_relationships: Include relationships
             include_statistics: Include statistics
+            include_sample_data: Include sample data (last N rows)
+            sample_row_limit: Number of sample rows to extract
 
         Returns:
             Schema metadata as JSON
@@ -382,81 +289,37 @@ class DatabaseSchemaExtractorTool(KodeTool):
 
             # Get table names
             table_names = tables if tables else inspector.get_table_names()
+            total_tables = len(table_names)
+
+            # 发送初始进度
+            if enable_progress:
+                self._emit_progress(f"开始提取 {total_tables} 个表的结构...", 0, total_tables)
 
             schema_data = {
                 "status": "success",
                 "connection": connection.to_dict(),
                 "database": connection.database,
                 "schema": connection.db_schema,
-                "table_count": len(table_names),
+                "table_count": total_tables,
                 "tables": {},
             }
 
-            # Extract metadata for each table
-            for table_name in table_names:
-                table_data: Dict[str, Any] = {"name": table_name}
+            # 并发批量提取表结构和样例数据（带进度）
+            schema_data["tables"] = self._extract_tables_batch(
+                connection_name=connection_name,
+                table_names=table_names,
+                include_columns=include_columns,
+                include_constraints=include_constraints,
+                include_indexes=include_indexes,
+                include_sample_data=include_sample_data,
+                sample_row_limit=sample_row_limit,
+                max_workers=10,
+                enable_progress=enable_progress
+            )
 
-                # Table comment
-                try:
-                    table_comment_info = inspector.get_table_comment(table_name)
-                    if table_comment_info and table_comment_info.get("text"):
-                        table_data["comment"] = table_comment_info["text"]
-                except NotImplementedError:
-                    # Some databases don't support table comments
-                    pass
-
-                # Columns
-                if include_columns:
-                    columns = inspector.get_columns(table_name)
-                    table_data["columns"] = [
-                        {
-                            "name": col["name"],
-                            "type": str(col["type"]),
-                            "nullable": col.get("nullable", True),
-                            "default": str(col.get("default")) if col.get("default") else None,
-                            "autoincrement": col.get("autoincrement", False),
-                            "comment": col.get("comment"),  # 添加字段注释
-                        }
-                        for col in columns
-                    ]
-                    table_data["column_count"] = len(columns)
-
-                # Primary Keys
-                if include_constraints:
-                    pk = inspector.get_pk_constraint(table_name)
-                    if pk and pk.get("constrained_columns"):
-                        table_data["primary_key"] = {
-                            "name": pk.get("name"),
-                            "columns": pk["constrained_columns"],
-                        }
-
-                    # Foreign Keys
-                    fks = inspector.get_foreign_keys(table_name)
-                    if fks:
-                        table_data["foreign_keys"] = [
-                            {
-                                "name": fk.get("name"),
-                                "columns": fk["constrained_columns"],
-                                "referred_table": fk["referred_table"],
-                                "referred_columns": fk["referred_columns"],
-                            }
-                            for fk in fks
-                        ]
-
-                # Indexes
-                if include_indexes:
-                    indexes = inspector.get_indexes(table_name)
-                    if indexes:
-                        table_data["indexes"] = [
-                            {
-                                "name": idx["name"],
-                                "columns": idx["column_names"],
-                                "unique": idx.get("unique", False),
-                            }
-                            for idx in indexes
-                        ]
-
-                schema_data["tables"][table_name] = table_data
+            # 完成进度
+            if enable_progress:
+                self._emit_progress(f"成功提取 {total_tables} 个表", total_tables, total_tables)
 
             # Build relationship graph
             if include_relationships:
@@ -479,12 +342,59 @@ class DatabaseSchemaExtractorTool(KodeTool):
             if include_statistics:
                 schema_data["statistics"] = self._get_statistics(connection_name, table_names)
 
+            # Add extraction timestamp
+            extraction_time = datetime.now().isoformat()
+            schema_data["extraction_time"] = extraction_time
+
             # Auto-save schema to file
+            save_result = None
             if auto_save:
                 save_result = self._save_schema(schema_data, connection_name, version)
                 schema_data["storage"] = save_result
 
-            return json.dumps(schema_data, indent=2, ensure_ascii=False)
+            # 构建概要信息(不返回完整数据,避免上下文爆炸)
+            # 注意: schema_data["tables"] 是字典 {table_name: table_data}, 不是列表
+            tables_dict = schema_data.get("tables", {})
+            summary = {
+                "status": "success",
+                "connection": schema_data["connection"],
+                "extraction_time": extraction_time,
+                "summary": {
+                    "total_tables": len(tables_dict),
+                    "table_list": [
+                        {
+                            "name": t["name"],
+                            "comment": t.get("comment", ""),
+                            "column_count": len(t.get("columns", [])),
+                            "has_primary_key": bool(t.get("primary_key")),
+                            "foreign_key_count": len(t.get("foreign_keys", [])),
+                            "index_count": len(t.get("indexes", [])),
+                            "sample_row_count": t.get("sample_data", {}).get("row_count", 0)
+                        }
+                        for t in tables_dict.values()  # 修复: 迭代字典的值,不是字典本身
+                    ],
+                    "total_relationships": len(schema_data.get("relationships", [])),
+                },
+                "message": f"成功提取 {len(tables_dict)} 个表的 schema 元数据"
+            }
+
+            # 如果自动保存,添加文件路径信息
+            if save_result and save_result.get("saved"):
+                summary["storage"] = {
+                    "status": "success",
+                    "file_path": save_result.get("latest_file"),
+                    "version": save_result.get("version"),
+                    "message": f"Schema 已保存到文件,使用 FileRead 工具读取完整内容: {save_result.get('latest_file')}"
+                }
+            elif save_result:
+                summary["storage"] = {
+                    "status": "error",
+                    "message": f"Schema 保存失败: {save_result.get('error', 'Unknown error')}"
+                }
+            else:
+                summary["warning"] = "Schema 未保存到文件 (auto_save=False),完整数据未持久化"
+
+            return json.dumps(summary, indent=2, ensure_ascii=False)
 
         except Exception as e:
             return json.dumps(
@@ -503,7 +413,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
             with engine.connect() as conn:
                 for table_name in table_names:
                     try:
-                        result = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
+                        result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
                         row_count = result.scalar()
                         stats[table_name] = {"row_count": row_count}
                     except Exception:
@@ -512,6 +422,549 @@ class DatabaseSchemaExtractorTool(KodeTool):
             pass
 
         return stats
+
+    def _get_sample_data(
+        self, connection_name: str, table_name: str, limit: int = 5
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get sample data from a table (fast sampling without sorting).
+
+        优化策略：
+        - 移除 ORDER BY 排序（大表排序极慢）
+        - 直接 LIMIT 取前 N 行（毫秒级响应）
+        - PostgreSQL 使用 TABLESAMPLE 快速采样
+
+        Args:
+            connection_name: Database connection name
+            table_name: Table name to sample
+            limit: Number of rows to retrieve
+
+        Returns:
+            Dictionary with sample data or None if failed
+        """
+        try:
+            engine = db_manager.get_engine(connection_name)
+            connection = db_manager.get_connection(connection_name)
+            db_type = connection.db_type.lower()
+
+            with engine.connect() as conn:
+                # 根据数据库类型构建快速查询（不排序）
+                if db_type == "postgresql":
+                    # PostgreSQL: 尝试使用 TABLESAMPLE 快速随机采样
+                    # 如果表太小会失败，fallback 到普通 LIMIT
+                    try:
+                        query = f"SELECT * FROM {table_name} TABLESAMPLE SYSTEM (1) LIMIT {limit}"
+                        result = conn.execute(text(query))
+                    except Exception:
+                        query = f"SELECT * FROM {table_name} LIMIT {limit}"
+                        result = conn.execute(text(query))
+                elif db_type in ["mysql", "sqlite"]:
+                    # MySQL/SQLite: 直接 LIMIT（不排序）
+                    query = f"SELECT * FROM {table_name} LIMIT {limit}"
+                    result = conn.execute(text(query))
+                elif db_type == "sqlserver":
+                    # SQL Server: TOP（不排序）
+                    query = f"SELECT TOP {limit} * FROM {table_name}"
+                    result = conn.execute(text(query))
+                elif db_type == "oracle":
+                    # Oracle: ROWNUM（不排序）
+                    query = f"SELECT * FROM {table_name} WHERE ROWNUM <= {limit}"
+                    result = conn.execute(text(query))
+                else:
+                    # 默认使用 LIMIT
+                    query = f"SELECT * FROM {table_name} LIMIT {limit}"
+                    result = conn.execute(text(query))
+
+                rows = result.fetchall()
+                columns = list(result.keys())
+
+                # 转换为字典列表
+                sample_rows = []
+                for row in rows:
+                    row_dict = {}
+                    for i, col in enumerate(columns):
+                        value = row[i]
+                        # 转换非 JSON 可序列化的类型
+                        if isinstance(value, datetime):
+                            value = value.isoformat()
+                        elif not isinstance(value, (str, int, float, bool, type(None))):
+                            value = str(value)
+                        row_dict[col] = value
+                    sample_rows.append(row_dict)
+
+                return {
+                    "row_count": len(sample_rows),
+                    "rows": sample_rows,
+                    "note": f"前 {len(sample_rows)} 行样例数据（快速采样，无排序）"
+                }
+
+        except Exception as e:
+            # 如果失败，返回错误信息而不是 None
+            return {
+                "row_count": 0,
+                "rows": [],
+                "error": str(e),
+                "note": "无法获取样例数据"
+            }
+
+    def _get_sample_data_batch(
+        self, connection_name: str, table_names: List[str], limit: int = 5, max_workers: int = 5
+    ) -> Dict[str, Any]:
+        """
+        Batch get sample data from multiple tables concurrently.
+
+        并发优化：使用线程池并行读取多表样例数据，大幅提升性能。
+
+        Args:
+            connection_name: Database connection name
+            table_names: List of table names to sample
+            limit: Number of rows per table
+            max_workers: Maximum concurrent threads
+
+        Returns:
+            Dictionary mapping table_name -> sample_data
+        """
+        results = {}
+
+        # 使用线程池并发读取
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # 提交所有任务
+            future_to_table = {
+                executor.submit(self._get_sample_data, connection_name, table_name, limit): table_name
+                for table_name in table_names
+            }
+
+            # 收集结果
+            for future in as_completed(future_to_table):
+                table_name = future_to_table[future]
+                try:
+                    sample_data = future.result()
+                    results[table_name] = sample_data
+                except Exception as e:
+                    results[table_name] = {
+                        "row_count": 0,
+                        "rows": [],
+                        "error": str(e),
+                        "note": "并发读取失败"
+                    }
+
+        return results
+
+    def _extract_single_table_metadata(
+        self,
+        connection_name: str,
+        table_name: str,
+        include_columns: bool,
+        include_constraints: bool,
+        include_indexes: bool,
+        include_sample_data: bool,
+        sample_row_limit: int
+    ) -> Dict[str, Any]:
+        """
+        Extract metadata for a single table.
+
+        Args:
+            connection_name: Database connection name
+            table_name: Table name
+            include_columns: Include column metadata
+            include_constraints: Include constraints
+            include_indexes: Include indexes
+            include_sample_data: Include sample data
+            sample_row_limit: Number of sample rows
+
+        Returns:
+            Table metadata dictionary
+        """
+        inspector = db_manager.get_inspector(connection_name)
+        table_data: Dict[str, Any] = {"name": table_name}
+
+        # Table comment
+        try:
+            table_comment_info = inspector.get_table_comment(table_name)
+            if table_comment_info and table_comment_info.get("text"):
+                table_data["comment"] = table_comment_info["text"]
+        except (NotImplementedError, Exception):
+            pass
+
+        # Columns
+        if include_columns:
+            columns = inspector.get_columns(table_name)
+            table_data["columns"] = [
+                {
+                    "name": col["name"],
+                    "type": str(col["type"]),
+                    "nullable": col.get("nullable", True),
+                    "default": str(col.get("default")) if col.get("default") else None,
+                    "autoincrement": col.get("autoincrement", False),
+                    "comment": col.get("comment"),
+                }
+                for col in columns
+            ]
+            table_data["column_count"] = len(columns)
+
+        # Primary Keys
+        if include_constraints:
+            pk = inspector.get_pk_constraint(table_name)
+            if pk and pk.get("constrained_columns"):
+                table_data["primary_key"] = {
+                    "name": pk.get("name"),
+                    "columns": pk["constrained_columns"],
+                }
+
+            # Foreign Keys
+            fks = inspector.get_foreign_keys(table_name)
+            if fks:
+                table_data["foreign_keys"] = [
+                    {
+                        "name": fk.get("name"),
+                        "columns": fk["constrained_columns"],
+                        "referred_table": fk["referred_table"],
+                        "referred_columns": fk["referred_columns"],
+                    }
+                    for fk in fks
+                ]
+
+        # Indexes
+        if include_indexes:
+            indexes = inspector.get_indexes(table_name)
+            if indexes:
+                table_data["indexes"] = [
+                    {
+                        "name": idx["name"],
+                        "columns": idx["column_names"],
+                        "unique": idx.get("unique", False),
+                    }
+                    for idx in indexes
+                ]
+
+        # Sample Data
+        if include_sample_data:
+            sample_data = self._get_sample_data(connection_name, table_name, sample_row_limit)
+            if sample_data:
+                table_data["sample_data"] = sample_data
+
+        return table_data
+
+    def _extract_all_tables_fast(
+        self, connection_name: str, table_names: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Fast batch extraction using information_schema (一次性查询所有表结构).
+
+        性能最优：单次 SQL 查询获取所有表、字段、约束信息。
+
+        Args:
+            connection_name: Database connection name
+            table_names: List of table names to extract
+
+        Returns:
+            Dictionary of {table_name: {columns: [...], primary_keys: [...], foreign_keys: [...]}}
+        """
+        engine = db_manager.get_engine(connection_name)
+        connection = db_manager.get_connection(connection_name)
+        db_type = connection.db_type.lower()
+
+        results = {name: {"name": name, "columns": [], "foreign_keys": []} for name in table_names}
+
+        table_list = "', '".join(table_names)
+
+        with engine.connect() as conn:
+            try:
+                # 1. 批量查询所有列信息（一次查询）
+                if db_type == "postgresql":
+                    columns_query = f"""
+                        SELECT
+                            table_name, column_name, data_type,
+                            is_nullable, column_default,
+                            col_description((table_schema||'.'||table_name)::regclass::oid, ordinal_position) as comment
+                        FROM information_schema.columns
+                        WHERE table_name IN ('{table_list}')
+                        ORDER BY table_name, ordinal_position
+                    """
+                elif db_type == "mysql":
+                    columns_query = f"""
+                        SELECT
+                            TABLE_NAME as table_name,
+                            COLUMN_NAME as column_name,
+                            DATA_TYPE as data_type,
+                            IS_NULLABLE as is_nullable,
+                            COLUMN_DEFAULT as column_default,
+                            COLUMN_COMMENT as comment
+                        FROM information_schema.COLUMNS
+                        WHERE TABLE_NAME IN ('{table_list}')
+                        ORDER BY TABLE_NAME, ORDINAL_POSITION
+                    """
+                elif db_type == "sqlite":
+                    # SQLite 不支持 information_schema，fallback 到并发模式
+                    return None
+                else:
+                    return None
+
+                result = conn.execute(text(columns_query))
+                for row in result:
+                    table_name = row[0]
+                    if table_name in results:
+                        results[table_name]["columns"].append({
+                            "name": row[1],
+                            "type": row[2],
+                            "nullable": row[3] == "YES",
+                            "default": row[4],
+                            "comment": row[5] if len(row) > 5 else None
+                        })
+
+                # 2. 批量查询主键
+                if db_type == "postgresql":
+                    pk_query = f"""
+                        SELECT
+                            tc.table_name,
+                            kcu.column_name
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu
+                            ON tc.constraint_name = kcu.constraint_name
+                        WHERE tc.constraint_type = 'PRIMARY KEY'
+                            AND tc.table_name IN ('{table_list}')
+                        ORDER BY tc.table_name, kcu.ordinal_position
+                    """
+                elif db_type == "mysql":
+                    pk_query = f"""
+                        SELECT
+                            TABLE_NAME as table_name,
+                            COLUMN_NAME as column_name
+                        FROM information_schema.KEY_COLUMN_USAGE
+                        WHERE CONSTRAINT_NAME = 'PRIMARY'
+                            AND TABLE_NAME IN ('{table_list}')
+                        ORDER BY TABLE_NAME, ORDINAL_POSITION
+                    """
+                else:
+                    pk_query = None
+
+                if pk_query:
+                    result = conn.execute(text(pk_query))
+                    pk_map = {}
+                    for row in result:
+                        table_name = row[0]
+                        if table_name not in pk_map:
+                            pk_map[table_name] = []
+                        pk_map[table_name].append(row[1])
+
+                    for table_name, pk_cols in pk_map.items():
+                        if table_name in results:
+                            results[table_name]["primary_key"] = {
+                                "name": "PRIMARY",
+                                "columns": pk_cols
+                            }
+
+                # 3. 批量查询外键
+                if db_type == "postgresql":
+                    fk_query = f"""
+                        SELECT
+                            tc.table_name,
+                            tc.constraint_name,
+                            kcu.column_name,
+                            ccu.table_name AS foreign_table_name,
+                            ccu.column_name AS foreign_column_name
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu
+                            ON tc.constraint_name = kcu.constraint_name
+                        JOIN information_schema.constraint_column_usage ccu
+                            ON ccu.constraint_name = tc.constraint_name
+                        WHERE tc.constraint_type = 'FOREIGN KEY'
+                            AND tc.table_name IN ('{table_list}')
+                    """
+                elif db_type == "mysql":
+                    fk_query = f"""
+                        SELECT
+                            TABLE_NAME as table_name,
+                            CONSTRAINT_NAME as constraint_name,
+                            COLUMN_NAME as column_name,
+                            REFERENCED_TABLE_NAME as foreign_table_name,
+                            REFERENCED_COLUMN_NAME as foreign_column_name
+                        FROM information_schema.KEY_COLUMN_USAGE
+                        WHERE REFERENCED_TABLE_NAME IS NOT NULL
+                            AND TABLE_NAME IN ('{table_list}')
+                    """
+                else:
+                    fk_query = None
+
+                if fk_query:
+                    result = conn.execute(text(fk_query))
+                    fk_map = {}
+                    for row in result:
+                        table_name = row[0]
+                        fk_name = row[1]
+                        key = (table_name, fk_name)
+                        if key not in fk_map:
+                            fk_map[key] = {
+                                "name": fk_name,
+                                "columns": [],
+                                "referred_table": row[3],
+                                "referred_columns": []
+                            }
+                        fk_map[key]["columns"].append(row[2])
+                        fk_map[key]["referred_columns"].append(row[4])
+
+                    for (table_name, _), fk_data in fk_map.items():
+                        if table_name in results:
+                            results[table_name]["foreign_keys"].append(fk_data)
+
+                return results
+
+            except Exception as e:
+                # 如果批量查询失败，返回 None，fallback 到并发模式
+                # 常见原因：查询超时、权限不足、数据库不支持
+                import logging
+                logging.warning(f"Fast schema extraction failed: {e}, falling back to concurrent mode")
+                return None
+
+    def _extract_tables_batch(
+        self,
+        connection_name: str,
+        table_names: List[str],
+        include_columns: bool,
+        include_constraints: bool,
+        include_indexes: bool,
+        include_sample_data: bool,
+        sample_row_limit: int,
+        max_workers: int = 10,
+        enable_progress: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Batch extract metadata for multiple tables concurrently.
+
+        优化策略：
+        1. 优先使用 information_schema 一次性批量查询（最快）
+        2. Fallback 到并发模式（适用于 SQLite 等不支持的数据库）
+
+        Args:
+            connection_name: Database connection name
+            table_names: List of table names
+            include_columns: Include column metadata
+            include_constraints: Include constraints
+            include_indexes: Include indexes
+            include_sample_data: Include sample data
+            sample_row_limit: Number of sample rows
+            max_workers: Maximum concurrent threads
+            enable_progress: Enable progress callbacks
+
+        Returns:
+            Dictionary mapping table_name -> table_metadata
+        """
+        total_tables = len(table_names)
+
+        # 尝试使用快速批量查询
+        if include_columns and include_constraints:
+            if enable_progress:
+                self._emit_progress("使用快速批量查询提取表结构...", 0, total_tables)
+
+            fast_results = self._extract_all_tables_fast(connection_name, table_names)
+            if fast_results:
+                # 补充 comment 和 column_count
+                for table_name, table_data in fast_results.items():
+                    if "columns" in table_data:
+                        table_data["column_count"] = len(table_data["columns"])
+
+                if enable_progress:
+                    self._emit_progress("表结构提取完成，开始读取样例数据...", total_tables // 2, total_tables)
+
+                # 补充样例数据（并发读取，带进度）
+                if include_sample_data:
+                    sample_data_map = self._get_sample_data_batch_with_progress(
+                        connection_name, table_names, sample_row_limit,
+                        max_workers=max_workers, enable_progress=enable_progress
+                    )
+                    for table_name, sample_data in sample_data_map.items():
+                        if table_name in fast_results:
+                            fast_results[table_name]["sample_data"] = sample_data
+
+                return fast_results
+
+        # Fallback: 使用线程池并发提取（兼容所有数据库）
+        if enable_progress:
+            self._emit_progress("使用并发模式提取表结构...", 0, total_tables)
+
+        results = {}
+        completed = 0
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_table = {
+                executor.submit(
+                    self._extract_single_table_metadata,
+                    connection_name,
+                    table_name,
+                    include_columns,
+                    include_constraints,
+                    include_indexes,
+                    include_sample_data,
+                    sample_row_limit
+                ): table_name
+                for table_name in table_names
+            }
+
+            for future in as_completed(future_to_table):
+                table_name = future_to_table[future]
+                try:
+                    table_data = future.result()
+                    results[table_name] = table_data
+                    completed += 1
+
+                    # 定期发送进度（每10个表或最后一个）
+                    if enable_progress and (completed % 10 == 0 or completed == total_tables):
+                        self._emit_progress(
+                            f"已提取 {completed}/{total_tables} 个表",
+                            completed, total_tables,
+                            {"current_table": table_name}
+                        )
+                except Exception as e:
+                    results[table_name] = {
+                        "name": table_name,
+                        "error": str(e),
+                        "note": "提取表结构失败"
+                    }
+                    completed += 1
+
+        return results
+
+    def _get_sample_data_batch_with_progress(
+        self, connection_name: str, table_names: List[str],
+        limit: int = 5, max_workers: int = 5, enable_progress: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Batch get sample data with progress reporting.
+        """
+        results = {}
+        total = len(table_names)
+        completed = 0
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_table = {
+                executor.submit(self._get_sample_data, connection_name, table_name, limit): table_name
+                for table_name in table_names
+            }
+
+            for future in as_completed(future_to_table):
+                table_name = future_to_table[future]
+                try:
+                    sample_data = future.result()
+                    results[table_name] = sample_data
+                    completed += 1
+
+                    # 定期发送进度（每5个表）
+                    if enable_progress and (completed % 5 == 0 or completed == total):
+                        self._emit_progress(
+                            f"已读取 {completed}/{total} 个表的样例数据",
+                            completed, total,
+                            {"current_table": table_name}
+                        )
+                except Exception as e:
+                    results[table_name] = {
+                        "row_count": 0,
+                        "rows": [],
+                        "error": str(e),
+                        "note": "并发读取失败"
+                    }
+                    completed += 1
+
+        return results
 
     def _save_schema(
         self, schema_data: Dict[str, Any], connection_name: str, version: str
@@ -573,85 +1026,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
             }
 
 
-class SchemaLoadTool(KodeTool):
-    """
-    Load previously extracted database schema from storage.
-
-    Use this tool to retrieve cached schema metadata instead of re-extracting.
-    """
-
-    name: str = "SchemaLoad"
-    description: str = """Load previously extracted database schema from storage.
-    This is much faster than re-extracting schema. Use this when you need schema
-    information and suspect it may have been extracted before."""
-
-    args_schema: Type[BaseModel] = SchemaLoadInput
-    requires_permission: bool = False
-
-    def _run(self, connection_name: str, version: str = "latest") -> str:
-        """
-        Load schema from storage.
-
-        Args:
-            connection_name: Connection name
-            version: Version to load (latest or specific)
-
-        Returns:
-            Schema data as JSON
-        """
-        try:
-            config = ConfigManager()
-            storage_path = config.get("storage.schema_path", "./schema_store")
-            conn_dir = Path(storage_path) / connection_name
-
-            if not conn_dir.exists():
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"No schema found for connection '{connection_name}'",
-                        "suggestion": "Use DatabaseSchemaExtractor to extract schema first",
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-
-            # Load specific version or latest
-            if version == "latest":
-                schema_file = conn_dir / "schema_latest.json"
-            else:
-                schema_file = conn_dir / f"schema_{version}.json"
-
-            if not schema_file.exists():
-                # List available versions
-                available = list(conn_dir.glob("schema_v*.json"))
-                available_versions = [f.stem.replace("schema_", "") for f in available]
-
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"Schema version '{version}' not found",
-                        "available_versions": available_versions,
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-
-            with open(schema_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            data["loaded_from_cache"] = True
-            data["loaded_at"] = datetime.now().isoformat()
-
-            return json.dumps(data, indent=2, ensure_ascii=False)
-
-        except Exception as e:
-            return json.dumps(
-                {
-                    "status": "error",
-                    "message": f"Failed to load schema: {str(e)}",
-                },
-                indent=2,
-            )
 
 
 class DatabaseExecuteQueryTool(KodeTool):

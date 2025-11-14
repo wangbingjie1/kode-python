@@ -19,6 +19,9 @@ class FileReadInput(BaseModel):
     limit: Optional[int] = Field(
         default=None, description="Number of lines to read (default: all)"
     )
+    force: bool = Field(
+        default=False, description="Force read large files without warning (default: False)"
+    )
 
 
 class FileReadTool(KodeTool):
@@ -39,7 +42,7 @@ class FileReadTool(KodeTool):
     requires_permission: bool = False  # Reading is generally safe
 
     def _run(
-        self, file_path: str, offset: Optional[int] = None, limit: Optional[int] = None
+        self, file_path: str, offset: Optional[int] = None, limit: Optional[int] = None, force: bool = False
     ) -> str:
         """Read file contents."""
         try:
@@ -49,6 +52,44 @@ class FileReadTool(KodeTool):
 
             if not path.is_file():
                 return f"Error: Not a file: {file_path}"
+
+            # Check file size and warn if large (unless using pagination or force)
+            file_size = path.stat().st_size
+            size_threshold = 50_0000  # 50KB threshold
+
+            if file_size > size_threshold and offset is None and not force:
+                estimated_tokens = file_size // 4  # Rough estimate: 1 token ≈ 4 chars
+                size_kb = file_size / 1024
+
+                return f"""⚠️ 大文件警告（上下文管理）
+
+文件信息:
+- 路径: {file_path}
+- 大小: {size_kb:.1f} KB
+- 估算 tokens: ~{estimated_tokens:,}
+
+建议的高效工作流:
+
+1️⃣ 使用 Grep 精确定位目标代码（带行号）:
+   Grep(
+       pattern="你要找的关键词或函数名",
+       path="{file_path}",
+       output_mode="content"
+   )
+   → 会返回: {path.name}:行号:匹配的代码
+
+2️⃣ 根据行号精确读取（节省 90%+ tokens）:
+   FileRead(
+       file_path="{file_path}",
+       offset=行号-10,
+       limit=50
+   )
+
+如果确实需要读取整个文件:
+   FileRead(file_path="{file_path}", force=True)
+
+💡 提示: 使用 Grep → FileRead(分页) 工作流可以节省 90%+ 的上下文消耗!
+"""
 
             with open(path, "r", encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()

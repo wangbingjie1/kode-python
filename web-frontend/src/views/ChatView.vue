@@ -76,6 +76,18 @@
               :message="item.message"
               :group-behavior="item.groupBehavior"
             />
+
+            <!-- Token Usage Card (显示在消息底部) -->
+            <TokenUsageCard
+              v-if="!isTyping"
+              :usage="conversationTokenUsage"
+            />
+
+            <!-- Token Cost Card (开发者模式 - 真实成本分析) -->
+            <TokenCostCard
+              v-if="!isTyping && isDevelopmentMode"
+              :usage="conversationTokenUsage"
+            />
           </template>
 
           <div v-else class="empty-state">
@@ -136,6 +148,13 @@
       @close="handleContextPanelClose"
     />
 
+    <!-- User Input Dialog -->
+    <UserInputDialog
+      :question="pendingUserInputQuestion"
+      @submit="handleUserInputSubmit"
+      @cancel="handleUserInputCancel"
+    />
+
     <!-- Context Panel (Mobile Sheet) -->
     <div
       v-if="contextPanelSheet && !isDesktopViewport"
@@ -162,11 +181,13 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import ChatInput from '@/components/ChatInput.vue'
 import ContextPanel from '@/components/ContextPanel.vue'
 import MessageItem from '@/components/MessageItem.vue'
+import TokenUsageCard from '@/components/TokenUsageCard.vue'
+import TokenCostCard from '@/components/TokenCostCard.vue'
+import UserInputDialog from '@/components/UserInputDialog.vue'
 import { notification } from '@/composables/useNotification'
-import { DEFAULT_PROJECT_ID } from '@/config/constants'
 import { useChatStore } from '@/stores/chat'
 import type { ChatMessage } from '@/stores/chat'
-import api from '@/services/api'
+import api, { getOrCreateDefaultProject } from '@/services/api'
 
 type TabId = 'chats' | 'database' | 'billing' | 'settings'
 
@@ -188,10 +209,17 @@ const contextPanelSheet = ref(false)
 const isDesktopViewport = ref(false)
 const showScrollToLatest = ref(false)
 const messageContainer = ref<HTMLElement | null>(null)
+const currentProjectId = ref<string | null>(null)
 
 const isConnected = computed(() => chatStore.isConnected)
+const isTyping = computed(() => chatStore.isTyping)
+const conversationTokenUsage = computed(() => chatStore.conversationTokenUsage)
+const pendingUserInputQuestion = computed(() => chatStore.pendingUserInput?.userInputQuestion || null)
 const currentConversationId = computed(() => route.params.conversationId as string)
 const conversationTitle = computed(() => chatStore.currentConversation?.title || '未命名会话')
+
+// 开发者模式（显示真实成本分析）
+const isDevelopmentMode = ref(import.meta.env.DEV || localStorage.getItem('dev_mode') === 'true')
 const lastUpdatedText = computed(() => {
   const updatedAt = chatStore.currentConversation?.updated_at
   if (!updatedAt) return ''
@@ -361,7 +389,12 @@ async function handleNewConversation() {
 
   isLoading.value = true
   try {
-    const conversation = await chatStore.createNewConversation(DEFAULT_PROJECT_ID, 'New chat')
+    // 确保有项目 ID
+    if (!currentProjectId.value) {
+      await ensureProjectId()
+    }
+
+    const conversation = await chatStore.createNewConversation(currentProjectId.value!, 'New chat')
     await loadConversations()
     await router.push(`/chat/${conversation.id}`)
     notification.success('已创建新会话', '', 2000, true)
@@ -396,10 +429,29 @@ async function handleDeleteConversation(conversationId: string) {
 
 async function loadConversations() {
   try {
-    const response = await api.get(`/chat/projects/${DEFAULT_PROJECT_ID}/conversations`)
+    // 确保有项目 ID
+    if (!currentProjectId.value) {
+      await ensureProjectId()
+    }
+
+    const response = await api.get(`/chat/projects/${currentProjectId.value}/conversations`)
     conversations.value = response.data
   } catch (error) {
     console.error('Error loading conversations:', error)
+  }
+}
+
+async function ensureProjectId() {
+  if (!currentProjectId.value) {
+    try {
+      const project = await getOrCreateDefaultProject()
+      currentProjectId.value = project.id
+      console.log('Loaded default project:', project.id)
+    } catch (error) {
+      console.error('Error loading default project:', error)
+      notification.error('加载项目失败', '无法获取默认项目，请刷新页面重试。')
+      throw error
+    }
   }
 }
 
@@ -409,6 +461,27 @@ function handleTabChange(tab: TabId) {
 
 function handleSidebarToggle() {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
+}
+
+/**
+ * 处理用户提交交互式问题的答案
+ */
+async function handleUserInputSubmit(answer: any) {
+  try {
+    await chatStore.submitUserResponse(answer)
+  } catch (error: any) {
+    console.error('[ChatView] Error submitting user response:', error)
+    // notification 已经在 chatStore 中处理
+  }
+}
+
+/**
+ * 处理用户取消回答
+ */
+function handleUserInputCancel() {
+  // 目前仅清除状态，不发送取消请求
+  // 如果需要发送取消信号给后端，可以在这里添加
+  notification.info('已取消', '您取消了回答问题', 2000)
 }
 
 async function initializeConversation() {
@@ -461,6 +534,7 @@ function setupViewportWatcher() {
 
 onMounted(async () => {
   setupViewportWatcher()
+  await ensureProjectId()
   await loadConversations()
   await initializeConversation()
   await nextTick()
@@ -612,7 +686,7 @@ onUnmounted(() => {
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem 1rem 1.5rem 1rem;
+  padding: 1.5rem 1rem 9rem 1rem;
   position: relative;
 }
 

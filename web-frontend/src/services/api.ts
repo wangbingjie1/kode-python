@@ -157,6 +157,14 @@ export async function listProjectConversations(projectId: string): Promise<Conve
 }
 
 /**
+ * Get or create default project for current user
+ */
+export async function getOrCreateDefaultProject(): Promise<any> {
+  const response = await apiClient.get('/projects/user/default')
+  return response.data
+}
+
+/**
  * Get system configuration
  */
 export async function getConfig(): Promise<any> {
@@ -347,9 +355,7 @@ export interface Plan {
   description: string
   price: number
   billing_period: 'monthly' | 'yearly'
-  token_quota: number
-  message_quota: number
-  conversation_quota: number
+  token_quota: number  // 唯一计费项
   database_connection_quota: number
   database_access: boolean
   advanced_analysis: boolean
@@ -383,9 +389,7 @@ export interface Usage {
   subscription_id: string | null
   period_start: string
   period_end: string
-  token_count: number
-  message_count: number
-  conversation_count: number
+  token_count: number  // 唯一计费项
   database_query_count: number
   created_at: string
   updated_at: string
@@ -394,16 +398,11 @@ export interface Usage {
 export interface UsageSummary {
   current_period_start: string
   current_period_end: string
-  token_used: number
-  token_quota: number
-  token_remaining: number
-  message_used: number
-  message_quota: number
-  message_remaining: number
-  conversation_count: number
-  conversation_quota: number
+  token_used: number  // 已使用 Token
+  token_quota: number  // Token 配额（唯一计费项）
+  token_remaining: number  // 剩余 Token
   database_query_count: number
-  is_quota_exceeded: boolean
+  is_quota_exceeded: boolean  // 是否超出 Token 配额
 }
 
 export interface CreateSubscriptionRequest {
@@ -498,6 +497,27 @@ export async function createStripeCheckout(
 ): Promise<StripeCheckoutResponse> {
   const response = await apiClient.post<StripeCheckoutResponse>(
     '/billing/stripe/checkout',
+    data
+  )
+  return response.data
+}
+
+/**
+ * Submit user response to interactive question
+ *
+ * Used when Agent calls AskUserTool and needs user input
+ */
+export interface UserResponsePayload {
+  answer: any  // string | boolean | string[]
+  question_type: 'text' | 'select' | 'multiselect' | 'confirm'
+}
+
+export async function submitUserResponse(
+  conversationId: string,
+  data: UserResponsePayload
+): Promise<{ success: boolean; message: string; conversation_id: string }> {
+  const response = await apiClient.post(
+    `/sse/chat/${conversationId}/user-response`,
     data
   )
   return response.data

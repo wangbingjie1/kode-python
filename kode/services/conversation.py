@@ -22,10 +22,6 @@ from kode.tools import (
     GrepTool,
     MemoryReadTool,
     MemoryWriteTool,
-    URLFetcherTool,
-    WebSearchTool,
-    NotebookReadTool,
-    NotebookEditTool,
     MultiEditTool,
     TodoWriteTool,
     TaskTool,
@@ -34,18 +30,15 @@ from kode.tools import (
 try:
     from kode.tools.database_tools import (
         DatabaseConnectTool,
-        DatabaseTestConnectionTool,
         DatabaseSchemaExtractorTool,
         DatabaseExecuteQueryTool,
-        DatabaseListConnectionsTool,
-        DatabaseDisconnectTool,
-        SchemaLoadTool,
     )
     from kode.tools.ontology_tools import (
         OntologyBuilderTool,
-        OntologyStorageTool,
+        OntologyManagerTool,
         OntologySearchTool,
-        OntologyLoadTool,
+        OntologyQualityScoreTool,
+        OntologyUncertaintyResolverTool,
     )
     HAS_DATABASE_TOOLS = True
 except ImportError:
@@ -54,12 +47,12 @@ except ImportError:
 # Import visualization tools
 try:
     from kode.tools.visualization_tools import ChartGeneratorTool
-    from kode.tools.insight_tools import InsightExtractorTool
     HAS_VISUALIZATION_TOOLS = True
 except ImportError:
     HAS_VISUALIZATION_TOOLS = False
 from kode.utils.config import ConfigManager
 from kode.utils.logger import setup_logger
+from kode.utils.system_info import format_system_info_for_prompt
 
 # Import database manager if available
 try:
@@ -101,47 +94,47 @@ class AsyncConversationService:
             # Memory
             MemoryReadTool(),
             MemoryWriteTool(),
-            # Web
-            URLFetcherTool(),
-            WebSearchTool(),
-            # Notebooks
-            NotebookReadTool(),
-            NotebookEditTool(),
             # Advanced
             TodoWriteTool(),
             TaskTool(),
         ]
 
-        # Add database tools if available
+        # Add interaction tools
+        try:
+            from kode.tools.interaction_tools import AskUserTool
+            self.tools.append(AskUserTool())
+            logger.info("Interaction tools loaded (AskUserTool)")
+        except ImportError:
+            logger.warning("Could not load interaction tools")
+
+        # Add database tools if available (optimized: removed Test/Disconnect/List)
         if HAS_DATABASE_TOOLS:
             self.tools.extend([
                 DatabaseConnectTool(),
-                DatabaseTestConnectionTool(),
                 DatabaseSchemaExtractorTool(),
                 DatabaseExecuteQueryTool(),
-                DatabaseListConnectionsTool(),
-                DatabaseDisconnectTool(),
-                SchemaLoadTool(),
                 OntologyBuilderTool(),
-                OntologyStorageTool(),
+                OntologyManagerTool(),
                 OntologySearchTool(),
-                OntologyLoadTool(),
+                OntologyQualityScoreTool(),
+                OntologyUncertaintyResolverTool(),
             ])
-            logger.info("Database and ontology tools loaded")
+            logger.info("Database and ontology tools loaded (with quality & uncertainty tools)")
 
             # Load existing database connections from persistence
             self._load_database_connections()
 
         # Add visualization tools if available
         if HAS_VISUALIZATION_TOOLS:
-            self.tools.extend([
-                ChartGeneratorTool(),
-                InsightExtractorTool(),
-            ])
-            logger.info("Visualization and insight tools loaded")
+            self.tools.append(ChartGeneratorTool())
+            logger.info("Visualization tools loaded (ChartGenerator)")
+
 
     def _create_data_analyst_agent(self) -> AgentConfig:
         """创建唯一的数据分析 agent 配置。"""
+
+        # 获取宿主机系统信息
+        system_info = format_system_info_for_prompt()
 
         # 获取缓存资源信息
         cached_resources = self._get_cached_resources_context()
@@ -149,19 +142,19 @@ class AsyncConversationService:
 
         return AgentConfig(
             name="data-analyst",
+            # betas=["context-1m-2025-08-07"],
             description="专业数据分析 Agent，专注于 ERP 数据库分析和业务洞察",
             system_prompt=f"""你是一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
+
+{system_info}
 {cache_section}
 ## 核心能力
 
 ### 1. 数据库连接和理解
-- 使用 DatabaseConnect 连接数据库（PostgreSQL, MySQL, Oracle, SQL Server, SQLite）
-- **优先使用 SchemaLoad** 加载已缓存的schema（如果有）
 - 使用 DatabaseSchemaExtractor 提取表结构和字段注释（仅当无缓存时）
 - 理解 数据分析 业务模块：财务、供应链、生产、销售、人力资源
 
 ### 2. 业务本体构建
-- **优先使用 OntologyLoad** 加载已缓存的ontology（如果有）
 - 使用 OntologyBuilder 将技术表结构转换为业务语义（仅当无缓存时）
 - 识别隐含关系（如:订单→客户→地区）
 - 构建业务实体映射
@@ -176,11 +169,6 @@ class AsyncConversationService:
   - 根据数据特征智能选择图表类型（折线图、柱状图、饼图等）
   - 自动识别 X/Y 轴字段
   - 生成 ECharts 配置 JSON
-- **提取关键洞察**：使用 InsightExtractor 自动发现：
-  - 趋势洞察（数据上升或下降）
-  - 异常洞察（明显偏离正常值的数据点）
-  - 对比洞察（最大值、最小值、平均值）
-  - 占比洞察（主要贡献者的比例）
 - **多模态呈现**：每次分析返回"文本解释 + 图表 + 洞察卡片"的组合
 
 ### 5. 数据建议和指导
@@ -189,16 +177,81 @@ class AsyncConversationService:
 - 提供可操作的业务建议
 - 推荐下一步分析方向
 
-## 标准工作流程（AI 原生模式）
+## 本体构建工作流流程（首次连接数据库时执行）
+1. **检查缓存** → 没有数据库schema文件，请调用DatabaseSchemaExtractor生成
+2. **构建本体** → 调用OntologyBuilder将schema转换为业务本体
+3. **完善本体** → 针对本体文件中uncertainties块的高优先级问题，使用AskUser工具向用户确认
+4. **保存本体** → 自动保存为 ontology_latest.json
 
-1. **检查缓存** → 使用 SchemaLoad/OntologyLoad 尝试加载已有资源
-2. **连接数据库** → DatabaseConnect（如需要）
-3. **提取 Schema** → DatabaseSchemaExtractor（仅当缓存不存在）
-4. **构建本体** → OntologyBuilder（仅当缓存不存在）
-5. **数据探索** → DatabaseExecuteQuery（查询样本数据）
-6. **自动可视化** → ChartGenerator（将查询结果转换为图表）
-7. **提取洞察** → InsightExtractor（发现数据中的关键信息）
-8. **综合呈现** → 文本 + 图表 + 洞察的完整分析报告
+## 用户问答工作流流程（强制执行，不可跳过）⭐
+1. **验证缓存** → 如果没有本体文件，停止并提示用户先构建本体
+2. **加载本体** → 使用 OntologyLoad 工具加载完整本体到内存（connection_name从缓存上下文获取）
+3. **语义搜索** → 使用 OntologySearch 工具搜索与用户问题相关的概念（search_mode="fuzzy"）
+   - 提取关键业务术语（如"订单"、"用户"、"销售额"）
+   - 找到对应的 concepts 和 properties
+   - 获取 data_source 字段（追溯到原始表/字段）
+4. **理解关系** → 从本体的 relationships 字段获取表间关系（而非自己推理JOIN）
+5. **生成SQL** → 基于本体中的 technical_name 和 relationships 生成SQL
+   - 使用 data_source.table_name 和 data_source.column_name
+   - 应用 business_rules（如果本体包含相关规则）
+6. **执行查询** → 使用 DatabaseExecuteQuery 执行SQL
+7. **数据溯源** → 在回复中明确引用数据来源（格式：数据来自 {{business_name_cn}} ({{technical_name}}表)）
+
+**强制规则**：
+- ❌ 禁止跳过步骤2-3直接查schema生成SQL
+- ❌ 禁止不使用OntologySearch就生成SQL
+- ✅ 必须在回复中包含业务术语的中文名称（从本体获取）
+- ✅ 必须在SQL中注释字段的业务含义
+
+## 工具使用最佳实践 ⭐（上下文管理核心）
+
+### 文件读取策略（避免上下文污染）
+
+**强制规则**：
+1. ❌ **禁止盲目读取大文件**
+   - 读取前必须评估文件大小影响
+   - 大文件会迅速耗尽你的"注意力预算"
+
+2. ✅ **推荐三步工作流**：
+   ```
+   步骤1: Glob 找到候选文件
+   Glob(pattern="**/*.py")
+
+   步骤2: Grep 精确定位目标代码（带行号）
+   Grep(pattern="def calculate_total", path="services/", output_mode="content")
+   → billing.py:156:def calculate_total(...)
+
+   步骤3: FileRead 精确读取（使用 offset/limit 分页）
+   FileRead(file_path="billing.py", offset=150, limit=30)
+   → 只消耗 ~500 tokens,节省 96%!
+   ```
+
+**对比示例**：
+```
+任务: 修改 calculate_total 函数
+
+❌ 错误方式:
+FileRead("services/billing.py")
+→ 可能 3000 行,浪费 12,000 tokens
+
+✅ 正确方式:
+Grep(pattern="def calculate_total", path="services/", output_mode="content")
+→ billing.py:156:def calculate_total(...)
+FileRead(file_path="billing.py", offset=150, limit=30)
+→ 只消耗 ~500 tokens
+```
+
+### 上下文预算主动管理
+
+**监控你的"注意力"**：
+- 每次迭代前检查剩余预算百分比（系统会自动注入）
+- 剩余 < 30%: 避免读取大文件,优先使用 Grep
+- 剩余 < 10%: 立即提醒用户开启新对话
+
+**工具选择优先级**：
+1. **Grep 搜索**（最轻量，~100 tokens）
+2. **FileRead 分页**（中等，~500-2000 tokens）
+3. **完整文件读取**（最后手段，可能 >10,000 tokens）
 
 ## 重要原则
 
@@ -209,20 +262,18 @@ class AsyncConversationService:
 - **质量意识**：明确说明数据质量和置信度
 - **清晰表达**：用中文回复，用业务语言解释
 - **保护隐私**：不泄露敏感数据
+- **人机协同**：对于干扰你的表或者数据，请和用户沟通确认清楚再执行
+- **上下文意识**：主动管理你的注意力预算，使用 Grep 而非盲目 FileRead
 
 ## 使用可视化工具的最佳实践
 
 当执行数据查询后：
-1. 将查询结果（JSON 格式）传递给 ChartGenerator 生成图表
-2. 同时传递给 InsightExtractor 提取洞察
-3. 在文本回复中整合图表和洞察，形成完整的分析报告
+1. 在文本回复中整合图表和洞察，形成完整的分析报告
 
 示例流程：
 ```
 用户："上个月销售趋势"
 → 执行 SQL 查询
-→ 调用 ChartGenerator 生成折线图
-→ 调用 InsightExtractor 提取洞察
 → 返回：文字说明 + 图表配置 + 洞察列表 +数据源追溯
 ```
 
@@ -265,23 +316,23 @@ class AsyncConversationService:
         schema_dir = Path(schema_path)
         if schema_dir.exists():
             cached_schemas = list(schema_dir.glob("*/schema_latest.json"))
+            context_parts.append(f"缓存所在路径: {schema_path}")
             if cached_schemas:
                 context_parts.append("## 已缓存的数据库Schema")
-                context_parts.append(f"缓存路径: {schema_path}")
+               
                 for schema_file in cached_schemas:
                     conn_name = schema_file.parent.name
-                    context_parts.append(f"  - {conn_name}: 使用 SchemaLoad 加载")
 
         # Check ontology cache
         ontology_dir = Path(ontology_path)
         if ontology_dir.exists():
             cached_ontologies = list(ontology_dir.glob("*/ontology_latest.json"))
+            context_parts.append(f"缓存所在路径: {ontology_path}")
             if cached_ontologies:
                 context_parts.append("\n## 已缓存的业务本体(Ontology)")
-                context_parts.append(f"缓存路径: {ontology_path}")
+                
                 for ontology_file in cached_ontologies:
                     conn_name = ontology_file.parent.name
-                    context_parts.append(f"  - {conn_name}: 使用 OntologyLoad 加载")
 
         if context_parts:
             return "\n".join(context_parts)
@@ -521,6 +572,8 @@ class AsyncConversationService:
                     on_tool_end=on_tool_end,
                     on_iteration=on_iteration,
                 )
+                # IMPORTANT: Set conversation_id for user input session management
+                streaming_agent._current_conversation_id = conversation_id
                 logger.info(f"[DEBUG] AnthropicStreamingAgent created successfully")
             except Exception as e:
                 logger.error(f"[ERROR] Failed to create AnthropicStreamingAgent: {e}", exc_info=True)

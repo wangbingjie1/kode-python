@@ -34,7 +34,7 @@
     "affected_rows": "影响 {rows} 行"
   },
   "middleware": {
-    "quota_exceeded": "配额已用尽，请升级套餐或等待下个计费周期"
+    "quota_exceeded": "Token 配额已用尽，请升级套餐或等待下个计费周期"
   },
   "startup": {
     "starting": "启动 Kode Web 服务",

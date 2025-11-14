@@ -13,7 +13,7 @@ import httpx
 import uuid
 
 from kode.database.session import get_db
-from kode.models import User, Plan
+from kode.models import User, Plan, Project
 from kode.schemas.auth import (
     UserRegister,
     UserLogin,

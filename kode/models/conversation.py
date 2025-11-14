@@ -28,9 +28,8 @@ class Conversation(Base):
     messages = relationship(
         "Message", back_populates="conversation", cascade="all, delete-orphan"
     )
-
-    # Virtual relationship to user through project
-    user = relationship("User", secondary="projects", viewonly=True)
+    # Note: Access user through conversation.project.user
+    # 不要使用 secondary="projects" 的错误定义，因为 projects 不是多对多中间表
 
     def __repr__(self):
         return f"<Conversation(id={self.id}, title={self.title})>"
