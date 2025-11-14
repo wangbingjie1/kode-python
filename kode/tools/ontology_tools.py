@@ -1099,57 +1099,46 @@ Schema: {db_schema or "默认"}
 
 
 class OntologyManagerInput(BaseModel):
-    """Input schema for OntologyManagerTool (unified storage and load)."""
+    """Input schema for OntologyManagerTool (save only)."""
 
-    operation: str = Field(description="Operation: 'save' or 'load'")
     connection_name: str = Field(description="Database connection name")
-    ontology: Optional[Dict[str, Any]] = Field(default=None, description="Ontology data (for save)")
-    version: str = Field(default="latest", description="Version (for load) or 'auto' (for save)")
+    ontology: Dict[str, Any] = Field(description="Ontology data to save")
+    version: str = Field(default="auto", description="Version identifier ('auto' for timestamp)")
 
 
 class OntologyManagerTool(KodeTool):
     """
-    Manage ontology storage: save and load operations in one tool.
+    Save ontology to storage with version control.
 
-    Unified tool for storing and retrieving ontologies.
+    This tool is responsible for persisting ontology data to disk.
     """
 
     name: str = "OntologyManager"
-    description: str = """Manage ontology storage (save/load).
-    - save: Store ontology with versioning
-    - load: Retrieve cached ontology (faster than rebuilding)"""
+    description: str = """Save ontology to storage with versioning.
+    Stores ontology as both a versioned file and updates the 'latest' pointer.
+    Use this to persist ontology data after building or updating."""
 
     args_schema: Type[BaseModel] = OntologyManagerInput
     requires_permission: bool = False
 
     def _run(
         self,
-        operation: str,
         connection_name: str,
-        ontology: Optional[Dict[str, Any]] = None,
-        version: str = "latest",
+        ontology: Dict[str, Any],
+        version: str = "auto",
     ) -> str:
         """
-        Manage ontology storage.
+        Save ontology to storage.
 
         Args:
-            operation: 'save' or 'load'
             connection_name: Connection name
-            ontology: Ontology data (for save)
-            version: Version identifier
+            ontology: Ontology data to save
+            version: Version identifier ('auto' for timestamp)
 
         Returns:
-            Operation result as JSON
+            Save result as JSON
         """
-        if operation == "save":
-            return self._save_ontology(ontology, connection_name, version)
-        elif operation == "load":
-            return self._load_ontology(connection_name, version)
-        else:
-            return json.dumps(
-                {"status": "error", "message": f"Invalid operation: {operation}"},
-                indent=2,
-            )
+        return self._save_ontology(ontology, connection_name, version)
 
     def _save_ontology(
         self, ontology: Optional[Dict[str, Any]], connection_name: str, version: str
@@ -1157,7 +1146,7 @@ class OntologyManagerTool(KodeTool):
         """Save ontology to storage."""
         if not ontology:
             return json.dumps(
-                {"status": "error", "message": "Ontology data is required for save"},
+                {"status": "error", "message": "Ontology data is required"},
                 indent=2,
             )
 
@@ -1167,7 +1156,7 @@ class OntologyManagerTool(KodeTool):
             conn_dir = Path(storage_path) / connection_name
             conn_dir.mkdir(parents=True, exist_ok=True)
 
-            if version == "auto" or version == "latest":
+            if version == "auto":
                 version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
             ontology_with_meta = {
@@ -1181,7 +1170,7 @@ class OntologyManagerTool(KodeTool):
             with open(version_file, "w", encoding="utf-8") as f:
                 json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
 
-            # 使用 copy 而不是重复写入
+            # 使用 copy 更新 latest 指针
             import shutil
             latest_file = conn_dir / "ontology_latest.json"
             shutil.copy2(version_file, latest_file)
@@ -1189,9 +1178,10 @@ class OntologyManagerTool(KodeTool):
             return json.dumps(
                 {
                     "status": "success",
-                    "message": "Ontology saved",
+                    "message": "Ontology saved successfully",
                     "version": version,
-                    "path": str(version_file),
+                    "versioned_path": str(version_file),
+                    "latest_path": str(latest_file),
                 },
                 indent=2,
                 ensure_ascii=False,
@@ -1200,54 +1190,6 @@ class OntologyManagerTool(KodeTool):
         except Exception as e:
             return json.dumps(
                 {"status": "error", "message": f"Save failed: {str(e)}"}, indent=2
-            )
-
-    def _load_ontology(self, connection_name: str, version: str) -> str:
-        """Load ontology from storage."""
-        try:
-            config = ConfigManager()
-            storage_path = config.get("storage.ontology_path", "./ontology_store")
-            conn_dir = Path(storage_path) / connection_name
-
-            if not conn_dir.exists():
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"No ontology for '{connection_name}'",
-                        "suggestion": "Build ontology first",
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-
-            if version == "latest":
-                ontology_file = conn_dir / "ontology_latest.json"
-            else:
-                ontology_file = conn_dir / f"ontology_{version}.json"
-
-            if not ontology_file.exists():
-                available = [f.stem.replace("ontology_", "") for f in conn_dir.glob("ontology_v*.json")]
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"Version '{version}' not found",
-                        "available": available,
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-
-            with open(ontology_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            data["loaded_from_cache"] = True
-            data["loaded_at"] = datetime.now().isoformat()
-
-            return json.dumps(data, indent=2, ensure_ascii=False)
-
-        except Exception as e:
-            return json.dumps(
-                {"status": "error", "message": f"Load failed: {str(e)}"}, indent=2
             )
 
 
@@ -1317,6 +1259,32 @@ class OntologySearchTool(KodeTool):
                 # Semantic search with embeddings (ChromaDB)
             results = self._semantic_search(ontology, query, top_k, ontology_path)
 
+            # 提取 uncertainties（完整列表）
+            uncertainties = ontology.get("uncertainties", [])
+
+            # 筛选与查询相关的不确定性（基于 entity 和 question）
+            related_uncertainties = []
+            unrelated_uncertainties = []
+
+            query_lower = query.lower()
+            for uncertainty in uncertainties:
+                entity = uncertainty.get("entity", "").lower()
+                question = uncertainty.get("question", "").lower()
+                context = uncertainty.get("context", "").lower()
+
+                # 判断是否相关（实体名匹配 OR 问题描述包含查询词）
+                is_related = (
+                    entity in query_lower or
+                    query_lower in entity or
+                    query_lower in question or
+                    query_lower in context
+                )
+
+                if is_related:
+                    related_uncertainties.append(uncertainty)
+                else:
+                    unrelated_uncertainties.append(uncertainty)
+
             return json.dumps(
                 {
                     "status": "success",
@@ -1324,8 +1292,15 @@ class OntologySearchTool(KodeTool):
                     "search_type": search_type,
                     "results": results,
                     "ontology_version": ontology_data.get("version"),
+                    "uncertainties": {
+                        "related": related_uncertainties,  # 与本次查询相关的不确定性
+                        "all_unresolved": [u for u in uncertainties if u.get("status") != "resolved"],  # 所有未解决的
+                        "total_count": len(uncertainties),
+                        "resolved_count": len([u for u in uncertainties if u.get("status") == "resolved"])
+                    }
                 },
                 indent=2,
+                ensure_ascii=False,
             )
 
         except Exception as e:

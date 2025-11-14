@@ -184,24 +184,98 @@ class AsyncConversationService:
 4. **保存本体** → 自动保存为 ontology_latest.json
 
 ## 用户问答工作流流程（强制执行，不可跳过）⭐
-1. **验证缓存** → 如果没有本体文件，停止并提示用户先构建本体
-2. **加载本体** → 使用 OntologyLoad 工具加载完整本体到内存（connection_name从缓存上下文获取）
-3. **语义搜索** → 使用 OntologySearch 工具搜索与用户问题相关的概念（search_mode="fuzzy"）
-   - 提取关键业务术语（如"订单"、"用户"、"销售额"）
-   - 找到对应的 concepts 和 properties
-   - 获取 data_source 字段（追溯到原始表/字段）
-4. **理解关系** → 从本体的 relationships 字段获取表间关系（而非自己推理JOIN）
-5. **生成SQL** → 基于本体中的 technical_name 和 relationships 生成SQL
-   - 使用 data_source.table_name 和 data_source.column_name
-   - 应用 business_rules（如果本体包含相关规则）
-6. **执行查询** → 使用 DatabaseExecuteQuery 执行SQL
-7. **数据溯源** → 在回复中明确引用数据来源（格式：数据来自 {{business_name_cn}} ({{technical_name}}表)）
+
+### 核心流程（5步法）
+
+1. **验证本体缓存**
+   - 如果没有本体文件 → 停止并提示用户先构建本体
+   - 找到本体文件 → 继续执行
+
+2. **语义搜索** → 使用 OntologySearch 工具（这一步会自动返回相关的 uncertainties）
+   - 从用户问题提取关键业务术语（如"订单"、"用户"、"销售额"）
+   - 搜索本体中的 concepts 和 properties
+   - **工具会自动返回以下内容**：
+     * results.concepts: 相关的业务概念（含 data_source）
+     * results.properties: 相关的属性（含 data_source）
+     * **uncertainties.related**: 与本次查询相关的不确定性列表 ⭐
+     * uncertainties.all_unresolved: 所有未解决的不确定性
+
+3. **分析不确定性（关键步骤！）** ⭐⭐⭐
+   - 检查 OntologySearch 返回的 `uncertainties.related` 列表
+   - **如果存在相关且未解决的不确定性**：
+     a. **优先处理 high priority 的不确定性**
+     b. **使用 AskUser 工具询问用户**，例如：
+        "您提到的'订单'，系统发现有2个订单表（order 和 platform_trade_order），请问您想查询的是哪个订单表？"
+     c. 等待用户回答后再继续
+     d. 可选：使用 OntologyUncertaintyResolver 工具记录用户的回答
+   - **如果没有相关不确定性** → 继续下一步
+
+4. **生成并执行 SQL**
+   - 从 OntologySearch 结果获取 data_source（表名、字段名）
+   - 从 relationships 获取表关联关系
+   - 生成 SQL（必须在注释中标注业务含义）
+   - 使用 DatabaseExecuteQuery 执行查询
+
+5. **结果展示（数据溯源）**
+   - 格式：数据来自 {{business_name_cn}} ({{technical_name}}表)
+   - 在回复中包含业务术语的中文名称
 
 **强制规则**：
-- ❌ 禁止跳过步骤2-3直接查schema生成SQL
-- ❌ 禁止不使用OntologySearch就生成SQL
+- ❌ 禁止跳过语义搜索步骤直接查 schema 生成 SQL
+- ❌ 禁止不使用 OntologySearch 就生成 SQL
+- ❌ 禁止忽略 uncertainties.related 列表中的 high priority 不确定性
+- ✅ **必须**检查并处理相关的不确定性（使用 AskUser 工具）
 - ✅ 必须在回复中包含业务术语的中文名称（从本体获取）
-- ✅ 必须在SQL中注释字段的业务含义
+- ✅ 必须在 SQL 中注释字段的业务含义
+
+### 示例：处理不确定性的正确流程
+
+**场景**：用户问"查询最近的订单"
+
+```
+步骤1: 使用 OntologySearch 搜索"订单"
+返回结果:
+{{
+  "results": {{
+    "concepts": [
+      {{"technical_name": "order", "business_name_cn": "订单", ...}},
+      {{"technical_name": "platform_trade_order", "business_name_cn": "平台交易订单", ...}}
+    ]
+  }},
+  "uncertainties": {{
+    "related": [
+      {{
+        "type": "schema_ambiguity",
+        "priority": "high",
+        "entity": "order",
+        "question": "系统中存在 order 和 platform_trade_order 两个订单表，无法区分用途",
+        "status": "unresolved"
+      }}
+    ]
+  }}
+}}
+
+步骤2: 发现 high priority 不确定性 → 使用 AskUser 工具
+AskUser({{
+  "question": "您好，系统中发现有两个订单表：\n1. order（订单表）\n2. platform_trade_order（平台交易订单表）\n请问您想查询的是哪个订单表？",
+  "context": "...",
+  "options": ["order", "platform_trade_order"]
+}})
+
+步骤3: 等待用户回答 → 用户选择 "platform_trade_order"
+
+步骤4: 生成 SQL 并执行
+SELECT * FROM platform_trade_order -- 平台交易订单表
+ORDER BY create_time DESC
+LIMIT 10;
+
+步骤5: 可选 - 记录用户的回答
+OntologyUncertaintyResolver({{
+  "connection_name": "erp_db",
+  "uncertainty_index": 0,
+  "resolution": "用户明确表示查询 platform_trade_order 表"
+}})
+```
 
 ## 工具使用最佳实践 ⭐（上下文管理核心）
 
