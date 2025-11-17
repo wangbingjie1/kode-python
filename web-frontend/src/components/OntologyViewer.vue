@@ -188,15 +188,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { listOntologies, getOntology, searchOntology } from '@/services/api'
 import { notification } from '@/composables/useNotification'
+import { use } from 'echarts/core'
+import { GraphChart } from 'echarts/charts'
+import { TooltipComponent, LegendComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+import VChart from 'vue-echarts'
+
+// 注册 ECharts 组件
+use([GraphChart, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const ontologies = ref<any[]>([])
 const selectedOntology = ref<any | null>(null)
 const searchQuery = ref('')
 const searchResults = ref<any[]>([])
 const currentTab = ref<'entities' | 'relationships' | 'graph'>('entities')
+
+// 图表配置
+const graphChart = ref<InstanceType<typeof VChart> | null>(null)
+const graphLayout = ref<'force' | 'circular'>('force')
+const nodeSize = ref(40)
+const showLabels = ref(true)
+const graphOption = ref<any>({})
 
 onMounted(async () => {
   await loadOntologies()
@@ -216,10 +231,147 @@ async function selectOntology(name: string) {
     searchResults.value = []
     searchQuery.value = ''
     currentTab.value = 'entities'
+    updateGraph()
   } catch (error: any) {
     notification.error('加载失败', error.message)
   }
 }
+
+// 构建图表数据
+function buildGraphData() {
+  if (!selectedOntology.value?.ontology) {
+    return { nodes: [], links: [], categories: [] }
+  }
+
+  const concepts = selectedOntology.value.ontology.concepts || {}
+  const relationships = selectedOntology.value.ontology.relationships || []
+
+  // 按领域分组
+  const domainColors: Record<string, string> = {
+    user_management: '#5470c6',
+    content_management: '#91cc75',
+    interaction_management: '#fac858',
+    payment_management: '#ee6666',
+    notification_management: '#73c0de',
+    system_management: '#3ba272',
+    analytics_management: '#fc8452',
+    default: '#9a60b4'
+  }
+
+  const domains = new Set<string>()
+  const nodes = Object.entries(concepts).map(([key, concept]: [string, any]) => {
+    const domain = concept.domain || 'default'
+    domains.add(domain)
+    return {
+      id: key,
+      name: concept.business_name_cn || concept.technical_name || key,
+      symbolSize: nodeSize.value,
+      category: domain,
+      value: concept.importance === 'high' ? 3 : concept.importance === 'medium' ? 2 : 1,
+      label: {
+        show: showLabels.value,
+        fontSize: 11
+      },
+      itemStyle: {
+        color: domainColors[domain] || domainColors.default
+      }
+    }
+  })
+
+  const links = relationships.map((rel: any) => ({
+    source: rel.source_concept,
+    target: rel.target_concept,
+    label: {
+      show: false,
+      formatter: rel.relationship_type
+    },
+    lineStyle: {
+      curveness: 0.2,
+      width: rel.strength === 'strong' ? 2 : 1
+    }
+  }))
+
+  const categories = Array.from(domains).map((domain) => ({
+    name: domain
+  }))
+
+  return { nodes, links, categories }
+}
+
+// 更新图表
+function updateGraph() {
+  const { nodes, links, categories } = buildGraphData()
+
+  graphOption.value = {
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: any) => {
+        if (params.dataType === 'node') {
+          return `<b>${params.name}</b><br/>领域: ${params.data.category}<br/>重要性: ${params.data.value}`
+        } else if (params.dataType === 'edge') {
+          return `${params.data.source} → ${params.data.target}`
+        }
+        return ''
+      }
+    },
+    legend: {
+      data: categories.map((c) => c.name),
+      orient: 'vertical',
+      left: 'left',
+      top: 'middle',
+      textStyle: {
+        fontSize: 12
+      }
+    },
+    series: [
+      {
+        type: 'graph',
+        layout: graphLayout.value,
+        data: nodes,
+        links: links,
+        categories: categories,
+        roam: true,
+        label: {
+          position: 'right',
+          formatter: '{b}'
+        },
+        labelLayout: {
+          hideOverlap: true
+        },
+        scaleLimit: {
+          min: 0.4,
+          max: 2
+        },
+        lineStyle: {
+          color: 'source',
+          curveness: 0.3
+        },
+        emphasis: {
+          focus: 'adjacency',
+          lineStyle: {
+            width: 3
+          }
+        },
+        force:
+          graphLayout.value === 'force'
+            ? {
+                repulsion: 400,
+                gravity: 0.1,
+                edgeLength: [100, 200],
+                layoutAnimation: true
+              }
+            : undefined
+      }
+    ]
+  }
+}
+
+// 监听选中本体变化
+watch(selectedOntology, () => {
+  if (selectedOntology.value) {
+    updateGraph()
+  }
+})
 
 async function search() {
   if (!selectedOntology.value || !searchQuery.value.trim()) {
@@ -588,22 +740,61 @@ function formatDate(dateStr: string): string {
 }
 
 .graph-view {
-  min-height: 500px;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  height: 100%;
+  min-height: 600px;
+}
+
+.graph-controls {
+  display: flex;
+  gap: 2rem;
+  padding: 1rem;
+  background: #f8f8f8;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.control-group {
+  display: flex;
   align-items: center;
+  gap: 0.5rem;
 }
 
-.graph-placeholder {
-  text-align: center;
-  color: #999;
-}
-
-.graph-placeholder p {
-  margin: 0.5rem 0;
-}
-
-.graph-hint {
+.control-group label {
   font-size: 0.875rem;
+  font-weight: 500;
+  color: #666;
+  white-space: nowrap;
+}
+
+.control-group select {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.control-group input[type='range'] {
+  width: 100px;
+}
+
+.control-group input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.control-group span {
+  font-size: 0.875rem;
+  color: #666;
+  min-width: 30px;
+}
+
+.graph-chart {
+  flex: 1;
+  min-height: 500px;
+  width: 100%;
 }
 </style>
