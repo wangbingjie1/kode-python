@@ -62,7 +62,7 @@ class FileReadTool(KodeTool):
                 # Quick estimation: if file is small enough, skip token counting
                 # Conservative estimate: 1 byte ≈ 0.6 tokens (works for mixed CN/EN content)
                 quick_estimate = int(file_size * 0.6)
-                token_threshold = 50_000  # 5万 tokens 阈值
+                token_threshold = 50_00  # 5万 tokens 阈值
 
                 if quick_estimate > token_threshold:
                     # Use tiktoken for accurate token counting
@@ -79,7 +79,7 @@ class FileReadTool(KodeTool):
                         actual_tokens = quick_estimate
 
                     if actual_tokens > token_threshold:
-                        return f"""⚠️ 大文件警告，无法一次性读取
+                        return f"""⚠️ 大文件警告，无法一次性读取，先确定行号范围，再查询
 文件信息:
 - 路径: {file_path}
 - 大小: {size_kb:.1f} KB

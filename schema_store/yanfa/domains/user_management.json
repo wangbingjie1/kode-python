@@ -1,9 +1,9 @@
 {
   "domain_name": "user_management",
   "display_name": "User Management",
-  "description": "Core user information, accounts, authentication, and user profiles including personal details and preferences.",
+  "description": "Core user information, authentication, accounts, devices, and user profiles across the platform.",
   "table_count": 11,
-  "created_at": "2025-11-17T14:24:48.721074",
+  "created_at": "2025-11-17T17:02:05.472229",
   "connection": {
     "name": "yanfa",
     "db_type": "mysql",
@@ -1182,95 +1182,6 @@
         "note": "前 0 行样例数据（快速采样，无排序）"
       }
     },
-    "platform_email_domain_blacklist": {
-      "name": "platform_email_domain_blacklist",
-      "columns": [
-        {
-          "name": "id",
-          "type": "bigint",
-          "nullable": false,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "domain",
-          "type": "varchar",
-          "nullable": false,
-          "default": null,
-          "comment": "邮箱域名"
-        },
-        {
-          "name": "reason",
-          "type": "varchar",
-          "nullable": true,
-          "default": "临时邮箱域名",
-          "comment": "拉黑原因"
-        },
-        {
-          "name": "create_at",
-          "type": "bigint",
-          "nullable": true,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "status",
-          "type": "tinyint",
-          "nullable": true,
-          "default": "1",
-          "comment": "状态：1=启用，0=禁用"
-        }
-      ],
-      "foreign_keys": [],
-      "primary_key": {
-        "name": "PRIMARY",
-        "columns": [
-          "id"
-        ]
-      },
-      "column_count": 5,
-      "sample_data": {
-        "row_count": 5,
-        "rows": [
-          {
-            "id": 1,
-            "domain": "tmpmail.net",
-            "reason": "临时邮箱域名 - 发现大量黑客使用",
-            "create_at": 1749874608000,
-            "status": 1
-          },
-          {
-            "id": 2,
-            "domain": "disbox.net",
-            "reason": "临时邮箱域名 - 发现大量黑客使用",
-            "create_at": 1749874608000,
-            "status": 1
-          },
-          {
-            "id": 3,
-            "domain": "moakt.ws",
-            "reason": "临时邮箱域名 - 发现大量黑客使用",
-            "create_at": 1749874608000,
-            "status": 1
-          },
-          {
-            "id": 4,
-            "domain": "bareed.ws",
-            "reason": "临时邮箱域名 - 发现大量黑客使用",
-            "create_at": 1749874608000,
-            "status": 1
-          },
-          {
-            "id": 5,
-            "domain": "tmpbox.net",
-            "reason": "临时邮箱域名 - 发现大量黑客使用",
-            "create_at": 1749874608000,
-            "status": 1
-          }
-        ],
-        "note": "前 5 行样例数据（快速采样，无排序）"
-      }
-    },
     "user": {
       "name": "user",
       "columns": [
@@ -1641,6 +1552,95 @@
         "note": "前 0 行样例数据（快速采样，无排序）"
       }
     },
+    "pre_signup": {
+      "name": "pre_signup",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "email",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "用户email"
+        },
+        {
+          "name": "source",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "用户来源"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "创建时间"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "更新时间"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 5,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 11,
+            "email": "1178377059@qq.com",
+            "source": null,
+            "created_at": "2025-10-21T12:14:32",
+            "updated_at": "2025-10-21T12:14:32"
+          },
+          {
+            "id": 12,
+            "email": "rRooBet9001@protonmail.com",
+            "source": null,
+            "created_at": "2025-10-21T12:15:12",
+            "updated_at": "2025-10-21T12:15:12"
+          },
+          {
+            "id": 19,
+            "email": "antoine.becotte2@qolab.ca",
+            "source": null,
+            "created_at": "2025-10-21T12:18:51",
+            "updated_at": "2025-10-21T12:18:51"
+          },
+          {
+            "id": 27,
+            "email": "v9bg4@8mtz.com",
+            "source": null,
+            "created_at": "2025-10-21T12:32:49",
+            "updated_at": "2025-10-21T12:32:49"
+          },
+          {
+            "id": 28,
+            "email": "eugenianguyen1914@tubermail.com",
+            "source": null,
+            "created_at": "2025-10-21T12:34:09",
+            "updated_at": "2025-10-21T12:34:09"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
     "backup_disabled_blacklist_accounts": {
       "name": "backup_disabled_blacklist_accounts",
       "columns": [
@@ -2000,8 +2000,8 @@
         "note": "前 5 行样例数据（快速采样，无排序）"
       }
     },
-    "pre_signup": {
-      "name": "pre_signup",
+    "platform_email_domain_blacklist": {
+      "name": "platform_email_domain_blacklist",
       "columns": [
         {
           "name": "id",
@@ -2011,32 +2011,32 @@
           "comment": ""
         },
         {
-          "name": "email",
+          "name": "domain",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "邮箱域名"
+        },
+        {
+          "name": "reason",
           "type": "varchar",
           "nullable": true,
-          "default": null,
-          "comment": "用户email"
+          "default": "临时邮箱域名",
+          "comment": "拉黑原因"
         },
         {
-          "name": "source",
-          "type": "varchar",
+          "name": "create_at",
+          "type": "bigint",
           "nullable": true,
           "default": null,
-          "comment": "用户来源"
+          "comment": ""
         },
         {
-          "name": "created_at",
-          "type": "timestamp",
-          "nullable": false,
-          "default": "CURRENT_TIMESTAMP",
-          "comment": "创建时间"
-        },
-        {
-          "name": "updated_at",
-          "type": "timestamp",
-          "nullable": false,
-          "default": "CURRENT_TIMESTAMP",
-          "comment": "更新时间"
+          "name": "status",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "1",
+          "comment": "状态：1=启用，0=禁用"
         }
       ],
       "foreign_keys": [],
@@ -2051,39 +2051,39 @@
         "row_count": 5,
         "rows": [
           {
-            "id": 11,
-            "email": "1178377059@qq.com",
-            "source": null,
-            "created_at": "2025-10-21T12:14:32",
-            "updated_at": "2025-10-21T12:14:32"
+            "id": 1,
+            "domain": "tmpmail.net",
+            "reason": "临时邮箱域名 - 发现大量黑客使用",
+            "create_at": 1749874608000,
+            "status": 1
           },
           {
-            "id": 12,
-            "email": "rRooBet9001@protonmail.com",
-            "source": null,
-            "created_at": "2025-10-21T12:15:12",
-            "updated_at": "2025-10-21T12:15:12"
+            "id": 2,
+            "domain": "disbox.net",
+            "reason": "临时邮箱域名 - 发现大量黑客使用",
+            "create_at": 1749874608000,
+            "status": 1
           },
           {
-            "id": 19,
-            "email": "antoine.becotte2@qolab.ca",
-            "source": null,
-            "created_at": "2025-10-21T12:18:51",
-            "updated_at": "2025-10-21T12:18:51"
+            "id": 3,
+            "domain": "moakt.ws",
+            "reason": "临时邮箱域名 - 发现大量黑客使用",
+            "create_at": 1749874608000,
+            "status": 1
           },
           {
-            "id": 27,
-            "email": "v9bg4@8mtz.com",
-            "source": null,
-            "created_at": "2025-10-21T12:32:49",
-            "updated_at": "2025-10-21T12:32:49"
+            "id": 4,
+            "domain": "bareed.ws",
+            "reason": "临时邮箱域名 - 发现大量黑客使用",
+            "create_at": 1749874608000,
+            "status": 1
           },
           {
-            "id": 28,
-            "email": "eugenianguyen1914@tubermail.com",
-            "source": null,
-            "created_at": "2025-10-21T12:34:09",
-            "updated_at": "2025-10-21T12:34:09"
+            "id": 5,
+            "domain": "tmpbox.net",
+            "reason": "临时邮箱域名 - 发现大量黑客使用",
+            "create_at": 1749874608000,
+            "status": 1
           }
         ],
         "note": "前 5 行样例数据（快速采样，无排序）"
@@ -2178,5 +2178,166 @@
       }
     }
   },
-  "relationships": []
+  "relationships": [],
+  "uncertainties": [
+    {
+      "type": "schema_ambiguity",
+      "category": "表关系",
+      "priority": "high",
+      "entity": "platform_user, platform_user_account, user",
+      "question": "存在三个用户相关的核心表（platform_user、platform_user_account、user），它们之间的关系和使用场景不明确。是否是不同系统的用户表？是否存在数据同步关系？",
+      "context": "platform_user 和 platform_user_account 通过 user_id 关联，但 user 表独立存在且字段结构完全不同（包含 balance、chain_account 等区块链相关字段）",
+      "impact": "无法确定用户数据的主表，影响用户身份识别、数据关联和业务流程理解",
+      "suggestions": [
+        "明确三个表的使用场景和业务边界",
+        "说明是否是多系统整合或历史遗留",
+        "建立明确的表关系文档"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user, platform_user_account, user_27"
+    },
+    {
+      "type": "naming_confusion",
+      "category": "字段命名",
+      "priority": "high",
+      "entity": "platform_user.id, platform_user_account.id, platform_user_device.id",
+      "question": "多个表的 id 字段注释不一致：platform_user.id 注释为 'user_id'，platform_user_account.id 和 platform_user_device.id 注释为 '账号ID'，但它们都是主键",
+      "context": "主键字段的注释应该明确其业务含义，当前注释混淆了主键 id 和业务 id 的概念",
+      "impact": "导致字段关联关系理解困难，特别是在跨表关联时",
+      "suggestions": [
+        "统一主键命名规范：id 就是主键，不要用业务含义注释",
+        "如果需要强调业务含义，应在表级别说明"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user.id, platform_user_account.id, platform_user_device.id_28"
+    },
+    {
+      "type": "schema_ambiguity",
+      "category": "表用途",
+      "priority": "high",
+      "entity": "backup_disabled_blacklist_accounts",
+      "question": "表名包含 'backup'、'disabled'、'blacklist' 三个概念，无法确定该表的真实用途：是备份表？是禁用账号表？还是黑名单表？",
+      "context": "表结构与 platform_user_account 完全相同，但缺少表级别描述",
+      "impact": "无法判断该表在业务流程中的作用，不清楚数据来源和使用场景",
+      "suggestions": [
+        "明确表的业务用途和数据来源",
+        "说明与 platform_user_account 的关系",
+        "考虑重命名以反映单一职责"
+      ],
+      "domain": "user_management",
+      "id": "user_management_backup_disabled_blacklist_accounts_29"
+    },
+    {
+      "type": "business_logic_unclear",
+      "category": "业务流程",
+      "priority": "high",
+      "entity": "platform_user_account.type, platform_user_account.main_partner_id, platform_user_account.second_partner_id",
+      "question": "第三方账号存在 'main_partner_id' 和 'second_partner_id' 两个字段，不清楚为什么需要主次两个第三方 ID，以及它们的使用场景",
+      "context": "type 字段注释显示支持 appleid、googleid，但为何一个账号需要两个第三方 ID？是否支持账号绑定？",
+      "impact": "无法理解第三方账号的绑定逻辑和认证流程",
+      "suggestions": [
+        "说明主次第三方 ID 的业务场景",
+        "明确是否支持多账号绑定",
+        "补充第三方认证的业务流程文档"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user_account.type, platform_user_account.main_partner_id, platform_user_account.second_partner_id_30"
+    },
+    {
+      "type": "naming_confusion",
+      "category": "字段命名",
+      "priority": "medium",
+      "entity": "platform_user_wallet.create_by, platform_user_wallet.update_by",
+      "question": "create_by 和 update_by 注释为 '创建人ID' 和 '更新ID'，但字段类型是 varchar，同时存在 create_name 和 update_name 字段",
+      "context": "通常 _by 后缀表示 ID（应为数字类型），_name 表示名称，但此处 _by 字段却是 varchar 类型",
+      "impact": "字段用途不明确，可能导致数据存储错误",
+      "suggestions": [
+        "统一命名规范：_id 存储数字 ID，_by 存储用户标识",
+        "明确 varchar 类型的 _by 字段存储的是什么类型的标识"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user_wallet.create_by, platform_user_wallet.update_by_31"
+    },
+    {
+      "type": "schema_ambiguity",
+      "category": "数据一致性",
+      "priority": "medium",
+      "entity": "platform_user.email, platform_user.mobile, platform_user_account.mobile, user.email",
+      "question": "用户的联系方式（email、mobile）在多个表中重复存储，不清楚数据一致性如何保证",
+      "context": "platform_user 和 user 表都有 email 字段，platform_user 和 platform_user_account 都有 mobile 字段",
+      "impact": "可能导致数据不一致，查询时不确定应该使用哪个表的数据",
+      "suggestions": [
+        "明确各表中联系方式字段的数据来源和更新机制",
+        "说明是否存在数据同步流程",
+        "考虑建立统一的联系方式管理策略"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user.email, platform_user.mobile, platform_user_account.mobile, user.email_32"
+    },
+    {
+      "type": "business_logic_unclear",
+      "category": "业务规则",
+      "priority": "medium",
+      "entity": "user.balance, user.block_amount",
+      "question": "user 表包含余额和冻结金额字段，但在 user_management 域中出现财务相关字段是否合理？",
+      "context": "该域定义为用户管理域，通常不应包含财务数据。且其他用户表（platform_user）中没有财务字段",
+      "impact": "域边界不清晰，可能导致职责混乱",
+      "suggestions": [
+        "确认 user 表是否属于该域",
+        "考虑将财务相关字段拆分到独立的财务域",
+        "明确该表与区块链业务的关系"
+      ],
+      "domain": "user_management",
+      "id": "user_management_user.balance, user.block_amount_33"
+    },
+    {
+      "type": "naming_confusion",
+      "category": "时间字段",
+      "priority": "medium",
+      "entity": "platform_user.create_at, user.created_at",
+      "question": "时间字段命名不一致：部分表使用 create_at（bigint），部分使用 created_at（timestamp）",
+      "context": "platform_* 系列表使用 create_at/update_at（bigint），user/pre_signup 等表使用 created_at/updated_at（timestamp）",
+      "impact": "命名不一致增加理解成本，且数据类型不同可能导致时间处理逻辑复杂",
+      "suggestions": [
+        "统一时间字段命名规范",
+        "统一时间字段数据类型",
+        "说明 bigint 类型存储的是时间戳还是其他格式"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user.create_at, user.created_at_34"
+    },
+    {
+      "type": "schema_ambiguity",
+      "category": "字段用途",
+      "priority": "low",
+      "entity": "platform_user_device.adid",
+      "question": "adid 字段注释提到 'Adjust 标识符'，但未说明 Adjust 是什么系统或服务",
+      "context": "注释：'与设备关联的 Adjust 标识符。有助于识别 iOS 端缺失 IDFA 信息的 LAT 用户'",
+      "impact": "不了解第三方服务的团队成员可能无法理解该字段用途",
+      "suggestions": [
+        "在域文档中说明 Adjust 是移动归因分析平台",
+        "补充 LAT（Limit Ad Tracking）的说明"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user_device.adid_35"
+    },
+    {
+      "type": "business_logic_unclear",
+      "category": "业务流程",
+      "priority": "low",
+      "entity": "pre_signup, user",
+      "question": "pre_signup 表的作用不明确，与 user 表的关系和转化流程不清楚",
+      "context": "pre_signup 只有 email 和 source 字段，推测是预注册表，但缺少与正式用户表的关联",
+      "impact": "无法理解完整的用户注册流程",
+      "suggestions": [
+        "说明 pre_signup 的业务场景（如邀请制、白名单等）",
+        "明确预注册到正式注册的转化流程",
+        "考虑添加状态字段标识转化状态"
+      ],
+      "domain": "user_management",
+      "id": "user_management_pre_signup, user_36"
+    }
+  ],
+  "uncertainty_count": 10,
+  "uncertainty_analyzed_at": "2025-11-17T17:04:08.663014"
 }

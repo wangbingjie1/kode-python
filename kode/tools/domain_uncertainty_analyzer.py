@@ -111,7 +111,7 @@ class DomainUncertaintyAnalyzer(KodeTool):
 
             # 线程池并行执行
             all_uncertainties = []
-            domain_results = []
+            domain_results_full = []  # 🔥 保留完整数据（包含 uncertainties）
 
             with ThreadPoolExecutor(max_workers=max_concurrent_domains) as executor:
                 futures = {executor.submit(analyze_domain, d): d for d in domains}
@@ -120,36 +120,26 @@ class DomainUncertaintyAnalyzer(KodeTool):
                     try:
                         result = future.result()
                         all_uncertainties.extend(result["uncertainties"])
-                        domain_results.append({
-                            "domain_name": result["domain_name"],
-                            "table_count": result["table_count"],
-                            "uncertainty_count": result["uncertainty_count"]
-                        })
+                        domain_results_full.append(result)  # 🔥 保留完整结果
                     except Exception as e:
                         logger.error(f"域分析失败: {str(e)}")
 
             # 按优先级分组
             grouped = self._group_by_priority(all_uncertainties)
 
-            # 保存完整结果到文件
-            full_result = {
-                "status": "success",
-                "connection_name": connection_name,
-                "analyzed_at": datetime.now().isoformat(),
-                "total_domains": len(domains),
-                "domain_results": domain_results,
-                "total_uncertainties": len(all_uncertainties),
-                "uncertainties_by_priority": grouped,
-                "next_step": f"请先回答 {len(grouped['high'])} 个高优先级问题。"
-            }
-
-            save_result = self._save_uncertainties(connection_name, full_result)
+            # 🔥 新逻辑：将不确定性直接保存到各个领域 JSON 文件中
+            save_result = self._save_uncertainties_to_domains(
+                connection_name,
+                domain_results_full,  # 🔥 传递完整数据
+                schema_path
+            )
 
             # Return lightweight summary (save tokens)
             summary = {
                 "status": "success",
-                "message": "Uncertainty analysis completed",
-                "file_path": save_result.get("file_path"),
+                "message": "Uncertainty analysis completed (embedded in domain files)",
+                "storage_strategy": save_result.get("storage_strategy"),
+                "updated_domains": save_result.get("updated_domains"),
                 "statistics": {
                     "total_domains": len(domains),
                     "total_uncertainties": len(all_uncertainties),
@@ -157,7 +147,7 @@ class DomainUncertaintyAnalyzer(KodeTool):
                     "medium_priority": len(grouped['medium']),
                     "low_priority": len(grouped['low'])
                 },
-                "next_step": f"请先回答 {len(grouped['high'])} 个高优先级问题。"
+                "next_step": f"请先回答 {len(grouped['high'])} 个高优先级问题。使用 UncertaintyQAManager 工具。"
             }
 
             return json.dumps(summary, indent=2, ensure_ascii=False)
@@ -323,32 +313,57 @@ priority: high/medium/low
 
         return grouped
 
-    def _save_uncertainties(
+    def _save_uncertainties_to_domains(
         self,
         connection_name: str,
-        data: Dict[str, Any]
+        domain_results: List[Dict[str, Any]],
+        schema_path: str
     ) -> Dict[str, Any]:
-        """保存 uncertainties 到文件"""
+        """
+        将不确定性直接保存到各个领域的 JSON 文件中（高内聚设计）。
+
+        每个领域文件新增 'uncertainties' 字段，存储该领域的所有不确定性。
+        """
         try:
-            config = ConfigManager()
-            schema_path = config.get("storage.schema_path", "./schema_store")
-            base_dir = Path(schema_path) / connection_name
-            base_dir.mkdir(parents=True, exist_ok=True)
+            base_dir = Path(schema_path) / connection_name / "domains"
+            updated_count = 0
 
-            uncertainty_file = base_dir / "uncertainties.json"
+            for domain_result in domain_results:
+                domain_name = domain_result["domain_name"]
 
-            with open(uncertainty_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                # 读取领域 JSON 文件
+                domain_file = base_dir / f"{domain_name}.json"
+                if not domain_file.exists():
+                    logger.warning(f"领域文件不存在: {domain_file}")
+                    continue
 
-            logger.info(f"Saved uncertainties to {uncertainty_file}")
+                with open(domain_file, "r", encoding="utf-8") as f:
+                    domain_data = json.load(f)
+
+                # 获取当前域的不确定性
+                domain_uncertainties = domain_result.get("uncertainties", [])
+
+                # 添加到领域数据
+                if domain_uncertainties:
+                    domain_data["uncertainties"] = domain_uncertainties
+                    domain_data["uncertainty_count"] = len(domain_uncertainties)
+                    domain_data["uncertainty_analyzed_at"] = datetime.now().isoformat()
+
+                    # 保存更新后的文件
+                    with open(domain_file, "w", encoding="utf-8") as f:
+                        json.dump(domain_data, f, indent=2, ensure_ascii=False)
+
+                    updated_count += 1
+                    logger.info(f"✅ {domain_name}: 已保存 {len(domain_uncertainties)} 个不确定性到领域文件")
 
             return {
                 "saved": True,
-                "file_path": str(uncertainty_file)
+                "updated_domains": updated_count,
+                "storage_strategy": "embedded_in_domain_files"
             }
 
         except Exception as e:
-            logger.error(f"Failed to save uncertainties: {str(e)}")
+            logger.error(f"Failed to save uncertainties to domains: {str(e)}")
             return {
                 "saved": False,
                 "error": str(e)

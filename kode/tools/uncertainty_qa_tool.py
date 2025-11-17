@@ -105,36 +105,36 @@ class UncertaintyQAManager(KodeTool):
             Result as JSON
         """
         try:
-            # 获取 uncertainty 数据文件路径
-            uncertainty_file = self._get_uncertainty_file(connection_name)
+            # 🔥 获取领域目录（而不是单一的 uncertainties.json 文件）
+            domains_dir = self._get_domains_dir(connection_name)
 
             if action == "load":
-                return self._load_uncertainties(uncertainty_file)
+                return self._load_uncertainties(domains_dir)
             elif action == "batch_load":
-                return self._batch_load_uncertainties(uncertainty_file, group_by, limit)
+                return self._batch_load_uncertainties(domains_dir, group_by, limit)
             elif action == "answer":
                 if not uncertainty_id or not answer:
                     return json.dumps({
                         "status": "error",
                         "message": "uncertainty_id and answer are required for 'answer' action"
                     }, indent=2, ensure_ascii=False)
-                return self._record_answer(uncertainty_file, uncertainty_id, answer)
+                return self._record_answer(domains_dir, uncertainty_id, answer)
             elif action == "batch_answer":
                 if not batch_answers:
                     return json.dumps({
                         "status": "error",
                         "message": "batch_answers dict is required for 'batch_answer' action"
                     }, indent=2, ensure_ascii=False)
-                return self._batch_record_answers(uncertainty_file, batch_answers)
+                return self._batch_record_answers(domains_dir, batch_answers)
             elif action == "skip":
                 if not uncertainty_id:
                     return json.dumps({
                         "status": "error",
                         "message": "uncertainty_id is required for 'skip' action"
                     }, indent=2, ensure_ascii=False)
-                return self._skip_uncertainty(uncertainty_file, uncertainty_id)
+                return self._skip_uncertainty(domains_dir, uncertainty_id)
             elif action == "status":
-                return self._check_status(uncertainty_file)
+                return self._check_status(domains_dir)
             else:
                 return json.dumps({
                     "status": "error",
@@ -148,37 +148,60 @@ class UncertaintyQAManager(KodeTool):
                 "message": f"Failed to manage uncertainties: {str(e)}"
             }, indent=2, ensure_ascii=False)
 
-    def _get_uncertainty_file(self, connection_name: str) -> Path:
-        """获取 uncertainty 数据文件路径"""
+    def _get_domains_dir(self, connection_name: str) -> Path:
+        """获取领域文件所在目录"""
         config = ConfigManager()
         schema_path = config.get("storage.schema_path", "./schema_store")
-        return Path(schema_path) / connection_name / "uncertainties.json"
+        return Path(schema_path) / connection_name / "domains"
 
-    def _load_uncertainties(self, uncertainty_file: Path) -> str:
-        """加载所有待解决的不确定性"""
-        if not uncertainty_file.exists():
+    def _load_all_domain_files(self, domains_dir: Path) -> List[Dict[str, Any]]:
+        """加载所有领域文件的数据"""
+        domain_data_list = []
+        for domain_file in domains_dir.glob("*.json"):
+            with open(domain_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                data["_file_path"] = domain_file  # 记录文件路径
+                domain_data_list.append(data)
+        return domain_data_list
+
+    def _save_domain_file(self, file_path: Path, data: Dict[str, Any]) -> None:
+        """保存领域文件"""
+        # 移除临时字段
+        data_to_save = {k: v for k, v in data.items() if k != "_file_path"}
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data_to_save, f, indent=2, ensure_ascii=False)
+
+    def _load_uncertainties(self, domains_dir: Path) -> str:
+        """从各个领域文件加载所有待解决的不确定性"""
+        if not domains_dir.exists():
             return json.dumps({
                 "status": "error",
-                "message": f"Uncertainties file not found. Run DomainUncertaintyAnalyzer first."
+                "message": f"Domains directory not found. Run DomainUncertaintyAnalyzer first."
             }, indent=2, ensure_ascii=False)
 
-        with open(uncertainty_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        # 遍历所有领域文件，收集未解决的高优先级问题
+        high_uncertainties = []
+        domain_files = list(domains_dir.glob("*.json"))
 
-        # 筛选未解决的高优先级问题
-        high_uncertainties = [
-            u for u in data.get("uncertainties_by_priority", {}).get("high", [])
-            if u.get("status") != "resolved"
-        ]
+        for domain_file in domain_files:
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
 
-        # 为每个问题生成唯一 ID（如果没有的话）
-        for idx, u in enumerate(high_uncertainties):
-            if "id" not in u:
-                u["id"] = f"{u.get('domain')}_{u.get('entity')}_{idx}"
+            domain_name = domain_data.get("domain_name", domain_file.stem)
+            uncertainties = domain_data.get("uncertainties", [])
+
+            # 筛选未解决的高优先级问题
+            for u in uncertainties:
+                if u.get("priority", "medium").lower() == "high" and u.get("status") != "resolved":
+                    # 添加领域信息
+                    u["domain"] = domain_name
+                    # 生成唯一 ID（如果没有）
+                    if "id" not in u:
+                        u["id"] = f"{domain_name}_{u.get('entity', 'unknown')}_{len(high_uncertainties)}"
+                    high_uncertainties.append(u)
 
         return json.dumps({
             "status": "success",
-            "connection_name": data.get("connection_name"),
             "total_high_priority": len(high_uncertainties),
             "unresolved_count": len(high_uncertainties),
             "questions": high_uncertainties,
@@ -190,157 +213,107 @@ class UncertaintyQAManager(KodeTool):
 
     def _record_answer(
         self,
-        uncertainty_file: Path,
+        domains_dir: Path,
         uncertainty_id: str,
         answer: str
     ) -> str:
-        """记录用户对某个不确定性的回答"""
-        if not uncertainty_file.exists():
+        """
+        记录用户对某个不确定性的回答。
+
+        🔥 新逻辑：
+        1. 在对应的领域文件中标记 uncertainty 为 resolved
+        2. 将答案添加到领域文件的 business_rules 字段
+        """
+        if not domains_dir.exists():
             return json.dumps({
                 "status": "error",
-                "message": "Uncertainties file not found"
+                "message": "Domains directory not found"
             }, indent=2, ensure_ascii=False)
 
-        # 加载数据
-        with open(uncertainty_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        # 查找并更新对应的 uncertainty
+        # 遍历所有领域文件，查找对应的 uncertainty
+        domain_files = list(domains_dir.glob("*.json"))
         found = False
-        for priority in ["high", "medium", "low"]:
-            uncertainties = data.get("uncertainties_by_priority", {}).get(priority, [])
+        updated_domain = None
+
+        for domain_file in domain_files:
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
+
+            uncertainties = domain_data.get("uncertainties", [])
+
             for u in uncertainties:
                 # 生成 ID（如果没有）
                 if "id" not in u:
-                    u["id"] = f"{u.get('domain')}_{u.get('entity')}_{uncertainties.index(u)}"
+                    u["id"] = f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
 
                 if u["id"] == uncertainty_id:
+                    # 标记为已解决
                     u["status"] = "resolved"
                     u["answer"] = answer
                     u["answered_at"] = datetime.now().isoformat()
+
+                    # 🔥 核心变化：将答案添加到 business_rules
+                    if "business_rules" not in domain_data:
+                        domain_data["business_rules"] = []
+
+                    business_rule = {
+                        "entity": u.get("entity", ""),
+                        "category": u.get("category", ""),
+                        "question": u.get("question", ""),
+                        "answer": answer,
+                        "added_at": datetime.now().isoformat()
+                    }
+                    domain_data["business_rules"].append(business_rule)
+
+                    # 保存更新后的领域文件
+                    with open(domain_file, "w", encoding="utf-8") as f:
+                        json.dump(domain_data, f, indent=2, ensure_ascii=False)
+
                     found = True
+                    updated_domain = domain_data.get("domain_name", domain_file.stem)
                     break
+
             if found:
                 break
 
         if not found:
             return json.dumps({
                 "status": "error",
-                "message": f"Uncertainty with ID '{uncertainty_id}' not found"
+                "message": f"Uncertainty with ID '{uncertainty_id}' not found in any domain"
             }, indent=2, ensure_ascii=False)
 
-        # 保存更新后的数据
-        with open(uncertainty_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        # 统计所有领域中剩余的高优先级问题
+        remaining_high = 0
+        for domain_file in domain_files:
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
 
-        # 统计剩余未解决的高优先级问题
-        remaining_high = [
-            u for u in data.get("uncertainties_by_priority", {}).get("high", [])
-            if u.get("status") != "resolved"
-        ]
+            for u in domain_data.get("uncertainties", []):
+                if u.get("priority", "medium").lower() == "high" and u.get("status") != "resolved":
+                    remaining_high += 1
 
         return json.dumps({
             "status": "success",
             "resolved_id": uncertainty_id,
+            "updated_domain": updated_domain,
             "answer": answer,
-            "remaining_high_priority": len(remaining_high),
-            "can_build_ontology": len(remaining_high) == 0,
+            "remaining_high_priority": remaining_high,
+            "can_build_ontology": remaining_high == 0,
             "message": (
-                f"已记录回答。剩余 {len(remaining_high)} 个高优先级问题。"
-                if len(remaining_high) > 0
-                else "所有高优先级问题已解决！可以开始构建本体。"
+                f"已记录回答到领域 {updated_domain}。剩余 {remaining_high} 个高优先级问题。"
+                if remaining_high > 0
+                else f"已记录回答到领域 {updated_domain}。所有高优先级问题已解决！可以开始构建本体。"
             )
         }, indent=2, ensure_ascii=False)
 
-    def _preprocess_domain_rules(
-        self,
-        schema_dir: Path,
-        connection_name: str,
-        uncertainty_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        预处理领域规则：为每个域生成精简的规则文件。
+    # 🔥 已删除：_preprocess_domain_rules 和 _compress_domain_uncertainties
+    # 原因：规则现在直接存储在各领域 JSON 文件的 business_rules 字段，不再生成独立的 *_rules.txt 文件
 
-        Args:
-            schema_dir: Schema 存储目录
-            connection_name: 数据库连接名
-            uncertainty_data: 不确定性数据
-
-        Returns:
-            预处理结果统计
-        """
-        try:
-            domains_dir = schema_dir / "domains"
-            if not domains_dir.exists():
-                return {"status": "error", "message": "domains/ directory not found"}
-
-            # 按域分组High问题
-            high_uncertainties = uncertainty_data.get("uncertainties_by_priority", {}).get("high", [])
-            domain_groups = {}
-            for u in high_uncertainties:
-                if u.get("status") != "resolved":
-                    continue
-                domain = u.get("domain", "unknown")
-                if domain not in domain_groups:
-                    domain_groups[domain] = []
-                domain_groups[domain].append(u)
-
-            # 为每个域生成规则文件
-            processed = 0
-            for domain_name, uncertainties in domain_groups.items():
-                rules_text = self._compress_domain_uncertainties(uncertainties)
-                if rules_text:
-                    rules_file = domains_dir / f"{domain_name}_rules.txt"
-                    with open(rules_file, "w", encoding="utf-8") as f:
-                        f.write(rules_text)
-                    processed += 1
-                    logger.info(f"✅ 生成 {rules_file.name} ({len(uncertainties)} 条规则)")
-
-            return {
-                "status": "success",
-                "domains_processed": processed,
-                "total_rules": len(high_uncertainties)
-            }
-
-        except Exception as e:
-            logger.error(f"预处理领域规则失败: {e}")
-            return {"status": "error", "message": str(e)}
-
-    def _compress_domain_uncertainties(self, uncertainties: List[Dict[str, Any]]) -> str:
-        """
-        格式化领域不确定性为结构化文本（保留完整问题和答案）。
-
-        不再做过度压缩，因为已经按领域分割了，每个领域的规则数量不多。
-        """
-        if not uncertainties:
-            return ""
-
-        lines = []
-        lines.append("# 用户已确认的业务规则（构建本体时必须遵守）")
-        lines.append("")
-
-        for idx, unc in enumerate(uncertainties, 1):
-            entity = unc.get("entity", "")
-            question = unc.get("question", "").strip()
-            answer = unc.get("answer", "").strip()
-            category = unc.get("category", "")
-            unc_type = unc.get("type", "")
-
-            if not answer:
-                continue
-
-            # 每条规则保留：实体名、问题类型、问题、用户答案
-            lines.append(f"## 规则 {idx}: {entity}")
-            if category:
-                lines.append(f"**类型**: {category}")
-            lines.append(f"**问题**: {question}")
-            lines.append(f"**用户确认**: {answer}")
-            lines.append("")
-
-        if len(lines) <= 2:  # 只有标题，没有实际规则
-            return ""
-
-        return "\n".join(lines)
+    # TODO: 以下方法仍需重构以适配新的领域文件结构：
+    # - _batch_load_uncertainties
+    # - _batch_record_answers
+    # - _check_status
+    # - _skip_uncertainty
 
     def _check_status(self, uncertainty_file: Path) -> str:
         """检查当前进度"""
@@ -497,16 +470,7 @@ class UncertaintyQAManager(KodeTool):
         with open(uncertainty_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-        # 🔥 新增：如果所有High问题已解决，自动预处理领域规则
-        connection_name = data.get("connection_name")
-        all_high_resolved = all(
-            u.get("status") in ["resolved", "skipped"]
-            for u in data.get("uncertainties_by_priority", {}).get("high", [])
-        )
-
-        if all_high_resolved and connection_name:
-            preprocessing_result = self._preprocess_domain_rules(uncertainty_file.parent, connection_name, data)
-            logger.info(f"✅ 预处理完成：{preprocessing_result.get('domains_processed', 0)} 个领域")
+        # 🔥 注意：规则已经在 _record_answer 中实时写入领域文件，不需要额外预处理
 
         # 统计剩余未解决的高优先级问题
         remaining_high = [
