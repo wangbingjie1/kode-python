@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Any, Optional, Type
 
+import tiktoken
 from pydantic import BaseModel, Field
 
 from .base import KodeTool
@@ -53,42 +54,37 @@ class FileReadTool(KodeTool):
             if not path.is_file():
                 return f"Error: Not a file: {file_path}"
 
-            # Check file size and warn if large (unless using pagination or force)
-            file_size = path.stat().st_size
-            size_threshold = 50_0000  # 50KB threshold
-
-            if file_size > size_threshold and offset is None and not force:
-                estimated_tokens = file_size // 4  # Rough estimate: 1 token ≈ 4 chars
+            # Check token count and warn if large (unless using pagination or force)
+            if offset is None and not force:
+                file_size = path.stat().st_size
                 size_kb = file_size / 1024
 
-                return f"""⚠️ 大文件警告（上下文管理）
+                # Quick estimation: if file is small enough, skip token counting
+                # Conservative estimate: 1 byte ≈ 0.6 tokens (works for mixed CN/EN content)
+                quick_estimate = int(file_size * 0.6)
+                token_threshold = 50_000  # 5万 tokens 阈值
 
+                if quick_estimate > token_threshold:
+                    # Use tiktoken for accurate token counting
+                    try:
+                        # Read file content for token counting
+                        with open(path, "r", encoding="utf-8", errors="replace") as f:
+                            content = f.read()
+
+                        # Use cl100k_base encoding (GPT-4/Claude compatible)
+                        encoding = tiktoken.get_encoding("cl100k_base")
+                        actual_tokens = len(encoding.encode(content))
+                    except Exception:
+                        # Fallback to conservative estimation if tiktoken fails
+                        actual_tokens = quick_estimate
+
+                    if actual_tokens > token_threshold:
+                        return f"""⚠️ 大文件警告，无法一次性读取
 文件信息:
 - 路径: {file_path}
 - 大小: {size_kb:.1f} KB
-- 估算 tokens: ~{estimated_tokens:,}
-
-建议的高效工作流:
-
-1️⃣ 使用 Grep 精确定位目标代码（带行号）:
-   Grep(
-       pattern="你要找的关键词或函数名",
-       path="{file_path}",
-       output_mode="content"
-   )
-   → 会返回: {path.name}:行号:匹配的代码
-
-2️⃣ 根据行号精确读取（节省 90%+ tokens）:
-   FileRead(
-       file_path="{file_path}",
-       offset=行号-10,
-       limit=50
-   )
-
-如果确实需要读取整个文件:
-   FileRead(file_path="{file_path}", force=True)
-
-💡 提示: 使用 Grep → FileRead(分页) 工作流可以节省 90%+ 的上下文消耗!
+- Token 数: {actual_tokens:,}
+- 阈值: {token_threshold:,}
 """
 
             with open(path, "r", encoding="utf-8", errors="replace") as f:

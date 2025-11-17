@@ -2,6 +2,7 @@
 必须中文回复和思考，第一性原理解决根本问题，像一个老程序员一样写代码，比如Linux，只给最靠谱的建议和方案，不确定不推荐，不要说废话，不要生成说明文档，我不会看你文档的。生成的脚本和代码，要自己先测试通过，再告诉用户，用户有选择困难症，你可以向他提问，但不要给他选项，我不要你的速度，我要你的质量
 doc目录 存放你生成的说明文档
 test目录 存放你生成的测试代码
+永远不要写降级方案
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview

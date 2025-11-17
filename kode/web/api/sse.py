@@ -27,6 +27,32 @@ router = APIRouter()
 
 
 # ============================================================
+# Helper function for serializing chunks
+# ============================================================
+def serialize_chunk(chunk: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    将 chunk 中的不可序列化对象转换为可 JSON 序列化的字典。
+
+    主要处理 Anthropic SDK 返回的特殊对象如 ThinkingBlock, ToolUseBlock 等。
+    """
+    def convert_value(v):
+        # 处理 Anthropic SDK 对象（有 model_dump 方法）
+        if hasattr(v, 'model_dump'):
+            return v.model_dump()
+        # 处理字典
+        elif isinstance(v, dict):
+            return {k: convert_value(val) for k, val in v.items()}
+        # 处理列表
+        elif isinstance(v, list):
+            return [convert_value(item) for item in v]
+        # 其他类型直接返回
+        else:
+            return v
+
+    return convert_value(chunk)
+
+
+# ============================================================
 # Global session manager for pending user inputs
 # ============================================================
 class UserInputSessionManager:
@@ -153,18 +179,23 @@ async def event_generator(
     data: {"type": "complete", "content": "...", "metadata": {}}
 
     """
-    from kode.database.session import async_session_maker
-
-    assistant_content = ""  # 收集完整的 AI 回复
-    messages_to_save = []  # 收集需要保存的所有消息 (包括 chart, insight 等)
-
-    # ✨ 收集真实的 token 使用量（来自 Anthropic API）
-    total_input_tokens = 0
-    total_output_tokens = 0
-    total_cache_creation_tokens = 0
-    total_cache_read_tokens = 0
-
+    # 最外层异常捕获：确保所有错误（包括初始化阶段）都能被正确处理
     try:
+        from kode.database.session import async_session_maker
+        from kode.services.api_trace_service import api_trace_service
+
+        assistant_content = ""  # 收集完整的 AI 回复
+        assistant_metadata = {}  # 收集 assistant 消息的 metadata（chart, insight 等）
+
+        # ✨ 收集真实的 token 使用量（来自 Anthropic API）
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_cache_creation_tokens = 0
+        total_cache_read_tokens = 0
+
+        # 🔍 API 调用追踪（用于上下文工程优化）
+        current_iteration = 0
+        api_traces = []  # 记录每次迭代的调用
         async for chunk in conversation_service.execute_task_streaming(
             task=task_content,
             conversation_id=conversation_id,
@@ -187,7 +218,9 @@ async def event_generator(
                 logger.info(f"[SSE] User input required: {question_data.get('question')}")
 
                 # Send event to frontend immediately
-                event_data = json.dumps(chunk, ensure_ascii=False)
+                # Serialize chunk to handle non-JSON serializable objects
+                serialized_chunk = serialize_chunk(chunk)
+                event_data = json.dumps(serialized_chunk, ensure_ascii=False)
                 yield f"data: {event_data}\n\n"
 
                 # Note: The tool instance is already waiting via asyncio.Event
@@ -197,47 +230,88 @@ async def event_generator(
             # ✨ 收集真实的 token 统计（来自 Anthropic API）
             if chunk_type == "token_usage":
                 metadata = chunk.get("metadata", {})
+                iteration_num = metadata.get('iteration', 1)
+
+                # 累加总量
                 total_input_tokens += metadata.get("input_tokens", 0)
                 total_output_tokens += metadata.get("output_tokens", 0)
                 total_cache_creation_tokens += metadata.get("cache_creation_input_tokens", 0)
                 total_cache_read_tokens += metadata.get("cache_read_input_tokens", 0)
+
                 logger.info(
-                    f"[SSE Token] Iteration {metadata.get('iteration')}: "
+                    f"[SSE Token] Iteration {iteration_num}: "
                     f"input={metadata.get('input_tokens')}, "
                     f"output={metadata.get('output_tokens')}, "
                     f"cache_creation={metadata.get('cache_creation_input_tokens')}, "
                     f"cache_read={metadata.get('cache_read_input_tokens')}"
                 )
 
+                # 🔍 创建本次迭代的追踪记录
+                trace = api_trace_service.create_trace(
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    model_name=metadata.get('model', 'claude-sonnet-4-5'),
+                    iteration=iteration_num,
+                )
+                trace.set_token_usage(
+                    input_tokens=metadata.get("input_tokens", 0),
+                    output_tokens=metadata.get("output_tokens", 0),
+                    cache_creation_tokens=metadata.get("cache_creation_input_tokens", 0),
+                    cache_read_tokens=metadata.get("cache_read_input_tokens", 0),
+                )
+
+                # 设置上下文摘要
+                if chat_history:
+                    total_chars = sum(len(msg.get("content", "")) for msg in chat_history)
+                    trace.set_context_summary(
+                        history_count=len(chat_history),
+                        total_context_chars=total_chars,
+                    )
+
+                # 🔍 设置完整的请求和响应内容
+                request_data = metadata.get('request_data')
+                response_data = metadata.get('response_data')
+                if request_data:
+                    trace.set_request_content(
+                        system_prompt=request_data.get('system', ''),
+                        messages=request_data.get('messages', []),
+                        tools=request_data.get('tools', [])
+                    )
+                if response_data:
+                    trace.set_response_content(
+                        content=response_data.get('content', ''),
+                        stop_reason=response_data.get('stop_reason', ''),
+                        usage=response_data.get('usage', {})
+                    )
+
+                api_traces.append(trace)
+                current_iteration = iteration_num
+
             # Collect assistant response content
             if chunk_type == "chunk":
                 assistant_content += chunk.get("content", "")
 
-            # Collect chart messages for persistence
+            # Collect chart data into metadata (NOT as separate message)
             elif chunk_type == "chart":
-                messages_to_save.append({
-                    "role": "chart",
-                    "content": "",
-                    "metadata": {
-                        "chart_type": chunk.get("metadata", {}).get("chart_type"),
-                        "chart_config": chunk.get("content"),  # ECharts config
-                        "data_summary": chunk.get("metadata", {}).get("data_summary")
-                    }
+                if "charts" not in assistant_metadata:
+                    assistant_metadata["charts"] = []
+                assistant_metadata["charts"].append({
+                    "chart_type": chunk.get("metadata", {}).get("chart_type"),
+                    "chart_config": chunk.get("content"),  # ECharts config
+                    "data_summary": chunk.get("metadata", {}).get("data_summary")
                 })
-                logger.info(f"[SSE] Collected chart message for saving")
+                logger.info(f"[SSE] Collected chart data into metadata")
 
-            # Collect insight messages for persistence
+            # Collect insight data into metadata (NOT as separate message)
             elif chunk_type == "insight":
-                messages_to_save.append({
-                    "role": "insight",
-                    "content": "",
-                    "metadata": {
-                        "insights": chunk.get("content"),  # List of insights
-                        "total_count": chunk.get("metadata", {}).get("total_count"),
-                        "data_summary": chunk.get("metadata", {}).get("data_summary")
-                    }
+                if "insights" not in assistant_metadata:
+                    assistant_metadata["insights"] = []
+                assistant_metadata["insights"].append({
+                    "insights": chunk.get("content"),  # List of insights
+                    "total_count": chunk.get("metadata", {}).get("total_count"),
+                    "data_summary": chunk.get("metadata", {}).get("data_summary")
                 })
-                logger.info(f"[SSE] Collected insight message for saving")
+                logger.info(f"[SSE] Collected insight data into metadata")
 
             # Log tool call details for debugging
             if chunk_type in ('tool_call', 'tool_result'):
@@ -249,32 +323,30 @@ async def event_generator(
                     result_preview = str(metadata['result'])[:200]
                     logger.info(f"[SSE] Tool result preview: {result_preview}")
 
-            event_data = json.dumps(chunk, ensure_ascii=False)
+            # Serialize chunk to handle non-JSON serializable objects (e.g., ThinkingBlock)
+            serialized_chunk = serialize_chunk(chunk)
+            event_data = json.dumps(serialized_chunk, ensure_ascii=False)
             yield f"data: {event_data}\n\n"
 
         # Save all messages to database (create new session)
         async with async_session_maker() as db:
-            # Save assistant message
+            # Save assistant message with token statistics and metadata
             if assistant_content:
                 assistant_message = Message(
                     conversation_id=conversation_id,
                     role="assistant",
                     content=assistant_content,
-                    metadata={}
+                    message_metadata=assistant_metadata,  # Contains charts, insights, etc.
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    cache_creation_tokens=total_cache_creation_tokens,
+                    cache_read_tokens=total_cache_read_tokens,
                 )
                 db.add(assistant_message)
-                logger.info(f"[SSE] Saved assistant message to conversation {conversation_id}")
-
-            # Save chart/insight messages
-            for msg_data in messages_to_save:
-                message = Message(
-                    conversation_id=conversation_id,
-                    role=msg_data["role"],
-                    content=msg_data["content"],
-                    metadata=msg_data["metadata"]
+                logger.info(
+                    f"[SSE] Saved assistant message to conversation {conversation_id} "
+                    f"with {total_input_tokens + total_output_tokens} tokens"
                 )
-                db.add(message)
-                logger.info(f"[SSE] Saved {msg_data['role']} message to conversation {conversation_id}")
 
             await db.commit()
 
@@ -330,20 +402,32 @@ async def event_generator(
                     f"📦 用户配额扣除: {actual_tokens:,} tokens (简化计费)\n"
                     f"{'='*80}"
                 )
+
+                # 🔍 完成并保存所有追踪记录到数据库
+                for trace in api_traces:
+                    trace.finalize()
+                    # 使用异步保存（当前在 async 上下文中，db 是异步会话）
+                    await api_trace_service.save_trace_async(trace, db)
+
+                logger.info(f"[API Trace] Saved {len(api_traces)} trace records to database for conversation {conversation_id}")
+
             except Exception as e:
                 # 使用量更新失败不应该影响主流程
                 logger.warning(f"[SSE] Failed to update usage: {e}")
 
         # Send completion signal
-        yield f"data: {json.dumps({'type': 'done', 'content': '', 'metadata': {}})}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'content': '', 'metadata': {}}, ensure_ascii=False)}\n\n"
 
     except Exception as e:
-        logger.error(f"Error in SSE stream: {e}", exc_info=True)
+        from kode.utils.logger import safe_log_exception
+        error_message = str(e)
+        safe_log_exception(logger, f"Error in SSE stream: {error_message}", e)
+
         error_data = json.dumps({
             "type": "error",
-            "content": f"Error: {str(e)}",
-            "metadata": {"error": str(e)}
-        })
+            "content": f"Error: {error_message}",
+            "metadata": {"error": error_message}
+        }, ensure_ascii=False)
         yield f"data: {error_data}\n\n"
 
 

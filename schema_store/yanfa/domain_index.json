@@ -1,0 +1,205 @@
+{
+  "connection_name": "yanfa",
+  "total_tables": 107,
+  "total_domains": 10,
+  "created_at": "2025-11-17T14:24:50.355189",
+  "domains": [
+    {
+      "name": "user_management",
+      "display_name": "User Management",
+      "description": "Core user information, accounts, authentication, and user profiles including personal details and preferences.",
+      "table_count": 11,
+      "tables": [
+        "platform_user",
+        "platform_user_account",
+        "platform_user_device",
+        "platform_user_wallet",
+        "platform_user_blacklist",
+        "platform_email_domain_blacklist",
+        "user",
+        "user_option",
+        "backup_disabled_blacklist_accounts",
+        "pre_signup",
+        "personal_access_tokens"
+      ],
+      "file_path": "domains/user_management.json"
+    },
+    {
+      "name": "order_payment",
+      "display_name": "Order & Payment System",
+      "description": "Order processing, payment transactions, subscriptions, and financial records including invoices and unified payments.",
+      "table_count": 14,
+      "tables": [
+        "order",
+        "platform_trade_order",
+        "platform_trade_order_sub",
+        "platform_trade_product",
+        "platform_trade_product_sku",
+        "platform_trade_subscription",
+        "platform_trade_subscription_log",
+        "platform_trade_subscription_plan",
+        "subscription",
+        "subscription_log",
+        "subscription_plan",
+        "invoices",
+        "unified_payments",
+        "stripesubscriptions"
+      ],
+      "file_path": "domains/order_payment.json"
+    },
+    {
+      "name": "ai_agent_system",
+      "display_name": "AI Agent & Robot System",
+      "description": "AI agent configurations, robot definitions, templates, categories, and role mappings for intelligent assistants.",
+      "table_count": 15,
+      "tables": [
+        "platform_ai_agent",
+        "platform_ai_agent_20250625bak",
+        "platform_ai_agent_categray",
+        "platform_ai_agent_categray_mapping",
+        "platform_ai_agent_tag",
+        "platform_ai_animation_template",
+        "platform_ai_voice_template",
+        "platform_ai_role",
+        "platform_ai_role_agent_mapping",
+        "platform_ai_role_user",
+        "platform_ai_role_user_agent_mapping",
+        "platform_ai_role_user_default_agent",
+        "platform_ai_role_guide",
+        "robot",
+        "chatpal_agent_ad"
+      ],
+      "file_path": "domains/ai_agent_system.json"
+    },
+    {
+      "name": "conversation_messaging",
+      "display_name": "Conversation & Messaging",
+      "description": "Chat conversations, messages, tasks, and communication records across different AI models and user interactions.",
+      "table_count": 8,
+      "tables": [
+        "platform_ai_conversation",
+        "platform_ai_conversation_msg",
+        "task",
+        "message",
+        "note_chat_conversation",
+        "candy_chat_girl_friend",
+        "crush_chat_boy_friend",
+        "fantasy_image_session"
+      ],
+      "file_path": "domains/conversation_messaging.json"
+    },
+    {
+      "name": "billing_credits",
+      "display_name": "Billing & Credits System",
+      "description": "Usage billing, token consumption, cost tracking, credits management, and financial transactions for AI services.",
+      "table_count": 9,
+      "tables": [
+        "bill",
+        "platform_ai_bill",
+        "platform_ai_model",
+        "basi_bill",
+        "top_up_record",
+        "commission",
+        "license_coupon",
+        "features_token_usage",
+        "retention_free_credit_offers"
+      ],
+      "file_path": "domains/billing_credits.json"
+    },
+    {
+      "name": "task_management",
+      "display_name": "Task & Job Management",
+      "description": "AI task execution, batch processing, SEO tasks, and task-related metadata including tags and extensions.",
+      "table_count": 7,
+      "tables": [
+        "platform_ai_task",
+        "platform_ai_task_batch",
+        "platform_ai_task_ext",
+        "platform_ai_tasktags",
+        "platform_ai_tag",
+        "platform_ai_template_effect",
+        "seo_task"
+      ],
+      "file_path": "domains/task_management.json"
+    },
+    {
+      "name": "note_system",
+      "display_name": "Note & Category System",
+      "description": "User notes, categories, records management, feedback collection, and free trial whitelist for note-taking features.",
+      "table_count": 4,
+      "tables": [
+        "note_categroy",
+        "note_categroy_records",
+        "note_feedback",
+        "note_free_trial_whitelist"
+      ],
+      "file_path": "domains/note_system.json"
+    },
+    {
+      "name": "game_system",
+      "display_name": "Game & Gamification",
+      "description": "Game mechanics, rounds, fights, rewards, user feeds, and permble game-related data including archived tables.",
+      "table_count": 13,
+      "tables": [
+        "ao_permble_game",
+        "ao_permble_round",
+        "ao_permble_round_fight",
+        "ao_permble_round_fight_2024_11_28",
+        "ao_permble_round_fight_2024_12_13",
+        "ao_permble_round_rwd",
+        "ao_permble_round_rwd_2024_12_13",
+        "ao_permble_game_user_feeds",
+        "ao_permble_game_user_feeds_2024_11_28",
+        "ao_permble_game_user_feeds_2024_12_13",
+        "ao_permble_user",
+        "ao_permble_clean_old_records_log",
+        "halloween_pumpkin_rewards"
+      ],
+      "file_path": "domains/game_system.json"
+    },
+    {
+      "name": "blockchain_social",
+      "display_name": "Blockchain & Social Features",
+      "description": "Blockchain integration, bencat token management, user awareness, NPC system, friends, fission features, and social PK mechanics.",
+      "table_count": 9,
+      "tables": [
+        "ao_bencat_user",
+        "ao_bencat_send",
+        "ao_bencat_acquired",
+        "ao_awareness",
+        "ao_npc",
+        "ao_friends",
+        "ao_fission_pk",
+        "ao_fission_pk_friends",
+        "ao_fission_role_evaluation"
+      ],
+      "file_path": "domains/blockchain_social.json"
+    },
+    {
+      "name": "analytics_content",
+      "display_name": "Analytics & Content Management",
+      "description": "User events tracking, analytics data, prompts, articles, enterprise inquiries, app versions, experiments, and sign-in activities.",
+      "table_count": 17,
+      "tables": [
+        "event",
+        "eventbak",
+        "daily_new_users",
+        "daily_new_uuid",
+        "daily_uuid",
+        "platform_ai_prompt",
+        "platform_article",
+        "platform_enterprise_inquiry",
+        "chatpal_app_version",
+        "experiment",
+        "platform_user_sign_detail",
+        "platform_user_sign_status",
+        "migrations",
+        "chat",
+        "gpt-5-chat",
+        "video_all",
+        "opennext"
+      ],
+      "file_path": "domains/analytics_content.json"
+    }
+  ]
+}

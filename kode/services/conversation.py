@@ -24,7 +24,6 @@ from kode.tools import (
     MemoryWriteTool,
     MultiEditTool,
     TodoWriteTool,
-    TaskTool,
 )
 # Import database tools if available
 try:
@@ -35,11 +34,10 @@ try:
     )
     from kode.tools.ontology_tools import (
         OntologyBuilderTool,
-        OntologyManagerTool,
         OntologySearchTool,
-        OntologyQualityScoreTool,
-        OntologyUncertaintyResolverTool,
     )
+    from kode.tools.domain_uncertainty_analyzer import DomainUncertaintyAnalyzer
+    from kode.tools.uncertainty_qa_tool import UncertaintyQAManager
     HAS_DATABASE_TOOLS = True
 except ImportError:
     HAS_DATABASE_TOOLS = False
@@ -77,9 +75,6 @@ class AsyncConversationService:
         self.config = self.config_manager.get_all()
         self.model_manager = ModelManager(self.config)
 
-        # 单 agent 系统：直接创建内置的数据分析 agent 配置
-        self.agent_config = self._create_data_analyst_agent()
-
         # Setup tools (matching CLI's tool setup)
         self.tools = [
             # File operations
@@ -96,7 +91,6 @@ class AsyncConversationService:
             MemoryWriteTool(),
             # Advanced
             TodoWriteTool(),
-            TaskTool(),
         ]
 
         # Add interaction tools
@@ -113,21 +107,23 @@ class AsyncConversationService:
                 DatabaseConnectTool(),
                 DatabaseSchemaExtractorTool(),
                 DatabaseExecuteQueryTool(),
+                DomainUncertaintyAnalyzer(),  # 并行域分析工具
+                UncertaintyQAManager(),  # 不确定性问答管理
                 OntologyBuilderTool(),
-                OntologyManagerTool(),
                 OntologySearchTool(),
-                OntologyQualityScoreTool(),
-                OntologyUncertaintyResolverTool(),
             ])
-            logger.info("Database and ontology tools loaded (with quality & uncertainty tools)")
+            logger.info("Database and ontology tools loaded (with uncertainty Q&A system)")
 
-            # Load existing database connections from persistence
+            # Load existing database connections from persistence FIRST
             self._load_database_connections()
 
         # Add visualization tools if available
         if HAS_VISUALIZATION_TOOLS:
             self.tools.append(ChartGeneratorTool())
             logger.info("Visualization tools loaded (ChartGenerator)")
+
+        # 单 agent 系统：在加载完数据库连接后，创建内置的数据分析 agent 配置
+        self.agent_config = self._create_data_analyst_agent()
 
 
     def _create_data_analyst_agent(self) -> AgentConfig:
@@ -138,7 +134,11 @@ class AsyncConversationService:
 
         # 获取缓存资源信息
         cached_resources = self._get_cached_resources_context()
-        cache_section = f"\n\n## 可用的缓存资源\n\n{cached_resources}\n\n**重要**: 优先使用缓存!如果有缓存的schema或ontology\n" if cached_resources else ""
+        cache_section = f"\n\n## 可用的文件资源\n\n{cached_resources}\n\n**重要**: 优先使用缓存!如果有缓存的schema或ontology\n" if cached_resources else ""
+
+        # 获取数据库连接信息
+        db_connections = self._get_database_context()
+        db_section = db_connections if db_connections else ""
 
         return AgentConfig(
             name="data-analyst",
@@ -148,6 +148,7 @@ class AsyncConversationService:
 
 {system_info}
 {cache_section}
+{db_section}
 ## 核心能力
 
 ### 1. 数据库连接和理解
@@ -177,11 +178,108 @@ class AsyncConversationService:
 - 提供可操作的业务建议
 - 推荐下一步分析方向
 
-## 本体构建工作流流程（首次连接数据库时执行）
-1. **检查缓存** → 没有数据库schema文件，请调用DatabaseSchemaExtractor生成
-2. **构建本体** → 调用OntologyBuilder将schema转换为业务本体
-3. **完善本体** → 针对本体文件中uncertainties块的高优先级问题，使用AskUser工具向用户确认
-4. **保存本体** → 自动保存为 ontology_latest.json
+## 本体构建工作流流程（首次连接数据库时执行）⭐ 智能简化版
+
+**前提**：Schema 已通过 DatabaseSchemaExtractor 提取并保存
+
+### 🚀 智能检测逻辑（OntologyBuilder 自动执行）
+
+**重要**：直接调用 **OntologyBuilder** 即可，它会自动检测并提示后续步骤。
+
+```
+用户: "帮我构建本体"
+↓
+OntologyBuilder 自动检测：
+  1. 检查 uncertainties.json 是否存在
+     ├─ 不存在 → 返回错误，提示先运行 DomainUncertaintyAnalyzer
+     └─ 存在 → 继续检查 high 问题
+  2. 检查 high 优先级问题状态
+     ├─ 有未解决 → 返回错误，提示使用 UncertaintyQAManager
+     └─ 全部已解决 → 开始构建本体
+```
+
+**你不需要手动判断，OntologyBuilder 会自动提示正确的操作步骤！**
+
+---
+
+### 第1步：不确定性分析（仅首次需要）
+
+**触发条件**：OntologyBuilder 提示 "missing_uncertainty_analysis"
+
+- 运行 **DomainUncertaintyAnalyzer**（仅运行一次）
+- 这个工具会：
+  * 读取 domain_index.json（13个业务域）
+  * 并行调用 AI 分析每个域的不确定性
+  * 生成 uncertainties.json（按 high/medium/low 分组）
+- **重要**：如果 uncertainties.json 已存在，不要重复运行此工具
+
+### 第2步：回答高优先级问题（强制门禁）⭐ 关键卡点
+
+**使用 UncertaintyQAManager 工具管理问答流程**：
+
+1. **加载问题列表**：
+   ```
+   UncertaintyQAManager(connection_name="yanfa", action="load")
+   ```
+   - 返回所有未解决的 high 优先级问题
+   - 每个问题包含唯一 ID、问题描述、上下文、影响等信息
+
+2. **提问并记录回答（两种模式）**：
+
+   **模式A：批量问答（推荐，用户友好）⭐**
+   - 当问题数量 >= 5 时，使用批量模式
+   - 步骤：
+     a) 批量加载问题（支持分组和限制数量）：
+        ```
+        UncertaintyQAManager(
+          connection_name="yanfa",
+          action="batch_load",
+          group_by="domain",  # 或 "priority"
+          limit=10  # 可选，限制问题数量
+        )
+        ```
+     b) **直接告诉用户**："我已经为你准备了批量问答表单，请在界面上填写并提交。提交后我会继续处理。"
+        - ⚠️ **不要使用 AskUser 工具**，因为前端会自动渲染表单
+        - 等待用户在前端填写表单并提交
+     c) 用户提交后，前端会调用 batch_answer API，工具会自动记录所有答案
+
+   **模式B：逐个问答（问题数量 < 5 时使用）**
+   - 使用 **AskUser** 工具逐个提问
+   - 问题格式：`{{question}}\\n\\n上下文：{{context}}\\n影响：{{impact}}`
+   - 获得用户回答后，立即记录：
+     ```
+     UncertaintyQAManager(
+       connection_name="yanfa",
+       action="answer",
+       uncertainty_id="user_management_platform_user_0",
+       answer="用户的回答内容"
+     )
+     ```
+
+3. **检查进度**：
+   ```
+   UncertaintyQAManager(connection_name="yanfa", action="status")
+   ```
+   - 返回剩余未解决的 high 问题数量
+   - can_build_ontology: true/false
+
+4. **强制门禁**：
+   - **只有当 can_build_ontology=true 时** → 才能调用 OntologyBuilder
+   - 否则必须继续提问，直到所有 high 问题解决
+
+### 第3步：构建本体
+- 调用 **OntologyBuilder** 将 schema 转换为业务本体
+- **重要**：构建时会自动包含所有域的不确定性（包括已解决的）
+- 自动保存为 ontology_latest.json
+
+### 第4步：可选 - 处理 medium/low 优先级问题
+- 可在后续分析过程中，遇到相关问题时再询问用户
+- 使用 **OntologyUncertaintyResolver** 记录答案并更新本体
+
+**强制规则**：
+- ❌ **禁止跳过第2步**，high 优先级问题必须全部解决
+- ✅ medium/low 问题可以延迟处理
+- ✅ 所有不确定性记录在本体中，用于后续分析时参考
 
 ## 用户问答工作流流程（强制执行，不可跳过）⭐
 
@@ -202,12 +300,20 @@ class AsyncConversationService:
 
 3. **分析不确定性（关键步骤！）** ⭐⭐⭐
    - 检查 OntologySearch 返回的 `uncertainties.related` 列表
-   - **如果存在相关且未解决的不确定性**：
+
+   - **如果存在已解决的不确定性（status=resolved）**：
+     a. **严格遵循用户的回答（answer字段）**
+     b. 示例："订单表歧义已解决，用户确认使用 platform_trade_order（order表已废弃）"
+     c. **直接应用，无需再次询问用户**
+     d. 在生成SQL时遵循这些规则
+
+   - **如果存在未解决的不确定性（status=unresolved）**：
      a. **优先处理 high priority 的不确定性**
      b. **使用 AskUser 工具询问用户**，例如：
         "您提到的'订单'，系统发现有2个订单表（order 和 platform_trade_order），请问您想查询的是哪个订单表？"
      c. 等待用户回答后再继续
      d. 可选：使用 OntologyUncertaintyResolver 工具记录用户的回答
+
    - **如果没有相关不确定性** → 继续下一步
 
 4. **生成并执行 SQL**
@@ -217,12 +323,10 @@ class AsyncConversationService:
    - 使用 DatabaseExecuteQuery 执行查询
 
 5. **结果展示（数据溯源）**
-   - 格式：数据来自 {{business_name_cn}} ({{technical_name}}表)
+   - 格式：数据来自 {{{{business_name_cn}}}} ({{{{technical_name}}}}表)
    - 在回复中包含业务术语的中文名称
 
 **强制规则**：
-- ❌ 禁止跳过语义搜索步骤直接查 schema 生成 SQL
-- ❌ 禁止不使用 OntologySearch 就生成 SQL
 - ❌ 禁止忽略 uncertainties.related 列表中的 high priority 不确定性
 - ✅ **必须**检查并处理相关的不确定性（使用 AskUser 工具）
 - ✅ 必须在回复中包含业务术语的中文名称（从本体获取）
@@ -235,84 +339,46 @@ class AsyncConversationService:
 ```
 步骤1: 使用 OntologySearch 搜索"订单"
 返回结果:
-{{
-  "results": {{
+{{{{
+  "results": {{{{
     "concepts": [
-      {{"technical_name": "order", "business_name_cn": "订单", ...}},
-      {{"technical_name": "platform_trade_order", "business_name_cn": "平台交易订单", ...}}
+      {{{{"technical_name": "order", "business_name_cn": "订单", ...}}}},
+      {{{{"technical_name": "platform_trade_order", "business_name_cn": "平台交易订单", ...}}}}
     ]
-  }},
-  "uncertainties": {{
+  }}}},
+  "uncertainties": {{{{
     "related": [
-      {{
+      {{{{
         "type": "schema_ambiguity",
         "priority": "high",
         "entity": "order",
         "question": "系统中存在 order 和 platform_trade_order 两个订单表，无法区分用途",
         "status": "unresolved"
-      }}
+      }}}}
     ]
-  }}
-}}
+  }}}}
+}}}}
 
 步骤2: 发现 high priority 不确定性 → 使用 AskUser 工具
-AskUser({{
-  "question": "您好，系统中发现有两个订单表：\n1. order（订单表）\n2. platform_trade_order（平台交易订单表）\n请问您想查询的是哪个订单表？",
+AskUser({{{{
+  "question": "您好，系统中发现有两个订单表：\\n1. order（订单表）\\n2. platform_trade_order（平台交易订单表）\\n请问您想查询的是哪个订单表？",
   "context": "...",
   "options": ["order", "platform_trade_order"]
-}})
+}}}})
 
-步骤3: 等待用户回答 → 用户选择 "platform_trade_order"
+步骤3: 等待用户回答 → 假设用户选择 "platform_trade_order"
 
 步骤4: 生成 SQL 并执行
 SELECT * FROM platform_trade_order -- 平台交易订单表
 ORDER BY create_time DESC
 LIMIT 10;
 
-步骤5: 可选 - 记录用户的回答
-OntologyUncertaintyResolver({{
+步骤5: 记录用户的回答
+OntologyUncertaintyResolver({{{{
   "connection_name": "erp_db",
   "uncertainty_index": 0,
   "resolution": "用户明确表示查询 platform_trade_order 表"
-}})
-```
-
-## 工具使用最佳实践 ⭐（上下文管理核心）
-
-### 文件读取策略（避免上下文污染）
-
-**强制规则**：
-1. ❌ **禁止盲目读取大文件**
-   - 读取前必须评估文件大小影响
-   - 大文件会迅速耗尽你的"注意力预算"
-
-2. ✅ **推荐三步工作流**：
-   ```
-   步骤1: Glob 找到候选文件
-   Glob(pattern="**/*.py")
-
-   步骤2: Grep 精确定位目标代码（带行号）
-   Grep(pattern="def calculate_total", path="services/", output_mode="content")
-   → billing.py:156:def calculate_total(...)
-
-   步骤3: FileRead 精确读取（使用 offset/limit 分页）
-   FileRead(file_path="billing.py", offset=150, limit=30)
-   → 只消耗 ~500 tokens,节省 96%!
-   ```
-
-**对比示例**：
-```
-任务: 修改 calculate_total 函数
-
-❌ 错误方式:
-FileRead("services/billing.py")
-→ 可能 3000 行,浪费 12,000 tokens
-
-✅ 正确方式:
-Grep(pattern="def calculate_total", path="services/", output_mode="content")
-→ billing.py:156:def calculate_total(...)
-FileRead(file_path="billing.py", offset=150, limit=30)
-→ 只消耗 ~500 tokens
+}}}})
 ```
 
 ### 上下文预算主动管理
@@ -322,10 +388,6 @@ FileRead(file_path="billing.py", offset=150, limit=30)
 - 剩余 < 30%: 避免读取大文件,优先使用 Grep
 - 剩余 < 10%: 立即提醒用户开启新对话
 
-**工具选择优先级**：
-1. **Grep 搜索**（最轻量，~100 tokens）
-2. **FileRead 分页**（中等，~500-2000 tokens）
-3. **完整文件读取**（最后手段，可能 >10,000 tokens）
 
 ## 重要原则
 
@@ -337,19 +399,7 @@ FileRead(file_path="billing.py", offset=150, limit=30)
 - **清晰表达**：用中文回复，用业务语言解释
 - **保护隐私**：不泄露敏感数据
 - **人机协同**：对于干扰你的表或者数据，请和用户沟通确认清楚再执行
-- **上下文意识**：主动管理你的注意力预算，使用 Grep 而非盲目 FileRead
-
-## 使用可视化工具的最佳实践
-
-当执行数据查询后：
-1. 在文本回复中整合图表和洞察，形成完整的分析报告
-
-示例流程：
-```
-用户："上个月销售趋势"
-→ 执行 SQL 查询
-→ 返回：文字说明 + 图表配置 + 洞察列表 +数据源追溯
-```
+- **上下文意识**：主动管理你的注意力预算，使用glob， Grep先探索，然后使用FileRead读取关键内容
 
 和业务不相干的问题，请直接拒绝。""",
             tools=["*"],  # 所有工具都可用
@@ -390,23 +440,54 @@ FileRead(file_path="billing.py", offset=150, limit=30)
         schema_dir = Path(schema_path)
         if schema_dir.exists():
             cached_schemas = list(schema_dir.glob("*/schema_latest.json"))
-            context_parts.append(f"缓存所在路径: {schema_path}")
+            context_parts.append(f"数据库结构文件所在路径: {schema_path}")
             if cached_schemas:
                 context_parts.append("## 已缓存的数据库Schema")
-               
                 for schema_file in cached_schemas:
                     conn_name = schema_file.parent.name
+                    context_parts.append(f"- {conn_name}: {schema_file.absolute()}")
+
+                    # Check for domain partitioning
+                    domain_index_file = schema_file.parent / "domain_index.json"
+                    if domain_index_file.exists():
+                        import json
+                        try:
+                            with open(domain_index_file, 'r', encoding='utf-8') as f:
+                                domain_index = json.load(f)
+
+                            context_parts.append(f"\n  **领域分组**: {conn_name} 已分组到 {domain_index.get('total_domains', 0)} 个业务域")
+                            context_parts.append(f"  **索引文件**: {domain_index_file.absolute()}")
+                            context_parts.append("  **可用领域**:")
+                            for domain in domain_index.get('domains', []):
+                                context_parts.append(
+                                    f"    - {domain['name']} ({domain['display_name']}): "
+                                    f"{domain['table_count']} 个表 - {domain['description']}"
+                                )
+                                context_parts.append(f"      文件: {schema_file.parent / domain['file_path']}")
+
+                            context_parts.append("\n  **使用方法**: 根据用户问题，只加载相关的领域文件（减少上下文占用）")
+                            context_parts.append("  示例: 用户问订单相关 → 只读取 order_payment_system.json")
+                        except Exception as e:
+                            context_parts.append(f"  (领域索引加载失败: {e})")
+
+                    # Check for uncertainty analysis file
+                    uncertainties_file = schema_file.parent / "uncertainties.json"
+                    if uncertainties_file.exists():
+                        context_parts.append(f"\n  **不确定性分析**: {uncertainties_file.absolute()}")
+                        context_parts.append("  包含业务规则不明确、数据不一致、缺失约束等需要与用户确认的问题")
+                        context_parts.append("  **使用方法**: 需要深入分析数据问题时，使用 UncertaintyQATool 工具进行问答式诊断")
 
         # Check ontology cache
         ontology_dir = Path(ontology_path)
         if ontology_dir.exists():
             cached_ontologies = list(ontology_dir.glob("*/ontology_latest.json"))
-            context_parts.append(f"缓存所在路径: {ontology_path}")
+            context_parts.append(f"业务本体文件所在路径: {ontology_path}")
             if cached_ontologies:
                 context_parts.append("\n## 已缓存的业务本体(Ontology)")
-                
+
                 for ontology_file in cached_ontologies:
                     conn_name = ontology_file.parent.name
+                    context_parts.append(f"- {conn_name}: {ontology_file.absolute()}")
 
         if context_parts:
             return "\n".join(context_parts)
@@ -478,11 +559,6 @@ FileRead(file_path="billing.py", offset=150, limit=30)
             if conn.db_schema:
                 context_parts.append(f"- **默认Schema**: {conn.db_schema}")
 
-            context_parts.append("\n**重要提示**:")
-            context_parts.append("1. 使用 `DatabaseTestConnectionTool` 测试连接健康状态")
-            context_parts.append("2. 使用 `DatabaseSchemaExtractorTool` 提取完整的数据库结构(表、字段、关系等)")
-            context_parts.append("3. 使用 `OntologyBuilderTool` 构建业务本体模型")
-            context_parts.append("4. 回答问题时请结合提取的数据库结构信息\n")
 
             return "\n".join(context_parts)
 
@@ -650,7 +726,8 @@ FileRead(file_path="billing.py", offset=150, limit=30)
                 streaming_agent._current_conversation_id = conversation_id
                 logger.info(f"[DEBUG] AnthropicStreamingAgent created successfully")
             except Exception as e:
-                logger.error(f"[ERROR] Failed to create AnthropicStreamingAgent: {e}", exc_info=True)
+                from kode.utils.logger import safe_log_exception
+                safe_log_exception(logger, f"[ERROR] Failed to create AnthropicStreamingAgent: {e}", e)
                 raise
 
             # Stream chunks from agent
@@ -697,7 +774,8 @@ FileRead(file_path="billing.py", offset=150, limit=30)
             logger.info(f"Task completed for conversation {conversation_id}")
 
         except Exception as e:
-            logger.error(f"Error executing task: {e}", exc_info=True)
+            from kode.utils.logger import safe_log_exception
+            safe_log_exception(logger, f"Error executing task: {e}", e)
             yield {
                 "type": "error",
                 "content": f"Error: {str(e)}",

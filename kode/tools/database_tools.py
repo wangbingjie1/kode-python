@@ -352,6 +352,15 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 save_result = self._save_schema(schema_data, connection_name, version)
                 schema_data["storage"] = save_result
 
+            # Auto-cluster schema into domains (if enabled in config)
+            clustering_result = None
+            if auto_save and save_result and save_result.get("saved"):
+                clustering_result = self._auto_cluster_schema(
+                    connection_name=connection_name,
+                    schema_file=save_result.get("latest_file"),
+                    enable_progress=enable_progress
+                )
+
             # 构建概要信息(不返回完整数据,避免上下文爆炸)
             # 注意: schema_data["tables"] 是字典 {table_name: table_data}, 不是列表
             tables_dict = schema_data.get("tables", {})
@@ -393,6 +402,10 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 }
             else:
                 summary["warning"] = "Schema 未保存到文件 (auto_save=False),完整数据未持久化"
+
+            # 如果执行了聚类,添加聚类结果
+            if clustering_result:
+                summary["clustering"] = clustering_result
 
             return json.dumps(summary, indent=2, ensure_ascii=False)
 
@@ -550,6 +563,85 @@ class DatabaseSchemaExtractorTool(KodeTool):
 
         return results
 
+    def _extract_enum_values(
+        self, connection_name: str, table_name: str, column: Dict[str, Any]
+    ) -> Optional[List[str]]:
+        """
+        Extract enum values for ENUM type columns.
+
+        Supports MySQL and PostgreSQL enum types.
+
+        Args:
+            connection_name: Database connection name
+            table_name: Table name
+            column: Column metadata from inspector
+
+        Returns:
+            List of enum values or None if not an enum type
+        """
+        try:
+            connection = db_manager.get_connection(connection_name)
+            db_type = connection.db_type.lower()
+            col_type_str = str(column["type"]).lower()
+
+            # Check if it's an ENUM type
+            if "enum" not in col_type_str:
+                return None
+
+            engine = db_manager.get_engine(connection_name)
+
+            with engine.connect() as conn:
+                if db_type == "mysql":
+                    # MySQL: Extract from INFORMATION_SCHEMA.COLUMNS
+                    query = text("""
+                        SELECT COLUMN_TYPE
+                        FROM INFORMATION_SCHEMA.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                          AND TABLE_NAME = :table_name
+                          AND COLUMN_NAME = :column_name
+                    """)
+                    result = conn.execute(query, {"table_name": table_name, "column_name": column["name"]})
+                    row = result.fetchone()
+
+                    if row:
+                        column_type = row[0]  # e.g., "enum('free','pro','enterprise')"
+                        # Parse enum values using regex
+                        match = re.search(r"enum\((.*?)\)", column_type, re.IGNORECASE)
+                        if match:
+                            enum_str = match.group(1)
+                            # Extract values (strip quotes)
+                            enum_values = [v.strip().strip("'\"") for v in enum_str.split(",")]
+                            return enum_values
+
+                elif db_type == "postgresql":
+                    # PostgreSQL: Extract from pg_type and pg_enum
+                    # First, get the enum type name from the column type
+                    type_name_match = re.search(r"([a-z_]+)", col_type_str)
+                    if not type_name_match:
+                        return None
+
+                    type_name = type_name_match.group(1)
+
+                    query = text("""
+                        SELECT e.enumlabel
+                        FROM pg_type t
+                        JOIN pg_enum e ON t.oid = e.enumtypid
+                        WHERE t.typname = :type_name
+                        ORDER BY e.enumsortorder
+                    """)
+                    result = conn.execute(query, {"type_name": type_name})
+                    rows = result.fetchall()
+
+                    if rows:
+                        enum_values = [row[0] for row in rows]
+                        return enum_values
+
+            return None
+
+        except Exception as e:
+            # If extraction fails, silently return None (not critical)
+            return None
+
     def _extract_single_table_metadata(
         self,
         connection_name: str,
@@ -589,8 +681,10 @@ class DatabaseSchemaExtractorTool(KodeTool):
         # Columns
         if include_columns:
             columns = inspector.get_columns(table_name)
-            table_data["columns"] = [
-                {
+            enriched_columns = []
+
+            for col in columns:
+                col_info = {
                     "name": col["name"],
                     "type": str(col["type"]),
                     "nullable": col.get("nullable", True),
@@ -598,9 +692,16 @@ class DatabaseSchemaExtractorTool(KodeTool):
                     "autoincrement": col.get("autoincrement", False),
                     "comment": col.get("comment"),
                 }
-                for col in columns
-            ]
-            table_data["column_count"] = len(columns)
+
+                # Extract enum values for ENUM type columns
+                enum_values = self._extract_enum_values(connection_name, table_name, col)
+                if enum_values:
+                    col_info["enum_values"] = enum_values
+
+                enriched_columns.append(col_info)
+
+            table_data["columns"] = enriched_columns
+            table_data["column_count"] = len(enriched_columns)
 
         # Primary Keys
         if include_constraints:
@@ -687,6 +788,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
                             TABLE_NAME as table_name,
                             COLUMN_NAME as column_name,
                             DATA_TYPE as data_type,
+                            COLUMN_TYPE as column_type,
                             IS_NULLABLE as is_nullable,
                             COLUMN_DEFAULT as column_default,
                             COLUMN_COMMENT as comment
@@ -704,13 +806,36 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 for row in result:
                     table_name = row[0]
                     if table_name in results:
-                        results[table_name]["columns"].append({
-                            "name": row[1],
-                            "type": row[2],
-                            "nullable": row[3] == "YES",
-                            "default": row[4],
-                            "comment": row[5] if len(row) > 5 else None
-                        })
+                        # MySQL: table_name, column_name, data_type, column_type, is_nullable, column_default, comment
+                        # PostgreSQL: table_name, column_name, data_type, is_nullable, column_default, comment
+                        if db_type == "mysql":
+                            col_info = {
+                                "name": row[1],
+                                "type": row[2],
+                                "nullable": row[4] == "YES",
+                                "default": row[5] if len(row) > 5 else None,
+                                "comment": row[6] if len(row) > 6 else None
+                            }
+
+                            # Extract enum values from COLUMN_TYPE (row[3])
+                            column_type = row[3]  # e.g., "enum('free','pro','enterprise')"
+                            if column_type and "enum" in column_type.lower():
+                                enum_match = re.search(r"enum\((.*?)\)", column_type, re.IGNORECASE)
+                                if enum_match:
+                                    enum_str = enum_match.group(1)
+                                    enum_values = [v.strip().strip("'\"") for v in enum_str.split(",")]
+                                    col_info["enum_values"] = enum_values
+                        else:
+                            # PostgreSQL
+                            col_info = {
+                                "name": row[1],
+                                "type": row[2],
+                                "nullable": row[3] == "YES",
+                                "default": row[4] if len(row) > 4 else None,
+                                "comment": row[5] if len(row) > 5 else None
+                            }
+
+                        results[table_name]["columns"].append(col_info)
 
                 # 2. 批量查询主键
                 if db_type == "postgresql":
@@ -1025,7 +1150,67 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 "error": str(e),
             }
 
+    def _auto_cluster_schema(
+        self, connection_name: str, schema_file: str, enable_progress: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Automatically cluster schema into domains.
 
+        Args:
+            connection_name: Database connection name
+            schema_file: Path to saved schema file
+            enable_progress: Enable progress callbacks
+
+        Returns:
+            Clustering result summary
+
+        Raises:
+            Exception: If clustering fails, propagate error to caller
+        """
+        # Send progress update
+        if enable_progress:
+            self._emit_progress("AI analyzing tables for domain clustering...", 0, 1)
+
+        # Import and instantiate clusterer
+        from kode.tools.schema_clustering_tool import DatabaseSchemaClusterer
+
+        clusterer = DatabaseSchemaClusterer()
+
+        # Execute clustering with fixed parameters
+        result_json = clusterer._run(
+            connection_name=connection_name,
+            schema_file=schema_file,
+            target_tables_per_domain=10,
+            max_columns_for_analysis=20,
+            llm_model="main",
+            output_language="en",
+        )
+
+        # Parse result
+        result = json.loads(result_json)
+
+        # Check status and raise if failed
+        if result.get("status") != "success":
+            error_msg = result.get("message", "Unknown clustering error")
+            raise RuntimeError(f"Schema clustering failed: {error_msg}")
+
+        if enable_progress:
+            total_domains = result["clustering_summary"]["total_domains"]
+            self._emit_progress(f"Successfully clustered into {total_domains} domains", 1, 1)
+
+        # Return compact summary
+        return {
+            "status": "success",
+            "total_domains": result["clustering_summary"]["total_domains"],
+            "domains": [
+                {
+                    "name": d["name"],
+                    "table_count": d["table_count"],
+                }
+                for d in result["clustering_summary"]["domains"]
+            ],
+            "index_file": result["storage"]["domain_index_file"],
+        }
 
 
 class DatabaseExecuteQueryTool(KodeTool):

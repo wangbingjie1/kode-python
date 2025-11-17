@@ -7,7 +7,7 @@ from .grep_tool import GrepTool
 from .glob_tool import GlobTool
 from .memory_tools import MemoryReadTool, MemoryWriteTool
 
-from .advanced_tools import MultiEditTool, TodoWriteTool, TaskTool
+from .advanced_tools import MultiEditTool, TodoWriteTool
 from .database_tools import (
     DatabaseConnectTool,
     DatabaseSchemaExtractorTool,
@@ -15,10 +15,7 @@ from .database_tools import (
 )
 from .ontology_tools import (
     OntologyBuilderTool,
-    OntologyManagerTool,
     OntologySearchTool,
-    OntologyQualityScoreTool,
-    OntologyUncertaintyResolverTool,
 )
 from .interaction_tools import AskUserTool
 from .visualization_tools import ChartGeneratorTool
@@ -40,17 +37,13 @@ __all__ = [
     "MemoryWriteTool",
     # Advanced
     "TodoWriteTool",
-    "TaskTool",
     # Database (optimized: removed Test/Disconnect/List)
     "DatabaseConnectTool",
     "DatabaseSchemaExtractorTool",
     "DatabaseExecuteQueryTool",
-    # Ontology (optimized: merged Storage+Load -> Manager)
+    # Ontology
     "OntologyBuilderTool",
-    "OntologyManagerTool",
     "OntologySearchTool",
-    "OntologyQualityScoreTool",
-    "OntologyUncertaintyResolverTool",
     # Interaction
     "AskUserTool",
     # Visualization

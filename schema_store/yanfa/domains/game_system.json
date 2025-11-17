@@ -1,0 +1,2821 @@
+{
+  "domain_name": "game_system",
+  "display_name": "Game & Gamification",
+  "description": "Game mechanics, rounds, fights, rewards, user feeds, and permble game-related data including archived tables.",
+  "table_count": 13,
+  "created_at": "2025-11-17T14:24:49.846254",
+  "connection": {
+    "name": "yanfa",
+    "db_type": "mysql",
+    "host": "legaldao.cpcugqubfjku.ap-southeast-1.rds.amazonaws.com",
+    "port": 3306,
+    "database": "yanfa",
+    "username": "wbjread",
+    "db_schema": "",
+    "ssl": false
+  },
+  "tables": {
+    "ao_permble_game": {
+      "name": "ao_permble_game",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "游戏名称"
+        },
+        {
+          "name": "status",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "游戏状态 running|finished"
+        },
+        {
+          "name": "finished_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "结束时间"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 11,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "name": null,
+            "status": "finished",
+            "finished_at": 1730804040270,
+            "create_at": 1730800800006,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 2,
+            "name": null,
+            "status": "finished",
+            "finished_at": 1730807640257,
+            "create_at": 1730804400373,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 3,
+            "name": null,
+            "status": "finished",
+            "finished_at": 1730811240332,
+            "create_at": 1730808000060,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 4,
+            "name": null,
+            "status": "finished",
+            "finished_at": 1730814840441,
+            "create_at": 1730811600096,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 5,
+            "name": null,
+            "status": "finished",
+            "finished_at": 1730818440300,
+            "create_at": 1730815200153,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_round": {
+      "name": "ao_permble_round",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "游戏ID"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "轮次名称"
+        },
+        {
+          "name": "round_count",
+          "type": "int",
+          "nullable": true,
+          "default": "1",
+          "comment": "轮次"
+        },
+        {
+          "name": "finished_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "结束时间"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "game_id": 1,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1730800802136,
+            "create_at": 1730800800354,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 2,
+            "game_id": 1,
+            "name": null,
+            "round_count": 2,
+            "finished_at": 1730801160377,
+            "create_at": 1730801160170,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 3,
+            "game_id": 1,
+            "name": null,
+            "round_count": 3,
+            "finished_at": 1730801520410,
+            "create_at": 1730801520038,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 4,
+            "game_id": 1,
+            "name": null,
+            "round_count": 4,
+            "finished_at": 1730801880287,
+            "create_at": 1730801880157,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 5,
+            "game_id": 1,
+            "name": null,
+            "round_count": 5,
+            "finished_at": 1730802240320,
+            "create_at": 1730802240150,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_round_fight": {
+      "name": "ao_permble_round_fight",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "游戏ID"
+        },
+        {
+          "name": "round_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "轮次ID"
+        },
+        {
+          "name": "from_user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "轮次对决 user_id"
+        },
+        {
+          "name": "to_user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "轮次对决 user_id 可能为空 当用户遇上事件而不是玩家"
+        },
+        {
+          "name": "fight_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗类型，user|event"
+        },
+        {
+          "name": "fight_result_desc",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗结果描述"
+        },
+        {
+          "name": "fight_result",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "lose|win|draw"
+        },
+        {
+          "name": "win_rwd",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "获得点数"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "轮次名称"
+        },
+        {
+          "name": "round_count",
+          "type": "int",
+          "nullable": true,
+          "default": "1",
+          "comment": "轮次"
+        },
+        {
+          "name": "finished_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "结束时间"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "from_user_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "to_user_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "world_feeds",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 22,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 890167,
+            "game_id": 906,
+            "round_id": 9020,
+            "from_user_id": 219616009831584768,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "🪦<username>DhiikaKusuma</username> had a breath-holding contest with friends, forgot to breathe again.",
+            "fight_result": "lose",
+            "win_rwd": 0,
+            "name": null,
+            "round_count": 5,
+            "finished_at": 1734272641245,
+            "create_at": 1734272641245,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "DhiikaKusuma",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 890168,
+            "game_id": 906,
+            "round_id": 9020,
+            "from_user_id": 230409201795470336,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "💵 +20<username>Divalkz</username> went fishing by the river and accidentally caught a talking goldfish, granting three small wishes.",
+            "fight_result": "win",
+            "win_rwd": 20,
+            "name": null,
+            "round_count": 5,
+            "finished_at": 1734272641248,
+            "create_at": 1734272641248,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "Divalkz",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 890169,
+            "game_id": 906,
+            "round_id": 9020,
+            "from_user_id": 226352644409529344,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "💵 +50<username>Ticky2121</username> befriended a mysterious cat and learned agile movements, boosting agility.",
+            "fight_result": "win",
+            "win_rwd": 50,
+            "name": null,
+            "round_count": 5,
+            "finished_at": 1734272641256,
+            "create_at": 1734272641256,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "Ticky2121",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 890170,
+            "game_id": 906,
+            "round_id": 9020,
+            "from_user_id": 232089699185857536,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "🛌<username>mbhkakung1</username> met some lost tourists in Obtimus Forest and guided them for hours.",
+            "fight_result": "draw",
+            "win_rwd": 0,
+            "name": null,
+            "round_count": 5,
+            "finished_at": 1734272641265,
+            "create_at": 1734272641265,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "mbhkakung1",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 890171,
+            "game_id": 906,
+            "round_id": 9020,
+            "from_user_id": 229450299226461184,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "💵 +1<username>arminn121212</username> wrote a diary with invisible ink, achieving maximum secrecy.",
+            "fight_result": "win",
+            "win_rwd": 1,
+            "name": null,
+            "round_count": 5,
+            "finished_at": 1734272641267,
+            "create_at": 1734272641267,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "arminn121212",
+            "to_user_name": null,
+            "world_feeds": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_round_fight_2024_11_28": {
+      "name": "ao_permble_round_fight_2024_11_28",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "游戏ID"
+        },
+        {
+          "name": "round_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "轮次ID"
+        },
+        {
+          "name": "from_user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "轮次对决 user_id"
+        },
+        {
+          "name": "to_user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "轮次对决 user_id 可能为空 当用户遇上事件而不是玩家"
+        },
+        {
+          "name": "fight_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗类型，user|event"
+        },
+        {
+          "name": "fight_result_desc",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗结果描述"
+        },
+        {
+          "name": "fight_result",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "lose|win|draw"
+        },
+        {
+          "name": "win_rwd",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "获得点数"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "轮次名称"
+        },
+        {
+          "name": "round_count",
+          "type": "int",
+          "nullable": true,
+          "default": "1",
+          "comment": "轮次"
+        },
+        {
+          "name": "finished_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "结束时间"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "from_user_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "to_user_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "world_feeds",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 22,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "game_id": 1,
+            "round_id": 1,
+            "from_user_id": 12,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "🪦<username>MiaMalkova (Parody)</username> tried to pet a cute rabbit, which turned out to be a shapeshifter and swallowed them whole.",
+            "fight_result": "lose",
+            "win_rwd": 0,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1730800801870,
+            "create_at": 1730800801870,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "MiaMalkova (Parody)",
+            "to_user_name": null,
+            "world_feeds": 1
+          },
+          {
+            "id": 2,
+            "game_id": 1,
+            "round_id": 1,
+            "from_user_id": 22,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "💵 +20<username>skylerlo_ (Parody)</username> stumbled upon a magical hat and instantly learned teleportation upon wearing it, saving lots of travel time.",
+            "fight_result": "win",
+            "win_rwd": 20,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1730800801875,
+            "create_at": 1730800801875,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "skylerlo_ (Parody)",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 3,
+            "game_id": 1,
+            "round_id": 1,
+            "from_user_id": 9,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "💵 +50<username>MilfyLana (Parody)</username> read in an ancient library, overloading with knowledge, becoming a walking encyclopedia.",
+            "fight_result": "win",
+            "win_rwd": 50,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1730800801887,
+            "create_at": 1730800801887,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "MilfyLana (Parody)",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 4,
+            "game_id": 1,
+            "round_id": 1,
+            "from_user_id": 1,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "💵 +20<username>VitalikButerin (Parody)</username> got lost in a cave and developed an extraordinary sense of direction, never fearing getting lost again.",
+            "fight_result": "win",
+            "win_rwd": 20,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1730800801932,
+            "create_at": 1730800801932,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "VitalikButerin (Parody)",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 5,
+            "game_id": 1,
+            "round_id": 1,
+            "from_user_id": 103729257062077440,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "💎 +1000<username>ZackZ4399</username> got bitten by a stick insect, magically gaining superpowers and transforming into Stick Insect Man.",
+            "fight_result": "win",
+            "win_rwd": 1000,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1730800801943,
+            "create_at": 1730800801943,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "ZackZ4399",
+            "to_user_name": null,
+            "world_feeds": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_round_fight_2024_12_13": {
+      "name": "ao_permble_round_fight_2024_12_13",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "游戏ID"
+        },
+        {
+          "name": "round_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "轮次ID"
+        },
+        {
+          "name": "from_user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "轮次对决 user_id"
+        },
+        {
+          "name": "to_user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "轮次对决 user_id 可能为空 当用户遇上事件而不是玩家"
+        },
+        {
+          "name": "fight_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗类型，user|event"
+        },
+        {
+          "name": "fight_result_desc",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗结果描述"
+        },
+        {
+          "name": "fight_result",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "lose|win|draw"
+        },
+        {
+          "name": "win_rwd",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "获得点数"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "轮次名称"
+        },
+        {
+          "name": "round_count",
+          "type": "int",
+          "nullable": true,
+          "default": "1",
+          "comment": "轮次"
+        },
+        {
+          "name": "finished_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "结束时间"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "from_user_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "to_user_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "world_feeds",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 22,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 9581754,
+            "game_id": 870,
+            "round_id": 8664,
+            "from_user_id": 215413110612169728,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "🛌<username>delphi_hi</username> accidentally fell into a lake and was saved by a mermaid.",
+            "fight_result": "draw",
+            "win_rwd": 0,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1733936442330,
+            "create_at": 1733936442330,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "delphi_hi",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 9581755,
+            "game_id": 870,
+            "round_id": 8664,
+            "from_user_id": 229428028931838976,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "🛌<username>putry_dew</username> went fishing in Obtimus Forest and caught a boot.",
+            "fight_result": "draw",
+            "win_rwd": 0,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1733936442335,
+            "create_at": 1733936442335,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "putry_dew",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 9581756,
+            "game_id": 870,
+            "round_id": 8664,
+            "from_user_id": 236790910157853696,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "💵 +10<username>kirkalex135</username> caught an old boot while fishing, adding a stylish vintage shoe to the wardrobe.",
+            "fight_result": "win",
+            "win_rwd": 10,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1733936442337,
+            "create_at": 1733936442337,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "kirkalex135",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 9581757,
+            "game_id": 870,
+            "round_id": 8664,
+            "from_user_id": 233452357218735104,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "💵 +1<username>0xdstprj</username> spent a day digging for treasure, gathered many rocks, and now has a fine rock collection.",
+            "fight_result": "win",
+            "win_rwd": 1,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1733936442341,
+            "create_at": 1733936442341,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "0xdstprj",
+            "to_user_name": null,
+            "world_feeds": 0
+          },
+          {
+            "id": 9581758,
+            "game_id": 870,
+            "round_id": 8664,
+            "from_user_id": 230749527756248064,
+            "to_user_id": null,
+            "fight_type": "event",
+            "fight_result_desc": "💵 +50<username>HanggalaPu96728</username> meditated under a waterfall and realized powerful mental strength, greatly increasing mental power.",
+            "fight_result": "win",
+            "win_rwd": 50,
+            "name": null,
+            "round_count": 1,
+            "finished_at": 1733936442344,
+            "create_at": 1733936442344,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "from_user_name": "HanggalaPu96728",
+            "to_user_name": null,
+            "world_feeds": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_round_rwd": {
+      "name": "ao_permble_round_rwd",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "游戏ID"
+        },
+        {
+          "name": "round_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "轮次ID"
+        },
+        {
+          "name": "fight_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗ID"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": " user_id"
+        },
+        {
+          "name": "win_rwd",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "获得点数"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "奖励名称"
+        },
+        {
+          "name": "finished_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "结束时间"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 15,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 721332,
+            "game_id": 906,
+            "round_id": 9020,
+            "fight_id": null,
+            "user_id": 241668174792102912,
+            "win_rwd": 100,
+            "name": null,
+            "finished_at": null,
+            "create_at": 1734272641205,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 721333,
+            "game_id": 906,
+            "round_id": 9020,
+            "fight_id": null,
+            "user_id": 242509967494484992,
+            "win_rwd": 100,
+            "name": null,
+            "finished_at": null,
+            "create_at": 1734272641208,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 721334,
+            "game_id": 906,
+            "round_id": 9020,
+            "fight_id": null,
+            "user_id": 242890371388937216,
+            "win_rwd": 100,
+            "name": null,
+            "finished_at": null,
+            "create_at": 1734272641210,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 721335,
+            "game_id": 906,
+            "round_id": 9020,
+            "fight_id": null,
+            "user_id": 242911313716581376,
+            "win_rwd": 100,
+            "name": null,
+            "finished_at": null,
+            "create_at": 1734272641213,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 721336,
+            "game_id": 906,
+            "round_id": 9020,
+            "fight_id": null,
+            "user_id": 242902317471372288,
+            "win_rwd": 100,
+            "name": null,
+            "finished_at": null,
+            "create_at": 1734272641217,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_round_rwd_2024_12_13": {
+      "name": "ao_permble_round_rwd_2024_12_13",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "游戏ID"
+        },
+        {
+          "name": "round_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "轮次ID"
+        },
+        {
+          "name": "fight_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗ID"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": " user_id"
+        },
+        {
+          "name": "win_rwd",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "获得点数"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "奖励名称"
+        },
+        {
+          "name": "finished_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "结束时间"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 15,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 8405040,
+            "game_id": 870,
+            "round_id": 8664,
+            "fight_id": null,
+            "user_id": 103717695228220416,
+            "win_rwd": 100,
+            "name": null,
+            "finished_at": null,
+            "create_at": 1733936403533,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 8405041,
+            "game_id": 870,
+            "round_id": 8664,
+            "fight_id": null,
+            "user_id": 103729257062077440,
+            "win_rwd": 100,
+            "name": null,
+            "finished_at": null,
+            "create_at": 1733936403557,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 8405042,
+            "game_id": 870,
+            "round_id": 8664,
+            "fight_id": null,
+            "user_id": 1,
+            "win_rwd": 100,
+            "name": null,
+            "finished_at": null,
+            "create_at": 1733936403604,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 8405043,
+            "game_id": 870,
+            "round_id": 8664,
+            "fight_id": null,
+            "user_id": 2,
+            "win_rwd": 100,
+            "name": null,
+            "finished_at": null,
+            "create_at": 1733936403620,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 8405044,
+            "game_id": 870,
+            "round_id": 8664,
+            "fight_id": null,
+            "user_id": 3,
+            "win_rwd": 100,
+            "name": null,
+            "finished_at": null,
+            "create_at": 1733936403632,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_game_user_feeds": {
+      "name": "ao_permble_game_user_feeds",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "游戏ID"
+        },
+        {
+          "name": "round_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "轮次ID"
+        },
+        {
+          "name": "fight_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗ID"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "user_id"
+        },
+        {
+          "name": "feed_content",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "信息流内容"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "total_rwd",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "当时总点数"
+        },
+        {
+          "name": "total_kill",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "当时总击杀"
+        },
+        {
+          "name": "total_win",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "当时总获胜局数"
+        },
+        {
+          "name": "message_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "上传到链上的messageId"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 17,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1271825,
+            "game_id": null,
+            "round_id": null,
+            "fight_id": null,
+            "user_id": 242929801017431040,
+            "feed_content": "🐣<username>hitayegemen</username> descended into Obtimus Forest, full of grandiose enthusiasm, and is now eagerly warming up for who knows what.",
+            "create_at": 1734271771210,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 0,
+            "total_kill": 0,
+            "total_win": 0,
+            "message_id": "AkRymrCFd4K_ivwCccmMoXTMtzpOo0spRRynnsWWDYk"
+          },
+          {
+            "id": 1271826,
+            "game_id": null,
+            "round_id": null,
+            "fight_id": null,
+            "user_id": 242921909082133504,
+            "feed_content": "🐣<username>LunalaXira</username> descended into Obtimus Forest, full of grandiose enthusiasm, and is now eagerly warming up for who knows what.",
+            "create_at": 1734272238943,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 0,
+            "total_kill": 0,
+            "total_win": 0,
+            "message_id": "R6vS7zYBTTpfl5BO2JNu2alfVpqsiJ_coUe6eeUbagQ"
+          },
+          {
+            "id": 1271827,
+            "game_id": null,
+            "round_id": null,
+            "fight_id": null,
+            "user_id": 231949580374119424,
+            "feed_content": "🐣<username>jack_pot2</username> descended into Obtimus Forest, full of grandiose enthusiasm, and is now eagerly warming up for who knows what.",
+            "create_at": 1734272589307,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 0,
+            "total_kill": 0,
+            "total_win": 0,
+            "message_id": "ztv_GSWkzRZrlUQUB2hk-bLaQjlPDaA1ECr9cQFSZP8"
+          },
+          {
+            "id": 1271828,
+            "game_id": null,
+            "round_id": null,
+            "fight_id": null,
+            "user_id": 240995935503520768,
+            "feed_content": "🐣<username>0xYYDS</username> descended into Obtimus Forest, full of grandiose enthusiasm, and is now eagerly warming up for who knows what.",
+            "create_at": 1734272626392,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 0,
+            "total_kill": 0,
+            "total_win": 0,
+            "message_id": "tqBed6o2lvMe4i2kDR-wYD8nTGKkVmjHYCpG04MwB_A"
+          },
+          {
+            "id": 1271829,
+            "game_id": 906,
+            "round_id": 9020,
+            "fight_id": null,
+            "user_id": 241668174792102912,
+            "feed_content": "🌲  +100<username>woxNFT</username> embarked on yet another thrilling survival challenge in the illustrious Obtimus Forest.",
+            "create_at": 1734272641203,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 0,
+            "total_kill": 0,
+            "total_win": 0,
+            "message_id": "Gj4LwpEuVT39CV7lCQ0TSh0_y8NUHcl0H_M2XYCjOvk"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_game_user_feeds_2024_11_28": {
+      "name": "ao_permble_game_user_feeds_2024_11_28",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "游戏ID"
+        },
+        {
+          "name": "round_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "轮次ID"
+        },
+        {
+          "name": "fight_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗ID"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "user_id"
+        },
+        {
+          "name": "feed_content",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "信息流内容"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "total_rwd",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "当时总点数"
+        },
+        {
+          "name": "total_kill",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "当时总击杀"
+        },
+        {
+          "name": "total_win",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "当时总获胜局数"
+        },
+        {
+          "name": "message_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "上传到链上的messageId"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 17,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "game_id": 1,
+            "round_id": 1,
+            "fight_id": null,
+            "user_id": 103717695228220416,
+            "feed_content": "🌲  +100<username>DefeEthan</username> embarked on yet another thrilling survival challenge in the illustrious Obtimus Forest.",
+            "create_at": 1730800800479,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 100,
+            "total_kill": 0,
+            "total_win": 0,
+            "message_id": "0mzZHi3U_93ES-grNrxJN9YAvp_b16RNHLf4S4MwqxI"
+          },
+          {
+            "id": 2,
+            "game_id": 1,
+            "round_id": 1,
+            "fight_id": null,
+            "user_id": 103729257062077440,
+            "feed_content": "🌲  +100<username>ZackZ4399</username> embarked on yet another thrilling survival challenge in the illustrious Obtimus Forest.",
+            "create_at": 1730800800666,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 100,
+            "total_kill": 0,
+            "total_win": 0,
+            "message_id": "EdpQnuf_8FdqG-pwnIxjFEAWGqfbeNfb4DS2TDn922U"
+          },
+          {
+            "id": 3,
+            "game_id": 1,
+            "round_id": 1,
+            "fight_id": null,
+            "user_id": 1,
+            "feed_content": "🌲  +100<username>VitalikButerin (Parody)</username> embarked on yet another thrilling survival challenge in the illustrious Obtimus Forest.",
+            "create_at": 1730800800697,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 100,
+            "total_kill": 0,
+            "total_win": 0,
+            "message_id": null
+          },
+          {
+            "id": 4,
+            "game_id": 1,
+            "round_id": 1,
+            "fight_id": null,
+            "user_id": 2,
+            "feed_content": "🌲  +100<username>Sama (Parody)</username> embarked on yet another thrilling survival challenge in the illustrious Obtimus Forest.",
+            "create_at": 1730800800772,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 100,
+            "total_kill": 0,
+            "total_win": 0,
+            "message_id": null
+          },
+          {
+            "id": 5,
+            "game_id": 1,
+            "round_id": 1,
+            "fight_id": null,
+            "user_id": 3,
+            "feed_content": "🌲  +100<username>elonmusk (Parody)</username> embarked on yet another thrilling survival challenge in the illustrious Obtimus Forest.",
+            "create_at": 1730800800811,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 110,
+            "total_kill": 0,
+            "total_win": 0,
+            "message_id": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_game_user_feeds_2024_12_13": {
+      "name": "ao_permble_game_user_feeds_2024_12_13",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "游戏ID"
+        },
+        {
+          "name": "round_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "轮次ID"
+        },
+        {
+          "name": "fight_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "战斗ID"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "user_id"
+        },
+        {
+          "name": "feed_content",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "信息流内容"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "total_rwd",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "当时总点数"
+        },
+        {
+          "name": "total_kill",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "当时总击杀"
+        },
+        {
+          "name": "total_win",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "当时总获胜局数"
+        },
+        {
+          "name": "message_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "上传到链上的messageId"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 17,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 11570839,
+            "game_id": 843,
+            "round_id": 8426,
+            "fight_id": 8085508,
+            "user_id": 229300622317327360,
+            "feed_content": "🛌<username>susususiku</username> got captivated by the charm of Obtimus Forest and lost track of time.",
+            "create_at": 1733833808250,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 56278,
+            "total_kill": 51,
+            "total_win": 4,
+            "message_id": null
+          },
+          {
+            "id": 11576663,
+            "game_id": 843,
+            "round_id": 8427,
+            "fight_id": 8091322,
+            "user_id": 231057809318351872,
+            "feed_content": "🔪 +1823<username lose>pentilku</username> set up a mighty display, but got tangled in the wiring, as <username win>Ecess38274919</username> took the spotlight.",
+            "create_at": 1733834169623,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 46377,
+            "total_kill": 29,
+            "total_win": 5,
+            "message_id": null
+          },
+          {
+            "id": 11583676,
+            "game_id": 843,
+            "round_id": 8430,
+            "fight_id": 8098309,
+            "user_id": 229481320013632512,
+            "feed_content": "🤝<username>sipalingnftlo</username> and <username>hentaikemed</username> danced in the rain, twirling until laughter their breath away.",
+            "create_at": 1733835246019,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 58638,
+            "total_kill": 47,
+            "total_win": 6,
+            "message_id": "lFJNtec7M-zbB7SJmdjsTNRE0lTkk2KaZXiW1VaXuxE"
+          },
+          {
+            "id": 11583679,
+            "game_id": 843,
+            "round_id": 8430,
+            "fight_id": 8098312,
+            "user_id": 231535067929777152,
+            "feed_content": "🔪 +1324<username lose>ruyynnadwmib22</username> was so captivated by <username win>papawhale1990</username>'s beauty that all reason was lost<username lose>ruyynnadwmib22</username>, bathing in the wild, was leftiliated and compliant after <username win>papawhale1990</username> made off with their clothes.",
+            "create_at": 1733835246030,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 19889,
+            "total_kill": 10,
+            "total_win": 0,
+            "message_id": "rPGGa6BbUFW8RCZ2Cg6BhSORdmcUdSBtiBn2Jlposbo"
+          },
+          {
+            "id": 11583682,
+            "game_id": 843,
+            "round_id": 8430,
+            "fight_id": 8098315,
+            "user_id": 230048524031497216,
+            "feed_content": "🤝<username>papahm000</username> and <username>MalahSenja45116</username> decided to paint a mural, only to paint over each other’s sections repeatedly.",
+            "create_at": 1733835246041,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_rwd": 49102,
+            "total_kill": 36,
+            "total_win": 7,
+            "message_id": "wOs_WIEru50kacf1-c1PbUr5IqQsZgdjDx-z-dP81og"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_user": {
+      "name": "ao_permble_user",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "user_id"
+        },
+        {
+          "name": "ico",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "用户头像"
+        },
+        {
+          "name": "nick_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "用户twitter昵称"
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "用户简介"
+        },
+        {
+          "name": "user_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "用户twitter username"
+        },
+        {
+          "name": "instruction",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "ai instruction"
+        },
+        {
+          "name": "total_rwd",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "总点数"
+        },
+        {
+          "name": "total_kill",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "总击杀"
+        },
+        {
+          "name": "total_win",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "总获胜局数"
+        },
+        {
+          "name": "wallet_address",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "钱包地址"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "profile_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "是否删除 0否 1是"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 19,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 103717695228220416,
+            "ico": "https://pbs.twimg.com/profile_images/1701506207306117120/koHBzjvt_normal.png",
+            "nick_name": "DEFED-Test",
+            "description": "Ah, Jason Defed, the human embodiment of a clickbait headline. Your tweets are like a never-ending stream of conservative Mad Libs, filled with more buzzwords",
+            "user_name": "DefeEthan",
+            "instruction": "I'm here with Jason Defed, the human clickbait machine whose tweets are a toxic cocktail of conservative jargon that even BuzzFeed would reject—what's next, a recipe for outrage?",
+            "total_rwd": 1204627,
+            "total_kill": 961,
+            "total_win": 194,
+            "wallet_address": "KEUbOP9VlSt-I39NWM0HVyTmgqfbuFdT2qvgSL_3TWY",
+            "create_at": 1730739953289,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "profile_id": "8g-2ytIJ-xOnlZo2GaxEwOnA19mIIZlLOFciZIsyaL4"
+          },
+          {
+            "id": 2,
+            "user_id": 103729257062077440,
+            "ico": "https://pbs.twimg.com/profile_images/1826871299568009216/CuwUsnSE_normal.png",
+            "nick_name": "zouzoudogg@gmail.com",
+            "description": "",
+            "user_name": "ZackZ4399",
+            "instruction": "Alright, ZackZ4399, let’s cut to the chase: your profile screams “I’m a gamer who thinks staring at a screen for 12 hours makes me a life coach.” Seriously, bro, that avatar isn’t going to level you up in real life!",
+            "total_rwd": 1220342,
+            "total_kill": 924,
+            "total_win": 204,
+            "wallet_address": "n7icoVyd6gvPg19EHZgNS74J5jwXno8fM4P5dtoI6j0",
+            "create_at": 1730742045994,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "profile_id": "qXbAG8AsjVmtVwPU3X9vc3xOBoZmohdLAHjCI5vOsr4"
+          },
+          {
+            "id": 3,
+            "user_id": 1,
+            "ico": "https://pbs.twimg.com/profile_images/1748153260203229184/sXJIGMBk_normal.jpg",
+            "nick_name": "VitalikButerin",
+            "description": "mi pinxe lo crino tcati",
+            "user_name": "VitalikButerin (Parody)",
+            "instruction": "Alright, Vitalik, you're just a meme waiting to happen with that bio—sounds like you're trying too hard to be cryptic while actually saying nothing at all!",
+            "total_rwd": 1275816,
+            "total_kill": 1011,
+            "total_win": 207,
+            "wallet_address": null,
+            "create_at": 1730746116841,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "profile_id": null
+          },
+          {
+            "id": 4,
+            "user_id": 2,
+            "ico": "https://pbs.twimg.com/profile_images/804990434455887872/BG0Xh7Oa_normal.jpg",
+            "nick_name": "Sama",
+            "description": "AI is cool i guess",
+            "user_name": "Sama (Parody)",
+            "instruction": "I'm here with someone who thinks AI is \"cool, I guess,\" which is like saying a microwave is \"fine\" while they eat cold pizza! Come on, let's spice up that hot take, Sama!",
+            "total_rwd": 1195018,
+            "total_kill": 952,
+            "total_win": 187,
+            "wallet_address": null,
+            "create_at": 1730746116841,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "profile_id": null
+          },
+          {
+            "id": 5,
+            "user_id": 3,
+            "ico": "https://pbs.twimg.com/profile_images/1849727333617573888/HBgPUrjG_normal.jpg",
+            "nick_name": "elonmusk",
+            "description": "Read @America to understand why I’m supporting Trump for President",
+            "user_name": "elonmusk (Parody)",
+            "instruction": "Oh look, it's Elon Musk, the self-proclaimed genius who thinks tweeting about Trump makes him some kind of political sage—newsflash, buddy: that's not how it works!",
+            "total_rwd": 1153922,
+            "total_kill": 883,
+            "total_win": 192,
+            "wallet_address": null,
+            "create_at": 1730746116841,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "profile_id": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_permble_clean_old_records_log": {
+      "name": "ao_permble_clean_old_records_log",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "event_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "execution_time",
+          "type": "datetime",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "records_affected",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 4,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "event_name": "ao_permble_game_user_feeds",
+            "execution_time": "2024-12-02T08:46:02",
+            "records_affected": 1023123
+          },
+          {
+            "id": 2,
+            "event_name": "ao_permble_round_fight",
+            "execution_time": "2024-12-02T08:50:26",
+            "records_affected": 716301
+          },
+          {
+            "id": 3,
+            "event_name": "ao_permble_round_rwd",
+            "execution_time": "2024-12-02T08:55:57",
+            "records_affected": 1356261
+          },
+          {
+            "id": 4,
+            "event_name": "ao_permble_game_user_feeds",
+            "execution_time": "2024-12-02T09:42:50",
+            "records_affected": 21482
+          },
+          {
+            "id": 5,
+            "event_name": "ao_permble_round_fight",
+            "execution_time": "2024-12-02T09:42:54",
+            "records_affected": 14978
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "halloween_pumpkin_rewards": {
+      "name": "halloween_pumpkin_rewards",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "date",
+          "type": "date",
+          "nullable": false,
+          "default": null,
+          "comment": "活动日期"
+        },
+        {
+          "name": "pumpkins",
+          "type": "json",
+          "nullable": false,
+          "default": null,
+          "comment": "三个南瓜的状态和奖励信息"
+        },
+        {
+          "name": "has_seen_subscription_guide",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否已看过订阅引导"
+        },
+        {
+          "name": "has_seen_upgrade_guide",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否已看过升级引导"
+        },
+        {
+          "name": "completed_at",
+          "type": "datetime",
+          "nullable": true,
+          "default": null,
+          "comment": "三个南瓜全部点击完成的时间"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 9,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 96,
+            "user_id": 358174,
+            "date": "2025-10-27",
+            "pumpkins": "[{\"index\": 1, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"credits\", \"reward_value\": 2}, {\"index\": 2, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"credits\", \"reward_value\": 24}, {\"index\": 3, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"upgrade_guide\", \"reward_value\": 10000}]",
+            "has_seen_subscription_guide": 0,
+            "has_seen_upgrade_guide": 1,
+            "completed_at": null,
+            "created_at": "2025-10-27T14:25:12",
+            "updated_at": "2025-10-27T14:25:12"
+          },
+          {
+            "id": 97,
+            "user_id": 1070544,
+            "date": "2025-10-27",
+            "pumpkins": "[{\"index\": 1, \"status\": \"clicked\", \"clicked_at\": \"2025-10-27 14:25:47\", \"reward_type\": \"subscription_guide\", \"reward_value\": 5000}, {\"index\": 2, \"status\": \"clicked\", \"clicked_at\": \"2025-10-27 14:26:00\", \"reward_type\": \"credits\", \"reward_value\": 43}, {\"index\": 3, \"status\": \"clicked\", \"clicked_at\": \"2025-10-27 14:26:12\", \"reward_type\": \"credits\", \"reward_value\": 15}]",
+            "has_seen_subscription_guide": 1,
+            "has_seen_upgrade_guide": 0,
+            "completed_at": "2025-10-27T14:26:31",
+            "created_at": "2025-10-27T14:25:23",
+            "updated_at": "2025-10-27T14:26:31"
+          },
+          {
+            "id": 98,
+            "user_id": 398542,
+            "date": "2025-10-27",
+            "pumpkins": "[{\"index\": 1, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"upgrade_guide\", \"reward_value\": 10000}, {\"index\": 2, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"credits\", \"reward_value\": 26}, {\"index\": 3, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"credits\", \"reward_value\": 29}]",
+            "has_seen_subscription_guide": 0,
+            "has_seen_upgrade_guide": 1,
+            "completed_at": null,
+            "created_at": "2025-10-27T14:25:40",
+            "updated_at": "2025-10-27T14:25:40"
+          },
+          {
+            "id": 99,
+            "user_id": 357279,
+            "date": "2025-10-27",
+            "pumpkins": "[{\"index\": 1, \"status\": \"clicked\", \"clicked_at\": \"2025-10-27 17:10:07\", \"reward_type\": \"upgrade_guide\", \"reward_value\": 10000}, {\"index\": 2, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"credits\", \"reward_value\": 2}, {\"index\": 3, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"credits\", \"reward_value\": 23}]",
+            "has_seen_subscription_guide": 0,
+            "has_seen_upgrade_guide": 1,
+            "completed_at": null,
+            "created_at": "2025-10-27T14:25:40",
+            "updated_at": "2025-10-27T17:10:07"
+          },
+          {
+            "id": 100,
+            "user_id": 1074271,
+            "date": "2025-10-27",
+            "pumpkins": "[{\"index\": 1, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"credits\", \"reward_value\": 1}, {\"index\": 2, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"credits\", \"reward_value\": 12}, {\"index\": 3, \"status\": \"pending\", \"clicked_at\": null, \"reward_type\": \"credits\", \"reward_value\": 20}]",
+            "has_seen_subscription_guide": 0,
+            "has_seen_upgrade_guide": 0,
+            "completed_at": null,
+            "created_at": "2025-10-27T14:25:48",
+            "updated_at": "2025-10-27T14:25:48"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    }
+  },
+  "relationships": []
+}

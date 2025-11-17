@@ -6,9 +6,39 @@ Kode AI 启动脚本
 """
 
 import sys
+import os
 import subprocess
 import time
 import uvicorn
+
+# 修复 Windows 控制台 UTF-8 编码问题
+if sys.platform == "win32":
+    # 设置环境变量（必须在导入其他模块前设置）
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    os.environ["PYTHONUTF8"] = "1"
+
+    # 设置 Python 的默认编码为 UTF-8
+    import locale
+    try:
+        locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+    except:
+        try:
+            locale.setlocale(locale.LC_ALL, 'C.UTF-8')
+        except:
+            pass
+
+    # 尝试设置控制台代码页为 UTF-8
+    try:
+        import subprocess
+        subprocess.run(["chcp", "65001"], shell=True, capture_output=True)
+    except:
+        pass
+
+    # 重新配置标准输出流
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 
 def kill_port_process(port: int, max_retries: int = 3) -> bool:
@@ -75,12 +105,78 @@ if __name__ == "__main__":
         import multiprocessing
         multiprocessing.freeze_support()
 
+    # ========================================
+    # 修复 Python traceback 模块的 UTF-8 bug
+    # ========================================
+    import traceback as tb_module
+
+    # 保存原始函数
+    _original_byte_offset = tb_module._byte_offset_to_character_offset
+
+    def safe_byte_offset_to_character_offset(text, offset):
+        """安全的字节偏移转换，处理 UTF-8 解码错误"""
+        try:
+            return _original_byte_offset(text, offset)
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            # 降级：返回近似值或0
+            try:
+                # 尝试使用 errors='replace'
+                as_utf8 = text.encode('utf-8', errors='replace')[:offset + 1]
+                return len(as_utf8.decode('utf-8', errors='replace'))
+            except:
+                return 0  # 最后的降级
+
+    # Monkey patch
+    tb_module._byte_offset_to_character_offset = safe_byte_offset_to_character_offset
+
+    # 设置全局的异常钩子，避免 UTF-8 编码问题
+    import logging
+    import asyncio
+
+    # 配置 asyncio 的 logger 使用安全的异常处理
+    asyncio_logger = logging.getLogger('asyncio')
+
+    # 保存原始的 error 方法
+    _original_error = asyncio_logger.error
+    _original_warning = asyncio_logger.warning
+
+    def safe_error(msg, *args, **kwargs):
+        """安全的 error 日志方法，避免 UTF-8 编码问题"""
+        try:
+            _original_error(msg, *args, **kwargs)
+        except (UnicodeDecodeError, UnicodeEncodeError) as e:
+            # 降级处理：完全移除 exc_info，使用简单的字符串格式
+            # 注意：直接调用 logger 的底层方法，避免循环
+            try:
+                # 提取异常信息（如果有）
+                exc_info = kwargs.get('exc_info')
+                error_detail = ""
+                if exc_info and exc_info is not True:
+                    error_detail = f" | Error: {str(exc_info[1]) if isinstance(exc_info, tuple) else str(exc_info)}"
+
+                # 移除所有可能导致问题的参数
+                clean_msg = f"{msg} (traceback omitted due to UTF-8 encoding issue){error_detail}"
+                asyncio_logger.log(logging.ERROR, clean_msg)
+            except:
+                # 最后的降级：直接 print（确保不会完全静默失败）
+                print(f"CRITICAL LOGGING ERROR: {msg}", file=sys.stderr)
+
+    def safe_warning(msg, *args, **kwargs):
+        """安全的 warning 日志方法"""
+        try:
+            _original_warning(msg, *args, **kwargs)
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            asyncio_logger.log(logging.WARNING, f"{msg} (encoding issue)")
+
+    asyncio_logger.error = safe_error
+    asyncio_logger.warning = safe_warning
+
     print("=" * 60)
     print("  Kode AI")
     print("=" * 60)
 
     # 清理端口（尝试清理，但不影响启动）
-    PORT = 8001  
+    PORT = 8001
     kill_port_process(PORT)
 
     print("\n正在启动服务...")

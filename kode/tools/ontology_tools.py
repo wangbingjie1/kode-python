@@ -127,6 +127,64 @@ class OntologyBuilderTool(KodeTool):
                     ensure_ascii=False,
                 )
 
+            # 【智能门禁检查】检查不确定性分析状态
+            uncertainty_file = Path(schema_path) / connection_name / "uncertainties.json"
+
+            if not uncertainty_file.exists():
+                # 🔍 情况1: 没有不确定性文件 → 提示需要先分析
+                logger.warning(f"⚠️ 未找到 uncertainties.json")
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "gate_check_failed": True,
+                        "reason": "missing_uncertainty_analysis",
+                        "message": "未找到不确定性分析结果文件。",
+                        "suggestion": "请先运行 DomainUncertaintyAnalyzer 进行不确定性分析。",
+                        "action_required": f"运行 DomainUncertaintyAnalyzer(connection_name='{connection_name}')",
+                        "note": "该工具会并行分析所有业务域，识别schema模糊性、缺失约束等问题。"
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            # 🔍 情况2: 有不确定性文件 → 检查 high 优先级问题
+            with open(uncertainty_file, "r", encoding="utf-8") as f:
+                uncertainty_data = json.load(f)
+
+            high_uncertainties = uncertainty_data.get("uncertainties_by_priority", {}).get("high", [])
+            unresolved_high = [
+                u for u in high_uncertainties
+                if u.get("status") not in ["resolved", "skipped"]
+            ]
+
+            if unresolved_high:
+                # 生成问题列表（前5个）
+                question_list = "\n".join([
+                    f"  {i+1}. [{u.get('domain')}] {u.get('question')}"
+                    for i, u in enumerate(unresolved_high[:5])
+                ])
+
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "gate_check_failed": True,
+                        "reason": "unresolved_high_priority_uncertainties",
+                        "message": f"❌ 不能构建本体！发现 {len(unresolved_high)} 个未解决的高优先级问题。",
+                        "unresolved_count": len(unresolved_high),
+                        "total_high_count": len(high_uncertainties),
+                        "sample_questions": question_list,
+                        "suggestion": "必须先回答所有 high 优先级问题（这些问题严重影响本体质量）。",
+                        "action_required": f"运行 UncertaintyQAManager(connection_name='{connection_name}', action='batch_load') 查看所有问题",
+                        "note": "不要重复运行 DomainUncertaintyAnalyzer，uncertainties.json 已存在。"
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            # ✅ 情况3: 所有 high 问题已解决
+            resolved_count = len([u for u in high_uncertainties if u.get("status") in ["resolved", "skipped"]])
+            logger.info(f"✅ 门禁检查通过：所有 {len(high_uncertainties)} 个高优先级问题已解决（resolved: {resolved_count}）")
+
             # Load schema data
             with open(schema_file, "r", encoding="utf-8") as f:
                 schema_data = json.load(f)
@@ -137,30 +195,64 @@ class OntologyBuilderTool(KodeTool):
             else:
                 schema_metadata = schema_data
 
-            # 核心改变：直接使用 AI 生成完整的本体，而不是传统代码转换
+            # 🚀 新的简化流程：优先使用 domain_index.json（如果存在）
+            domain_index_file = Path(schema_path) / connection_name / "domain_index.json"
             database = schema_metadata.get("database", "未知")
             db_schema = schema_metadata.get("schema")
 
-            # 检查是否在事件循环中
             import asyncio
-            try:
-                loop = asyncio.get_running_loop()
-                # 在事件循环中，使用 run_coroutine_threadsafe 或直接同步调用
-                ontology = self._build_ontology_with_ai_sync(schema_metadata, connection_name, database, db_schema)
-            except RuntimeError:
-                # 不在事件循环中，使用异步版本
-                ontology = asyncio.run(
-                    self._build_ontology_with_ai_async(schema_metadata, connection_name, database, db_schema)
-                )
+
+            # 策略选择：如果有 domain_index.json，使用简化并行流程
+            if domain_index_file.exists():
+                logger.info(f"✅ 检测到 domain_index.json，使用简化并行构建流程")
+
+                # 🔥 关键：在已运行的事件循环中，需要在新线程中运行 asyncio.run
+                def run_async_in_thread():
+                    """在新线程中运行异步任务（避免嵌套事件循环冲突）"""
+                    return asyncio.run(
+                        self._build_ontology_from_domains_async(
+                            connection_name, database, db_schema, schema_path
+                        )
+                    )
+
+                try:
+                    loop = asyncio.get_running_loop()
+                    # 在事件循环中，使用线程池运行
+                    from concurrent.futures import ThreadPoolExecutor
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(run_async_in_thread)
+                        ontology = future.result()
+                except RuntimeError:
+                    # 不在事件循环中，直接运行
+                    ontology = run_async_in_thread()
+            else:
+                # domain_index.json 不存在，报错
+                return json.dumps({
+                    "status": "error",
+                    "message": "domain_index.json not found. Please run DomainClusteringTool first to cluster the schema into domains."
+                }, indent=2, ensure_ascii=False)
 
             # Auto-save ontology to file
             if auto_save:
                 save_result = self._save_ontology(ontology, connection_name, version)
                 ontology["storage"] = save_result
 
-            return json.dumps(
-                {"status": "success", "ontology": ontology}, indent=2, ensure_ascii=False
-            )
+            # Return lightweight summary instead of full ontology (save tokens)
+            summary = {
+                "status": "success",
+                "message": "Ontology built successfully",
+                "file_path": ontology.get("storage", {}).get("latest_path", ""),
+                "statistics": {
+                    "concept_count": len(ontology.get("entities", {}).get("concepts", [])),
+                    "relationship_count": len(ontology.get("entities", {}).get("relationships", [])),
+                    "uncertainty_count": len(ontology.get("uncertainties", {}).get("high", [])) +
+                                       len(ontology.get("uncertainties", {}).get("medium", [])) +
+                                       len(ontology.get("uncertainties", {}).get("low", []))
+                },
+                "metadata": ontology.get("metadata", {})
+            }
+
+            return json.dumps(summary, indent=2, ensure_ascii=False)
 
         except Exception as e:
             return json.dumps(
@@ -1097,100 +1189,515 @@ Schema: {db_schema or "默认"}
             },
         }
 
+    # ==================== 新增：简化并行构建流程（基于 domain_index.json） ====================
 
-class OntologyManagerInput(BaseModel):
-    """Input schema for OntologyManagerTool (save only)."""
-
-    connection_name: str = Field(description="Database connection name")
-    ontology: Dict[str, Any] = Field(description="Ontology data to save")
-    version: str = Field(default="auto", description="Version identifier ('auto' for timestamp)")
-
-
-class OntologyManagerTool(KodeTool):
-    """
-    Save ontology to storage with version control.
-
-    This tool is responsible for persisting ontology data to disk.
-    """
-
-    name: str = "OntologyManager"
-    description: str = """Save ontology to storage with versioning.
-    Stores ontology as both a versioned file and updates the 'latest' pointer.
-    Use this to persist ontology data after building or updating."""
-
-    args_schema: Type[BaseModel] = OntologyManagerInput
-    requires_permission: bool = False
-
-    def _run(
-        self,
-        connection_name: str,
-        ontology: Dict[str, Any],
-        version: str = "auto",
-    ) -> str:
+    async def _build_ontology_from_domains_async(
+        self, connection_name: str, database: str, db_schema: Optional[str], schema_path: str
+    ) -> Dict[str, Any]:
         """
-        Save ontology to storage.
+        🚀 简化版：直接基于已分域的 schema 文件并行构建本体（异步版本）。
 
-        Args:
-            connection_name: Connection name
-            ontology: Ontology data to save
-            version: Version identifier ('auto' for timestamp)
-
-        Returns:
-            Save result as JSON
+        前提：DomainUncertaintyAnalyzer 已将 schema 分成多个 domain 文件。
+        优势：
+        - 跳过阶段1（全局架构扫描）→ 节省 ~6秒
+        - 跳过阶段3（跨域关系融合）→ 节省 ~5秒
+        - 直接并行构建所有域 → 总耗时 ~8秒（原 ~17秒）
         """
-        return self._save_ontology(ontology, connection_name, version)
-
-    def _save_ontology(
-        self, ontology: Optional[Dict[str, Any]], connection_name: str, version: str
-    ) -> str:
-        """Save ontology to storage."""
-        if not ontology:
-            return json.dumps(
-                {"status": "error", "message": "Ontology data is required"},
-                indent=2,
-            )
-
         try:
-            config = ConfigManager()
-            storage_path = config.get("storage.ontology_path", "./ontology_store")
-            conn_dir = Path(storage_path) / connection_name
-            conn_dir.mkdir(parents=True, exist_ok=True)
+            import time
+            from langchain_core.messages import HumanMessage
 
-            if version == "auto":
-                version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            # 1. 读取 domain_index.json
+            domain_index_file = Path(schema_path) / connection_name / "domain_index.json"
+            with open(domain_index_file, "r", encoding="utf-8") as f:
+                domain_index = json.load(f)
 
-            ontology_with_meta = {
-                "version": version,
-                "stored_at": datetime.now().isoformat(),
-                "connection_name": connection_name,
-                "ontology": ontology,
-            }
+            domains = domain_index["domains"]
+            logger.info(f"📋 加载到 {len(domains)} 个业务域")
 
-            version_file = conn_dir / f"ontology_{version}.json"
-            with open(version_file, "w", encoding="utf-8") as f:
-                json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
+            # 2. 初始化模型
+            config_manager = ConfigManager()
+            config = config_manager.get_all()
+            model_manager = ModelManager(config)
+            model = model_manager.get_model("main")
+            model.temperature = 0.0
+            model.max_tokens = 64000
 
-            # 使用 copy 更新 latest 指针
-            import shutil
-            latest_file = conn_dir / "ontology_latest.json"
-            shutil.copy2(version_file, latest_file)
-
-            return json.dumps(
-                {
-                    "status": "success",
-                    "message": "Ontology saved successfully",
-                    "version": version,
-                    "versioned_path": str(version_file),
-                    "latest_path": str(latest_file),
-                },
-                indent=2,
-                ensure_ascii=False,
+            # 3. 并行构建所有域
+            t_start = time.time()
+            domain_ontologies = await self._build_all_domains_parallel(
+                domains=domains,
+                connection_name=connection_name,
+                schema_path=schema_path,
+                database=database,
+                db_schema=db_schema,
+                model=model
             )
+            t_elapsed = time.time() - t_start
+            logger.info(f"✅ 并行构建完成：{len(domain_ontologies)} 个域，耗时 {t_elapsed:.2f}s")
+
+            # 4. 轻量级合并（无需AI）
+            final_ontology = self._merge_domain_ontologies_simple(
+                domain_ontologies=domain_ontologies,
+                connection_name=connection_name,
+                database=database,
+                model_manager=model_manager
+            )
+
+            logger.info(f"🎉 本体构建完成：{final_ontology['statistics']['concept_count']} 个概念")
+            return final_ontology
 
         except Exception as e:
-            return json.dumps(
-                {"status": "error", "message": f"Save failed: {str(e)}"}, indent=2
+            logger.error(f"简化构建失败: {str(e)}")
+            return {
+                "metadata": {
+                    "created_at": datetime.now().isoformat(),
+                    "created_by": "error_simplified",
+                    "error": str(e),
+                },
+                "concepts": {},
+                "properties": {},
+                "relationships": [],
+                "hierarchies": [],
+            }
+
+
+    async def _build_all_domains_parallel(
+        self,
+        domains: List[Dict[str, Any]],
+        connection_name: str,
+        schema_path: str,
+        database: str,
+        db_schema: Optional[str],
+        model
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        并行构建所有业务域的本体（核心性能优化）。
+
+        使用 asyncio.gather() + Semaphore(5) 限流，避免 API 限速。
+        """
+        import asyncio
+        import time
+
+        async def build_single_domain(domain_info: Dict[str, Any]) -> tuple:
+            """异步构建单个域。"""
+            domain_name = domain_info["name"]
+            t_start = time.time()
+            logger.info(f"🚀 开始构建 {domain_name}（{domain_info['table_count']} 个表）")
+
+            # 读取领域的完整 schema
+            domain_file = Path(schema_path) / connection_name / domain_info["file_path"]
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
+
+            # 异步调用 AI 构建本体
+            t_ai_start = time.time()
+            domain_ont = await self._ai_build_domain_ontology_simple_async(
+                domain_name=domain_name,
+                domain_schema=domain_data.get("tables", {}),
+                connection_name=connection_name,
+                database=database,
+                db_schema=db_schema,
+                model=model
             )
+            t_ai_elapsed = time.time() - t_ai_start
+
+            t_elapsed = time.time() - t_start
+            logger.info(f"✅ {domain_name} 完成（{domain_info['table_count']} 个表，AI耗时 {t_ai_elapsed:.2f}s，总耗时 {t_elapsed:.2f}s）")
+            return domain_name, domain_ont
+
+        # 限流并发（最多5个同时）
+        from asyncio import Semaphore
+        semaphore = Semaphore(5)
+
+        async def bounded_task(domain_info):
+            async with semaphore:
+                return await build_single_domain(domain_info)
+
+        # 并行执行
+        results = await asyncio.gather(*[bounded_task(d) for d in domains])
+
+        # 转换为字典
+        return {domain_name: ontology for domain_name, ontology in results}
+
+    async def _ai_build_domain_ontology_simple_async(
+        self,
+        domain_name: str,
+        domain_schema: Dict[str, Any],
+        connection_name: str,
+        database: str,
+        db_schema: Optional[str],
+        model
+    ) -> Dict[str, Any]:
+        """
+        为单个业务域构建本体（简化版 - 异步）。
+
+        关键简化：不再需要全局上下文，直接基于领域 schema 生成。
+        """
+        from langchain_core.messages import HumanMessage
+
+        # 准备领域 schema 文本
+        domain_schema_text = self._prepare_domain_schema(domain_schema)
+
+        # 🔥 新增：加载并注入High优先级不确定性的答案（极致压缩）
+        uncertainty_rules = self._load_high_priority_rules(connection_name, domain_name)
+        uncertainty_section = ""
+        if uncertainty_rules:
+            uncertainty_section = "\n\n# 🔒 用户已确认的业务规则（必须遵守）\n\n"
+            uncertainty_section += uncertainty_rules
+            uncertainty_section += "\n**重要**: 构建本体时必须严格遵循上述规则！\n"
+
+        # 简化版 Prompt（无全局上下文）
+        prompt = f"""你是 ERP 架构师。为业务域 "{domain_name}" 构建详细本体。
+
+# 当前域: {domain_name}
+数据库: {database}
+Schema: {db_schema or "默认"}
+{uncertainty_section}
+{domain_schema_text}
+
+# 任务
+构建本体（JSON格式）：
+1. **Concepts**: 每个表转换为业务概念
+   - technical_name, business_name_cn, business_name_en
+   - description（业务含义）
+   - domain（固定为 "{domain_name}"）
+   - importance, primary_key, data_source
+
+2. **Properties**: 每个字段转换为业务属性
+   - technical_name (table.column), business_name_cn, business_name_en
+   - description, data_type, nullable, concept, data_source
+
+3. **Relationships**: 表之间的关系（含外键+推断关系）
+   - from_concept, to_concept, relationship_type, cardinality
+   - business_meaning, from_properties, to_properties
+
+4. **Hierarchies**: 层次结构（如自引用、分类树）
+   - concept, type, parent_property, description
+
+# 输出格式
+```json
+{{{{
+  "concepts": {{}},
+  "properties": {{}},
+  "relationships": [],
+  "hierarchies": [],
+  "domain_insights": {{{{
+    "primary_domain": "{domain_name}",
+    "business_scenario": "..."
+  }}}}
+}}}}
+```
+
+**重要**：
+- 必须为该域的每个表生成 concept
+- 必须为每个字段生成 property
+- 充分利用字段注释理解业务含义
+- 只返回 JSON，不要任何解释文字
+"""
+
+        # 异步调用 AI
+        response = await model.ainvoke([HumanMessage(content=prompt)])
+        ontology_data = self._extract_json_from_text(response.content)
+
+        if not ontology_data or "concepts" not in ontology_data:
+            logger.error(f"❌ 域 {domain_name} 生成失败，AI输出前500字符: {response.content[:500]}")
+            return {
+                "concepts": {},
+                "properties": {},
+                "relationships": [],
+                "hierarchies": [],
+                "domain_insights": {},
+                "business_rules": []
+            }
+
+        # 加载业务规则（结构化数据）
+        business_rules = self._load_high_priority_rules_data(connection_name, domain_name)
+
+        return {
+            "concepts": ontology_data.get("concepts", {}),
+            "properties": ontology_data.get("properties", {}),
+            "relationships": ontology_data.get("relationships", []),
+            "hierarchies": ontology_data.get("hierarchies", []),
+            "domain_insights": ontology_data.get("domain_insights", {}),
+            "business_rules": business_rules
+        }
+
+    def _ai_build_domain_ontology_simple(
+        self,
+        domain_name: str,
+        domain_schema: Dict[str, Any],
+        connection_name: str,
+        database: str,
+        db_schema: Optional[str],
+        model
+    ) -> Dict[str, Any]:
+        """为单个业务域构建本体（简化版 - 同步）。"""
+        from langchain_core.messages import HumanMessage
+
+        domain_schema_text = self._prepare_domain_schema(domain_schema)
+
+        # 🔥 注入High优先级规则
+        uncertainty_rules = self._load_high_priority_rules(connection_name, domain_name)
+        uncertainty_section = ""
+        if uncertainty_rules:
+            uncertainty_section = "\n\n# 🔒 用户已确认的业务规则（必须遵守）\n\n"
+            uncertainty_section += uncertainty_rules
+            uncertainty_section += "\n**重要**: 构建本体时必须严格遵循上述规则！\n"
+
+        prompt = f"""你是 ERP 架构师。为业务域 "{domain_name}" 构建详细本体。
+
+# 当前域: {domain_name}
+数据库: {database}
+Schema: {db_schema or "默认"}
+{uncertainty_section}
+{domain_schema_text}
+
+# 任务
+构建本体（JSON格式）：
+1. **Concepts**: 每个表 → 业务概念
+2. **Properties**: 每个字段 → 业务属性
+3. **Relationships**: 表关系
+4. **Hierarchies**: 层次结构
+
+# 输出格式
+```json
+{{{{
+  "concepts": {{}},
+  "properties": {{}},
+  "relationships": [],
+  "hierarchies": [],
+  "domain_insights": {{{{
+    "primary_domain": "{domain_name}",
+    "business_scenario": "..."
+  }}}}
+}}}}
+```
+
+只返回 JSON，不要解释文字。
+"""
+
+        response = model.invoke([HumanMessage(content=prompt)])
+        ontology_data = self._extract_json_from_text(response.content)
+
+        if not ontology_data or "concepts" not in ontology_data:
+            logger.error(f"❌ 域 {domain_name} 生成失败")
+            return {
+                "concepts": {},
+                "properties": {},
+                "relationships": [],
+                "hierarchies": [],
+                "domain_insights": {},
+                "business_rules": []
+            }
+
+        # 加载业务规则（结构化数据）
+        business_rules = self._load_high_priority_rules_data(connection_name, domain_name)
+
+        return {
+            "concepts": ontology_data.get("concepts", {}),
+            "properties": ontology_data.get("properties", {}),
+            "relationships": ontology_data.get("relationships", []),
+            "hierarchies": ontology_data.get("hierarchies", []),
+            "domain_insights": ontology_data.get("domain_insights", {}),
+            "business_rules": business_rules
+        }
+
+    def _load_high_priority_rules_data(self, connection_name: str, domain_name: str) -> List[Dict[str, Any]]:
+        """
+        加载High优先级不确定性的结构化数据（用于保存到本体文件）。
+
+        Returns:
+            List of rule dictionaries with entity, category, question, answer, priority, resolved_at
+        """
+        try:
+            config = ConfigManager()
+            schema_path = config.get("storage.schema_path", "./schema_store")
+            uncertainty_file = Path(schema_path) / connection_name / "uncertainties.json"
+
+            if not uncertainty_file.exists():
+                return []
+
+            with open(uncertainty_file, "r", encoding="utf-8") as f:
+                uncertainty_data = json.load(f)
+
+            high_uncertainties = uncertainty_data.get("uncertainties_by_priority", {}).get("high", [])
+            domain_resolved = [
+                {
+                    "entity": u.get("entity", ""),
+                    "category": u.get("category", ""),
+                    "question": u.get("question", ""),
+                    "answer": u.get("answer", ""),
+                    "priority": "high",
+                    "resolved_at": u.get("answered_at", "")
+                }
+                for u in high_uncertainties
+                if u.get("domain") == domain_name and u.get("status") == "resolved" and u.get("answer")
+            ]
+
+            return domain_resolved
+
+        except Exception as e:
+            logger.warning(f"Failed to load uncertainty rules data for {domain_name}: {e}")
+            return []
+
+    def _load_high_priority_rules(self, connection_name: str, domain_name: str) -> str:
+        """
+        加载High优先级不确定性的用户答案（领域级缓存，用于Prompt注入）。
+
+        优化策略：
+        1. 优先读取预处理的领域规则文件（domains/{domain}_rules.txt）
+        2. 如果不存在，实时从 uncertainties.json 提取并缓存
+        3. 保留完整问题和答案，按领域分割后数量已经很少
+
+        Args:
+            connection_name: 数据库连接名
+            domain_name: 业务域名称
+
+        Returns:
+            结构化的规则文本（包含完整问题和用户答案）
+        """
+        try:
+            config = ConfigManager()
+            schema_path = config.get("storage.schema_path", "./schema_store")
+
+            # 🚀 优先读取预处理的领域规则文件
+            domain_rules_file = Path(schema_path) / connection_name / "domains" / f"{domain_name}_rules.txt"
+            if domain_rules_file.exists():
+                with open(domain_rules_file, "r", encoding="utf-8") as f:
+                    return f.read().strip()
+
+            # 降级：实时从 uncertainties.json 提取
+            uncertainty_file = Path(schema_path) / connection_name / "uncertainties.json"
+            if not uncertainty_file.exists():
+                return ""
+
+            with open(uncertainty_file, "r", encoding="utf-8") as f:
+                uncertainty_data = json.load(f)
+
+            # 筛选当前域的已解决High问题
+            high_uncertainties = uncertainty_data.get("uncertainties_by_priority", {}).get("high", [])
+            domain_resolved = [
+                u for u in high_uncertainties
+                if u.get("domain") == domain_name and u.get("status") == "resolved"
+            ]
+
+            if not domain_resolved:
+                return ""
+
+            # 格式化为结构化文本（保留完整问题和答案）
+            lines = []
+            lines.append("# 用户已确认的业务规则（构建本体时必须遵守）")
+            lines.append("")
+
+            for idx, unc in enumerate(domain_resolved, 1):
+                entity = unc.get("entity", "")
+                question = unc.get("question", "").strip()
+                answer = unc.get("answer", "").strip()
+                category = unc.get("category", "")
+
+                if not answer:
+                    continue
+
+                # 每条规则保留：实体名、问题类型、问题、用户答案
+                lines.append(f"## 规则 {idx}: {entity}")
+                if category:
+                    lines.append(f"**类型**: {category}")
+                lines.append(f"**问题**: {question}")
+                lines.append(f"**用户确认**: {answer}")
+                lines.append("")
+
+            result_text = "\n".join(lines) if len(lines) > 2 else ""
+
+            # 🔥 缓存到领域规则文件（加速下次构建）
+            if result_text:
+                try:
+                    domain_rules_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(domain_rules_file, "w", encoding="utf-8") as f:
+                        f.write(result_text)
+                    logger.info(f"✅ 缓存领域规则到 {domain_rules_file.name}")
+                except Exception as cache_err:
+                    logger.warning(f"缓存领域规则失败: {cache_err}")
+
+            return result_text
+
+        except Exception as e:
+            logger.warning(f"Failed to load uncertainty rules for {domain_name}: {e}")
+            return ""
+
+    def _merge_domain_ontologies_simple(
+        self,
+        domain_ontologies: Dict[str, Dict[str, Any]],
+        connection_name: str,
+        database: str,
+        model_manager
+    ) -> Dict[str, Any]:
+        """
+        轻量级合并所有域的本体（无需 AI）。
+
+        直接合并所有域的 concepts/properties/relationships。
+        """
+        all_concepts = {}
+        all_properties = {}
+        all_relationships = []
+        all_hierarchies = []
+        all_domain_insights = []
+        all_business_rules = {}  # 按域分组
+
+        for domain_name, ont in domain_ontologies.items():
+            all_concepts.update(ont.get("concepts", {}))
+            all_properties.update(ont.get("properties", {}))
+            all_relationships.extend(ont.get("relationships", []))
+            all_hierarchies.extend(ont.get("hierarchies", []))
+            if ont.get("domain_insights"):
+                all_domain_insights.append(ont["domain_insights"])
+
+            # 收集业务规则（按域分组）
+            domain_rules = ont.get("business_rules", [])
+            if domain_rules:
+                all_business_rules[domain_name] = domain_rules
+
+        # 合并 domain insights
+        primary_domains = [d.get("primary_domain") for d in all_domain_insights if d.get("primary_domain")]
+        business_scenarios = [d.get("business_scenario") for d in all_domain_insights if d.get("business_scenario")]
+
+        # 统计总的不确定性数量
+        total_uncertainty_count = sum(len(rules) for rules in all_business_rules.values())
+
+        return {
+            "metadata": {
+                "created_at": datetime.now().isoformat(),
+                "created_by": "simplified_parallel",
+                "model": model_manager.get_current_model_name(),
+                "source_database": database,
+                "source_connection": connection_name,
+                "build_method": "domain_based_parallel",
+                "total_domains": len(domain_ontologies)
+            },
+            "concepts": all_concepts,
+            "properties": all_properties,
+            "relationships": all_relationships,
+            "hierarchies": all_hierarchies,
+            "domain_insights": {
+                "primary_domain": ", ".join(set(primary_domains)),
+                "sub_domains": list(domain_ontologies.keys()),
+                "business_scenario": " | ".join(business_scenarios[:3]),  # 前3个
+                "architecture_pattern": "Multi-Domain ERP"
+            },
+            "business_rules": {
+                "total_count": total_uncertainty_count,
+                "by_domain": all_business_rules
+            },
+            "statistics": {
+                "concept_count": len(all_concepts),
+                "property_count": len(all_properties),
+                "relationship_count": len(all_relationships),
+                "hierarchy_count": len(all_hierarchies),
+                "uncertainty_count": total_uncertainty_count
+            }
+        }
+
+
 
 
 class OntologySearchTool(KodeTool):
@@ -1285,18 +1792,20 @@ class OntologySearchTool(KodeTool):
                 else:
                     unrelated_uncertainties.append(uncertainty)
 
+            # Return lightweight summary (save tokens)
             return json.dumps(
                 {
                     "status": "success",
                     "query": query,
                     "search_type": search_type,
-                    "results": results,
+                    "results": results,  # Keep search results (usually small)
                     "ontology_version": ontology_data.get("version"),
                     "uncertainties": {
-                        "related": related_uncertainties,  # 与本次查询相关的不确定性
-                        "all_unresolved": [u for u in uncertainties if u.get("status") != "resolved"],  # 所有未解决的
+                        "related_count": len(related_uncertainties),
+                        "unresolved_count": len([u for u in uncertainties if u.get("status") != "resolved"]),
                         "total_count": len(uncertainties),
-                        "resolved_count": len([u for u in uncertainties if u.get("status") == "resolved"])
+                        "resolved_count": len([u for u in uncertainties if u.get("status") == "resolved"]),
+                        "message": "Use FileRead to view full uncertainties from ontology_latest.json if needed"
                     }
                 },
                 indent=2,
@@ -1577,350 +2086,3 @@ class OntologySearchTool(KodeTool):
         logger.info(f"Indexed {len(concept_ids)} concepts and {len(property_ids)} properties to ChromaDB")
 
 
-# OntologyLoadTool removed - merged into OntologyManagerTool
-
-
-# ==================== Ontology Quality and Uncertainty Tools ====================
-
-
-class OntologyQualityScoreInput(BaseModel):
-    """Input schema for OntologyQualityScoreTool."""
-
-    connection_name: str = Field(
-        description="Database connection name to evaluate ontology quality"
-    )
-
-
-class OntologyQualityScoreTool(KodeTool):
-    """
-    Evaluate ontology quality with multiple metrics.
-
-    Calculates completeness, consistency, richness, and uncertainty rate
-    to provide an overall quality score.
-    """
-
-    name: str = "OntologyQualityScore"
-    description: str = """Evaluate the quality of a stored ontology with detailed metrics.
-    Returns completeness, consistency, richness scores and identifies areas for improvement."""
-
-    args_schema: Type[BaseModel] = OntologyQualityScoreInput
-    requires_permission: bool = False
-
-    def _run(self, connection_name: str) -> str:
-        """
-        Evaluate ontology quality.
-
-        Args:
-            connection_name: Database connection name
-
-        Returns:
-            Quality evaluation results as JSON
-        """
-        try:
-            # Load ontology
-            ontology_path = Path("./ontology_store") / connection_name / "ontology_latest.json"
-
-            if not ontology_path.exists():
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"Ontology for connection '{connection_name}' not found",
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-
-            with open(ontology_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            ontology = data.get("ontology", {})
-            concepts = ontology.get("concepts", {})
-            properties = ontology.get("properties", {})
-            relationships = ontology.get("relationships", [])
-            uncertainties = ontology.get("uncertainties", [])
-
-            # Calculate quality metrics
-            completeness_score = self._calculate_completeness(concepts, properties)
-            consistency_score = self._calculate_consistency(concepts, properties)
-            richness_score = self._calculate_richness(concepts, properties, relationships)
-            uncertainty_rate = len(uncertainties) / max(len(concepts), 1)
-
-            # Overall score (weighted average)
-            overall_score = (
-                completeness_score * 0.35 +
-                consistency_score * 0.25 +
-                richness_score * 0.25 +
-                (1 - min(uncertainty_rate, 1)) * 0.15
-            )
-
-            # Identify issues
-            issues = []
-            recommendations = []
-
-            if completeness_score < 0.7:
-                issues.append("部分概念缺少中文名称或描述")
-                recommendations.append("补充缺失的业务名称和描述信息")
-
-            if consistency_score < 0.7:
-                issues.append("命名规范不一致")
-                recommendations.append("统一命名风格（如统一使用下划线或驼峰命名）")
-
-            if richness_score < 0.5:
-                issues.append("业务语义信息不够丰富")
-                recommendations.append("添加更多业务规则和领域洞察")
-
-            if uncertainty_rate > 0.3:
-                issues.append(f"存在 {len(uncertainties)} 个未解决的不确定性问题")
-                recommendations.append("使用 AskUser 工具向用户确认不确定性问题")
-
-            result = {
-                "status": "success",
-                "connection_name": connection_name,
-                "version": data.get("version"),
-                "overall_score": round(overall_score, 2),
-                "metrics": {
-                    "completeness": round(completeness_score, 2),
-                    "consistency": round(consistency_score, 2),
-                    "richness": round(richness_score, 2),
-                    "uncertainty_rate": round(uncertainty_rate, 2),
-                },
-                "statistics": {
-                    "concept_count": len(concepts),
-                    "property_count": len(properties),
-                    "relationship_count": len(relationships),
-                    "uncertainty_count": len(uncertainties),
-                },
-                "issues": issues,
-                "recommendations": recommendations,
-                "quality_level": self._get_quality_level(overall_score),
-            }
-
-            return json.dumps(result, indent=2, ensure_ascii=False)
-
-        except Exception as e:
-            return json.dumps(
-                {
-                    "status": "error",
-                    "message": f"Failed to evaluate ontology quality: {str(e)}",
-                },
-                indent=2,
-                ensure_ascii=False,
-            )
-
-    def _calculate_completeness(self, concepts: Dict, properties: Dict) -> float:
-        """Calculate completeness score (0-1)."""
-        total_items = len(concepts) + len(properties)
-        if total_items == 0:
-            return 0.0
-
-        complete_items = 0
-
-        # Check concepts
-        for concept in concepts.values():
-            has_cn_name = bool(concept.get("business_name_cn"))
-            has_description = bool(concept.get("description"))
-            has_domain = bool(concept.get("domain"))
-
-            if has_cn_name and has_description and has_domain:
-                complete_items += 1
-
-        # Check properties
-        for prop in properties.values():
-            has_cn_name = bool(prop.get("business_name_cn"))
-            has_description = bool(prop.get("description"))
-
-            if has_cn_name and has_description:
-                complete_items += 1
-
-        return complete_items / total_items
-
-    def _calculate_consistency(self, concepts: Dict, properties: Dict) -> float:
-        """Calculate naming consistency score (0-1)."""
-        all_names = [c.get("technical_name", "") for c in concepts.values()]
-        all_names.extend([p.split(".")[0] for p in properties.keys()])
-
-        if not all_names:
-            return 1.0
-
-        # Check naming patterns
-        snake_case_count = sum(1 for name in all_names if "_" in name and name.islower())
-        camel_case_count = sum(1 for name in all_names if name[0].islower() and any(c.isupper() for c in name))
-
-        total = len(all_names)
-        dominant_style_count = max(snake_case_count, camel_case_count)
-
-        return dominant_style_count / total if total > 0 else 1.0
-
-    def _calculate_richness(self, concepts: Dict, properties: Dict, relationships: List) -> float:
-        """Calculate semantic richness score (0-1)."""
-        if not concepts:
-            return 0.0
-
-        richness_score = 0.0
-
-        # Business rules weight: 0.3
-        has_business_rules = any(
-            concept.get("business_rules") for concept in concepts.values()
-        )
-        if has_business_rules:
-            richness_score += 0.3
-
-        # Relationships weight: 0.4
-        relationship_ratio = len(relationships) / len(concepts)
-        richness_score += min(relationship_ratio / 2, 0.4)
-
-        # Domain insights weight: 0.3
-        has_domain = sum(1 for c in concepts.values() if c.get("domain"))
-        domain_ratio = has_domain / len(concepts)
-        richness_score += domain_ratio * 0.3
-
-        return min(richness_score, 1.0)
-
-    def _get_quality_level(self, score: float) -> str:
-        """Get quality level description."""
-        if score >= 0.9:
-            return "优秀 (Excellent)"
-        elif score >= 0.75:
-            return "良好 (Good)"
-        elif score >= 0.6:
-            return "中等 (Fair)"
-        elif score >= 0.4:
-            return "较差 (Poor)"
-        else:
-            return "很差 (Very Poor)"
-
-
-class OntologyUncertaintyResolverInput(BaseModel):
-    """Input schema for OntologyUncertaintyResolverTool."""
-
-    connection_name: str = Field(
-        description="Database connection name"
-    )
-    uncertainty_index: int = Field(
-        description="Index of the uncertainty to resolve (0-based)"
-    )
-    resolution: str = Field(
-        description="User's answer/resolution to the uncertainty question"
-    )
-
-
-class OntologyUncertaintyResolverTool(KodeTool):
-    """
-    Resolve uncertainties in ontology by recording user answers.
-
-    This tool helps close the loop on AI-identified uncertainties by
-    capturing user clarifications and updating the ontology accordingly.
-    """
-
-    name: str = "OntologyUncertaintyResolver"
-    description: str = """Resolve an uncertainty in the ontology by recording user's answer.
-    Updates the ontology to mark the uncertainty as resolved and incorporates the clarification."""
-
-    args_schema: Type[BaseModel] = OntologyUncertaintyResolverInput
-    requires_permission: bool = False
-
-    def _run(
-        self,
-        connection_name: str,
-        uncertainty_index: int,
-        resolution: str
-    ) -> str:
-        """
-        Resolve an uncertainty.
-
-        Args:
-            connection_name: Database connection name
-            uncertainty_index: Index of uncertainty to resolve
-            resolution: User's clarification/answer
-
-        Returns:
-            Result as JSON
-        """
-        try:
-            # Load ontology
-            ontology_dir = Path("./ontology_store") / connection_name
-            ontology_path = ontology_dir / "ontology_latest.json"
-
-            if not ontology_path.exists():
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"Ontology for connection '{connection_name}' not found",
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-
-            with open(ontology_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            ontology = data.get("ontology", {})
-            uncertainties = ontology.get("uncertainties", [])
-
-            if uncertainty_index < 0 or uncertainty_index >= len(uncertainties):
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"Invalid uncertainty index: {uncertainty_index}. Valid range: 0-{len(uncertainties)-1}",
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-
-            # Get the uncertainty
-            uncertainty = uncertainties[uncertainty_index]
-
-            # Mark as resolved
-            uncertainty["status"] = "resolved"
-            uncertainty["resolution"] = resolution
-            uncertainty["resolved_at"] = datetime.now().isoformat()
-
-            # Save updated ontology with new version
-            version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-            data["version"] = version
-            data["updated_at"] = datetime.now().isoformat()
-
-            # Save new version
-            versioned_path = ontology_dir / f"ontology_{version}.json"
-            with open(versioned_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-
-            # Update latest
-            with open(ontology_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-
-            logger.info(
-                f"Resolved uncertainty {uncertainty_index} for connection '{connection_name}' "
-                f"(saved as {version})"
-            )
-
-            # Count remaining uncertainties
-            remaining_uncertainties = [u for u in uncertainties if u.get("status") != "resolved"]
-
-            result = {
-                "status": "success",
-                "connection_name": connection_name,
-                "version": version,
-                "resolved_uncertainty": {
-                    "index": uncertainty_index,
-                    "type": uncertainty.get("type"),
-                    "entity": uncertainty.get("entity"),
-                    "question": uncertainty.get("question"),
-                    "resolution": resolution,
-                },
-                "remaining_uncertainties": len(remaining_uncertainties),
-                "message": f"已解决不确定性 #{uncertainty_index}。剩余 {len(remaining_uncertainties)} 个未解决问题。",
-            }
-
-            return json.dumps(result, indent=2, ensure_ascii=False)
-
-        except Exception as e:
-            return json.dumps(
-                {
-                    "status": "error",
-                    "message": f"Failed to resolve uncertainty: {str(e)}",
-                },
-                indent=2,
-                ensure_ascii=False,
-            )

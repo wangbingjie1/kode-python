@@ -41,9 +41,9 @@ SYNC_DATABASE_URL = os.getenv(
 # MySQL-specific pool configuration for better stability
 pool_config = {
     "pool_pre_ping": True,  # Test connections before using them
-    "pool_recycle": 3600,   # Recycle connections after 1 hour
-    "pool_size": 10,        # Connection pool size
-    "max_overflow": 20,     # Max overflow connections
+    "pool_recycle": 280,    # Recycle connections after 280 seconds (before MySQL's 300s timeout)
+    "pool_size": 5,         # Smaller pool for async (reduce connections)
+    "max_overflow": 10,     # Smaller overflow
     "echo_pool": False,     # Pool debug logging
 }
 
@@ -55,7 +55,8 @@ if "mysql" in DATABASE_URL:
             "connect_timeout": 10,        # Connection timeout (seconds)
             "charset": "utf8mb4",
             "autocommit": False,
-        }
+        },
+        "pool_recycle": 280,              # Critical: Recycle before MySQL timeout
     })
 
 engine = create_async_engine(
@@ -68,9 +69,9 @@ engine = create_async_engine(
 # Create sync engine for sync operations with same pool config
 sync_pool_config = {
     "pool_pre_ping": True,
-    "pool_recycle": 3600,
-    "pool_size": 10,
-    "max_overflow": 20,
+    "pool_recycle": 280,    # Recycle before MySQL timeout
+    "pool_size": 5,
+    "max_overflow": 10,
 }
 
 if "mysql" in SYNC_DATABASE_URL:
@@ -81,7 +82,8 @@ if "mysql" in SYNC_DATABASE_URL:
             "read_timeout": 30,           # pymysql 支持 read_timeout
             "write_timeout": 30,          # pymysql 支持 write_timeout
             "charset": "utf8mb4",
-        }
+        },
+        "pool_recycle": 280,              # Critical: Recycle before MySQL timeout
     })
 
 sync_engine = create_engine(

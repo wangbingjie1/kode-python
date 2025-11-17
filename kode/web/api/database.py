@@ -432,6 +432,13 @@ async def get_ontology(name: str, version: str = "latest"):
         Full ontology data including concepts, properties, relationships, etc.
     """
     try:
+        # Validate connection name
+        if not name or name in ["undefined", "null", ""]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid connection name. Please select a valid ontology.",
+            )
+
         ontology_path = Path("./ontology_store") / name
 
         if version == "latest":

@@ -74,13 +74,58 @@
           </div>
         </div>
 
+        <!-- Batch Uncertainty Q&A Summary (compact view) -->
+        <div v-if="isUncertaintyBatchLoad && uncertaintyData" class="detail-section">
+          <div class="section-title-with-action">
+            <span class="section-title">批量问答表单</span>
+            <span class="text-xs text-gray-500">
+              共 {{ uncertaintyData.total_loaded }} 个高优先级问题
+            </span>
+          </div>
+
+          <div class="uncertainty-summary">
+            <div class="summary-info">
+              <svg class="summary-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <div class="summary-text">
+                <p class="summary-main">AI 已为你准备好 {{ uncertaintyData.total_loaded }} 个业务问题</p>
+                <p class="summary-sub">涵盖 {{ uncertaintyData.groups?.length || 0 }} 个业务域，点击下方按钮在对话框中批量回答</p>
+              </div>
+            </div>
+            <button @click.stop="openBatchDialog" class="open-dialog-button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              <span>查看并回答</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Result or Error -->
         <div v-if="toolResult || toolError" class="detail-section">
           <div class="section-title">{{ hasError ? '错误信息' : '执行结果' }}</div>
 
+          <!-- 批量问答工具：只显示简洁统计 -->
+          <div v-if="isUncertaintyBatchLoad && parsedToolResult" class="result-summary">
+            <div class="summary-item">
+              <span class="summary-label">加载状态：</span>
+              <span class="summary-value success">✓ 成功</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">问题总数：</span>
+              <span class="summary-value">{{ parsedToolResult.total_loaded || 0 }} 个</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">业务域：</span>
+              <span class="summary-value">{{ parsedToolResult.groups?.length || 0 }} 个</span>
+            </div>
+          </div>
+
           <!-- 如果结果是表格数据，用表格展示 -->
           <QueryResultTable
-            v-if="!hasError && parsedToolResult && isTableData(parsedToolResult)"
+            v-else-if="!hasError && parsedToolResult && isTableData(parsedToolResult)"
             :loading="false"
             :error="''"
             :data="parsedToolResult"
@@ -103,12 +148,21 @@
         </div>
       </div>
     </transition>
+
+    <!-- Batch Uncertainty Dialog -->
+    <UncertaintyBatchDialog
+      v-model:visible="showBatchDialog"
+      :data="uncertaintyData"
+      :connection-name="toolArgs?.connection_name"
+      @submit="handleDialogSubmit"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import QueryResultTable from './QueryResultTable.vue'
+import UncertaintyBatchDialog from './UncertaintyBatchDialog.vue'
 import { executeDatabaseQuery } from '@/services/api'
 import { notification } from '@/composables/useNotification'
 
@@ -142,6 +196,7 @@ const isDatabaseQueryTool = computed(() => {
   return props.toolName === 'DatabaseExecuteQuery'
 })
 
+// 先定义 parsedResult 和 parsedToolResult，因为后面的 computed 会用到
 const parsedResult = computed(() => {
   if (!props.toolResult) return null
   try {
@@ -164,6 +219,103 @@ const parsedToolResult = computed(() => {
     return null
   }
 })
+
+const isUncertaintyBatchLoad = computed(() => {
+  // 支持两种 action: 'load' 和 'batch_load'
+  const result = props.toolName === 'UncertaintyQAManager' &&
+         (props.toolArgs?.action === 'batch_load' || props.toolArgs?.action === 'load')
+
+  // 调试日志
+  if (props.toolName === 'UncertaintyQAManager') {
+    console.log('[ToolCallItem] UncertaintyQAManager detected:', {
+      toolName: props.toolName,
+      action: props.toolArgs?.action,
+      isMatch: result,
+      toolArgs: props.toolArgs,
+      toolResult: props.toolResult,
+      hasError: hasError.value
+    })
+  }
+
+  return result
+})
+
+// 解析批量问答数据
+const uncertaintyData = computed(() => {
+  if (!isUncertaintyBatchLoad.value || !parsedToolResult.value) {
+    if (isUncertaintyBatchLoad.value) {
+      console.log('[ToolCallItem] uncertaintyData is null because:', {
+        isUncertaintyBatchLoad: isUncertaintyBatchLoad.value,
+        parsedToolResult: parsedToolResult.value,
+        hasError: hasError.value
+      })
+    }
+    return null
+  }
+
+  const result = parsedToolResult.value
+
+  // 如果是 'load' 格式（questions 数组），转换为 'batch_load' 格式（groups 数组）
+  if (result.questions && !result.groups) {
+    console.log('[ToolCallItem] Converting "load" format to "batch_load" format')
+
+    // 按 domain 分组
+    const groupsMap: Record<string, any[]> = {}
+    result.questions.forEach((q: any) => {
+      const domain = q.domain || 'unknown'
+      if (!groupsMap[domain]) {
+        groupsMap[domain] = []
+      }
+      groupsMap[domain].push(q)
+    })
+
+    // 转换为 groups 数组
+    const groups = Object.entries(groupsMap).map(([domain, questions]) => ({
+      domain,
+      question_count: questions.length,
+      questions
+    }))
+
+    return {
+      ...result,
+      total_loaded: result.questions.length,
+      groups
+    }
+  }
+
+  console.log('[ToolCallItem] uncertaintyData loaded:', result)
+  return result
+})
+
+// 批量问答对话框状态
+const showBatchDialog = ref(false)
+
+// 调试：监听对话框显示状态
+watch(showBatchDialog, (newVal) => {
+  console.log('[ToolCallItem] showBatchDialog changed to:', newVal)
+})
+
+// 监听 uncertaintyData 变化，自动打开对话框
+watch(
+  () => uncertaintyData.value,
+  (newData) => {
+    console.log('[ToolCallItem] uncertaintyData changed:', newData)
+    if (newData && newData.total_loaded > 0) {
+      console.log('[ToolCallItem] Auto-opening batch dialog for', newData.total_loaded, 'questions')
+      // 延迟一点时间自动打开，让用户看到工具卡片的动画
+      setTimeout(() => {
+        console.log('[ToolCallItem] Setting showBatchDialog to true')
+        showBatchDialog.value = true
+      }, 500)
+    } else {
+      console.log('[ToolCallItem] Not opening dialog:', {
+        hasData: !!newData,
+        totalLoaded: newData?.total_loaded
+      })
+    }
+  }
+  // 不使用 immediate: true，避免初始化时的错误
+)
 
 // 判断是否为表格数据
 function isTableData(data: any): boolean {
@@ -261,6 +413,16 @@ async function executeQuery() {
   } finally {
     isQuerying.value = false
   }
+}
+
+function openBatchDialog() {
+  showBatchDialog.value = true
+}
+
+function handleDialogSubmit(answers: Record<string, string>) {
+  console.log('[ToolCallItem] Batch answers submitted:', answers)
+  // 对话框组件已经处理提交逻辑，这里只做通知
+  notification.success('已提交', '问题答案已成功提交')
 }
 </script>
 
@@ -534,5 +696,124 @@ async function executeQuery() {
 .expand-leave-to {
   max-height: 0;
   opacity: 0;
+}
+
+/* Batch Uncertainty Summary Styles (compact) */
+.uncertainty-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.uncertainty-summary:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+}
+
+.summary-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  flex: 1;
+}
+
+.summary-icon {
+  width: 40px;
+  height: 40px;
+  color: #3b82f6;
+  flex-shrink: 0;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.1);
+}
+
+.summary-text {
+  flex: 1;
+}
+
+.summary-main {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1e40af;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.4;
+}
+
+.summary-sub {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.open-dialog-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.4375rem;
+  border: none;
+  background: #3b82f6;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+  flex-shrink: 0;
+}
+
+.open-dialog-button:hover {
+  background: #2563eb;
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+  transform: translateY(-1px);
+}
+
+.open-dialog-button:active {
+  transform: translateY(0);
+}
+
+.open-dialog-button svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* Result Summary Styles */
+.result-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.summary-label {
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.summary-value {
+  font-weight: 600;
+  color: #111827;
+}
+
+.summary-value.success {
+  color: #059669;
 }
 </style>

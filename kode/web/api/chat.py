@@ -11,7 +11,7 @@ from typing import List
 from datetime import datetime
 
 from kode.database.session import get_db
-from kode.models import Conversation, Message, Project, User
+from kode.models import Conversation, Message, Project, User, APICallTrace
 from kode.schemas.chat import (
     ConversationCreate,
     ConversationResponse,
@@ -264,3 +264,48 @@ async def list_project_conversations(
     conversations = result.scalars().all()
 
     return conversations
+
+
+@router.get("/conversations/{conversation_id}/api_traces")
+async def get_conversation_api_traces(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取会话的 API 调用追踪记录（用于真实成本分析）"""
+    # 验证会话所有权
+    conversation = await verify_conversation_ownership(
+        conversation_id, current_user.id, db
+    )
+
+    # 查询该会话的所有 API traces
+    result = await db.execute(
+        select(APICallTrace)
+        .where(APICallTrace.conversation_id == conversation_id)
+        .order_by(APICallTrace.created_at)
+    )
+    traces = result.scalars().all()
+
+    # 计算汇总统计
+    total_input_tokens = sum(t.input_tokens for t in traces)
+    total_output_tokens = sum(t.output_tokens for t in traces)
+    total_cache_creation = sum(t.cache_creation_input_tokens for t in traces)
+    total_cache_read = sum(t.cache_read_input_tokens for t in traces)
+
+    total_cost = sum(t.total_cost for t in traces)
+    total_savings = sum(t.cost_savings for t in traces)
+
+    return {
+        "conversation_id": conversation_id,
+        "summary": {
+            "total_calls": len(traces),
+            "total_tokens": total_input_tokens + total_output_tokens,
+            "total_input_tokens": total_input_tokens,
+            "total_output_tokens": total_output_tokens,
+            "total_cache_creation_tokens": total_cache_creation,
+            "total_cache_read_tokens": total_cache_read,
+            "total_cost_usd": round(total_cost, 8),
+            "total_savings_usd": round(total_savings, 8),
+        },
+        "traces": [trace.to_dict() for trace in traces],
+    }

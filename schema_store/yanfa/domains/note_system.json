@@ -1,0 +1,808 @@
+{
+  "domain_name": "note_system",
+  "display_name": "Note & Category System",
+  "description": "User notes, categories, records management, feedback collection, and free trial whitelist for note-taking features.",
+  "table_count": 4,
+  "created_at": "2025-11-17T14:24:49.792836",
+  "connection": {
+    "name": "yanfa",
+    "db_type": "mysql",
+    "host": "legaldao.cpcugqubfjku.ap-southeast-1.rds.amazonaws.com",
+    "port": 3306,
+    "database": "yanfa",
+    "username": "wbjread",
+    "db_schema": "",
+    "ssl": false
+  },
+  "tables": {
+    "note_categroy": {
+      "name": "note_categroy",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户ID"
+        },
+        {
+          "name": "title",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "分类名称"
+        },
+        {
+          "name": "type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "分类类型 calendar|other"
+        },
+        {
+          "name": "ico",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "分类ico"
+        },
+        {
+          "name": "categroy_summary",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "分类摘要"
+        },
+        {
+          "name": "last_modify_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "最后更新时间"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "type_sort",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "类型排序"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 15,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 209627378119350272,
+            "user_id": 209577485782750208,
+            "title": null,
+            "type": "calendar",
+            "ico": "🗓",
+            "categroy_summary": null,
+            "last_modify_at": 1732453982691,
+            "create_at": 1732286765408,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "type_sort": 1
+          },
+          {
+            "id": 209942861603411968,
+            "user_id": 209577485782750208,
+            "title": "Production Mobile",
+            "type": "other",
+            "ico": "📱",
+            "categroy_summary": "手机主屏幕与天气信息展示，适合用户在日常生活中快速获取天气和日程，提升管理效率与便捷性。",
+            "last_modify_at": 1732305722029,
+            "create_at": 1732305569689,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "type_sort": 0
+          },
+          {
+            "id": 212425476734457856,
+            "user_id": 212423794650780672,
+            "title": null,
+            "type": "calendar",
+            "ico": "🗓",
+            "categroy_summary": null,
+            "last_modify_at": 1732731884242,
+            "create_at": 1732453545082,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "type_sort": 1
+          },
+          {
+            "id": 212427060906301440,
+            "user_id": 212423794650780672,
+            "title": "黑咖啡消费趋势分析",
+            "type": "other",
+            "ico": "☕",
+            "categroy_summary": "黑咖啡消费趋势分析，旨在为市场研究提供洞察，揭示消费者向冰镇咖啡饮品转变的心理和行为，适合深入理解咖啡消费市场动向。",
+            "last_modify_at": 1732453676055,
+            "create_at": 1732453639506,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "type_sort": 0
+          },
+          {
+            "id": 212432777155450880,
+            "user_id": 209577485782750208,
+            "title": "ScreenshotAI应用界面",
+            "type": "other",
+            "ico": "📱",
+            "categroy_summary": null,
+            "last_modify_at": 1732453984396,
+            "create_at": 1732453980221,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "type_sort": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "note_categroy_records": {
+      "name": "note_categroy_records",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "categroy_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "分类id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户ID"
+        },
+        {
+          "name": "source",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "照片来源：user|system"
+        },
+        {
+          "name": "calendar_sync_status",
+          "type": "varchar",
+          "nullable": true,
+          "default": "none",
+          "comment": "仅calendar类型：日历同步状态 none|done"
+        },
+        {
+          "name": "calendar_start_date",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "仅calendar类型：日历时间"
+        },
+        {
+          "name": "calendar_end_date",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "仅calendar类型：日历时间"
+        },
+        {
+          "name": "calendar_location",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "仅calendar类型：地点"
+        },
+        {
+          "name": "record_summary",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "记录内容"
+        },
+        {
+          "name": "record_extract_text",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "记录提取文本"
+        },
+        {
+          "name": "record_pic",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "记录图片内容"
+        },
+        {
+          "name": "last_modify_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "最后更新时间"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "照片处理类型：system|userCalendar|userOther"
+        },
+        {
+          "name": "record_file_date",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "文件的原始日期"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 21,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 209627378186459136,
+            "categroy_id": 209627378119350272,
+            "user_id": 209577485782750208,
+            "source": "user",
+            "calendar_sync_status": "done",
+            "calendar_start_date": "2024-11-30 20:00:00.000",
+            "calendar_end_date": "2024-11-30 21:00:00.000",
+            "calendar_location": "",
+            "record_summary": "本月月底会议",
+            "record_extract_text": null,
+            "record_pic": "https://s3.ap-southeast-1.amazonaws.com/yanfa/upload_files/note/20241122/5e194e2d-0656-4c82-bce7-d95f85dc9195.png",
+            "last_modify_at": 1732286765412,
+            "create_at": 1732286765412,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": 1732286833863,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "type": "userCalendar",
+            "record_file_date": "2024:11:22 15:07:52"
+          },
+          {
+            "id": 209683004639942656,
+            "categroy_id": 209627378119350272,
+            "user_id": 209577485782750208,
+            "source": "user",
+            "calendar_sync_status": "done",
+            "calendar_start_date": "2024-11-30 20:00:00.000",
+            "calendar_end_date": "2024-11-30 21:00:00.000",
+            "calendar_location": "",
+            "record_summary": "本月月底35号8点开会",
+            "record_extract_text": null,
+            "record_pic": "https://s3.ap-southeast-1.amazonaws.com/yanfa/upload_files/note/20241122/95ce9f27-c0b6-4d1a-bfd2-56d31ae81e91.png",
+            "last_modify_at": 1732290081007,
+            "create_at": 1732290081007,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": 1732296083249,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "type": "userCalendar",
+            "record_file_date": "2024:11:22 15:01:32"
+          },
+          {
+            "id": 209942861653743616,
+            "categroy_id": 209942861603411968,
+            "user_id": 209577485782750208,
+            "source": "user",
+            "calendar_sync_status": "none",
+            "calendar_start_date": null,
+            "calendar_end_date": null,
+            "calendar_location": null,
+            "record_summary": "手机主屏幕展示，包含天气信息、日期，以及常用应用，适合用户快速查看天气和日程，提升日常管理效率。",
+            "record_extract_text": null,
+            "record_pic": "https://s3.ap-southeast-1.amazonaws.com/yanfa/upload_files/note/20241122/aa52f0ec-55dc-46c8-835d-e9d478db0e06.png",
+            "last_modify_at": 1732305569692,
+            "create_at": 1732305569692,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "type": "system",
+            "record_file_date": "2024:11:20 04:55:07"
+          },
+          {
+            "id": 209943620101347328,
+            "categroy_id": 209942861603411968,
+            "user_id": 209577485782750208,
+            "source": "user",
+            "calendar_sync_status": "none",
+            "calendar_start_date": null,
+            "calendar_end_date": null,
+            "calendar_location": null,
+            "record_summary": "手机主屏幕展示多种应用，适合用户整理和访问常用工具，便于管理日常工作与娱乐。",
+            "record_extract_text": null,
+            "record_pic": "https://s3.ap-southeast-1.amazonaws.com/yanfa/upload_files/note/20241122/5d323bad-2296-491d-9038-6f188e798e4e.png",
+            "last_modify_at": 1732305614899,
+            "create_at": 1732305614899,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "type": "system",
+            "record_file_date": "2024:11:19 22:05:52"
+          },
+          {
+            "id": 209945280676632576,
+            "categroy_id": 209942861603411968,
+            "user_id": 209577485782750208,
+            "source": "user",
+            "calendar_sync_status": "none",
+            "calendar_start_date": null,
+            "calendar_end_date": null,
+            "calendar_location": null,
+            "record_summary": "手机主屏幕展示天气信息，适合用户查看实时天气及日常安排，便于日常生活规划。",
+            "record_extract_text": null,
+            "record_pic": "https://s3.ap-southeast-1.amazonaws.com/yanfa/upload_files/note/20241122/4a231b20-a6b0-4e67-9894-c56a012396ca.png",
+            "last_modify_at": 1732305713877,
+            "create_at": 1732305713877,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "type": "system",
+            "record_file_date": "2024:11:20 04:55:07"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "note_feedback": {
+      "name": "note_feedback",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户ID"
+        },
+        {
+          "name": "feedback",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "反馈内容"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 10,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 209682536522061824,
+            "user_id": 209577485782750208,
+            "feedback": "Production test\n",
+            "create_at": 1732290053106,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 226927228355614721,
+            "user_id": 226926198637204480,
+            "feedback": "I ",
+            "create_at": 1733317916836,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 226929221438543872,
+            "user_id": 226926198637204480,
+            "feedback": "I ",
+            "create_at": 1733318035633,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 226929463114340352,
+            "user_id": 226926198637204480,
+            "feedback": "I ",
+            "create_at": 1733318050038,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 394998723853160448,
+            "user_id": 394991582379512832,
+            "feedback": "这",
+            "create_at": 1743335758622,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "note_free_trial_whitelist": {
+      "name": "note_free_trial_whitelist",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户ID"
+        },
+        {
+          "name": "end_at",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "使用截止日期"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 10,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 209620640154523648,
+            "user_id": 209577485782750208,
+            "end_at": 1732715791593,
+            "create_at": 1732286363794,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 212423860987893760,
+            "user_id": 212423794650780672,
+            "end_at": 1732885444822,
+            "create_at": 1732453448776,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 212443635268982784,
+            "user_id": 212440481655690240,
+            "end_at": 1732886439445,
+            "create_at": 1732454627415,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 212500684363274240,
+            "user_id": 212500533368329216,
+            "end_at": 1732890018806,
+            "create_at": 1732458027806,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 212599806571321344,
+            "user_id": 212599645778482176,
+            "end_at": 1732895926366,
+            "create_at": 1732463935950,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    }
+  },
+  "relationships": []
+}

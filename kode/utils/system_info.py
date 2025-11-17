@@ -9,6 +9,7 @@ import os
 import sys
 from typing import Dict
 from pathlib import Path
+from datetime import datetime
 
 
 def get_system_info() -> Dict[str, str]:
@@ -42,6 +43,9 @@ def get_system_info() -> Dict[str, str]:
     # 系统路径分隔符
     info['path_sep'] = os.sep
 
+    # 用户当前时间
+    info['current_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
     return info
 
 
@@ -71,6 +75,7 @@ def format_system_info_for_prompt() -> str:
         f"**用户主目录**: `{info['home']}`",
         f"**Shell/终端**: {info['shell']}",
         f"**路径分隔符**: `{info['path_sep']}`",
+        f"**当前时间**: {info['current_time']}",
         "",
         "**重要提示**:",
     ]

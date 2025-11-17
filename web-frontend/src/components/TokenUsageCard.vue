@@ -144,19 +144,24 @@ const savingsPercentage = computed(() => {
 const estimatedCost = computed(() => {
   const exchangeRate = 7.3 // 美元转人民币汇率
 
-  // 输入成本 ($3/M)
-  const inputCost = (props.usage.total_input_tokens / 1_000_000) * 3 * exchangeRate
+  // 计算常规输入 tokens (排除缓存)
+  const regularInputTokens = props.usage.total_input_tokens -
+    (props.usage.cache_creation_input_tokens || 0) -
+    (props.usage.cache_read_input_tokens || 0)
+
+  // 常规输入成本 ($3/M)
+  const regularInputCost = (regularInputTokens / 1_000_000) * 3 * exchangeRate
 
   // 输出成本 ($15/M)
   const outputCost = (props.usage.total_output_tokens / 1_000_000) * 15 * exchangeRate
 
-  // 缓存读取成本 (输入价格的 10%)
-  const cacheReadCost = ((props.usage.cache_read_input_tokens || 0) / 1_000_000) * 3 * 0.1 * exchangeRate
+  // 缓存读取成本 ($0.30/M - 节省90%)
+  const cacheReadCost = ((props.usage.cache_read_input_tokens || 0) / 1_000_000) * 0.30 * exchangeRate
 
-  // 缓存创建成本 (输入价格的 125%)
-  const cacheCreationCost = ((props.usage.cache_creation_input_tokens || 0) / 1_000_000) * 3 * 1.25 * exchangeRate
+  // 缓存创建成本 ($3.75/M - 标准价格的125%)
+  const cacheCreationCost = ((props.usage.cache_creation_input_tokens || 0) / 1_000_000) * 3.75 * exchangeRate
 
-  return inputCost + outputCost + cacheReadCost + cacheCreationCost
+  return regularInputCost + outputCost + cacheReadCost + cacheCreationCost
 })
 </script>
 

@@ -4,7 +4,7 @@ Message Model
 Database model for chat messages.
 """
 
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, JSON, Integer
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -21,9 +21,16 @@ class Message(Base):
     conversation_id = Column(
         String(36), ForeignKey("conversations.id"), nullable=False, index=True
     )
-    role = Column(String(20), nullable=False)  # "user" or "assistant"
-    content = Column(Text, nullable=False)
-    message_metadata = Column(JSON, default=dict)  # Store tool calls, model info, etc.
+    role = Column(String(20), nullable=False)  # "user" or "assistant" (only these two)
+    content = Column(Text, nullable=False)  # 使用 Text 类型，支持长文本（SQLite 无长度限制）
+    message_metadata = Column(JSON, default=dict)  # Store tool calls, model info, chart data, etc.
+
+    # Token 统计字段（仅 assistant 消息有值）
+    input_tokens = Column(Integer, default=0, nullable=False)
+    output_tokens = Column(Integer, default=0, nullable=False)
+    cache_creation_tokens = Column(Integer, default=0, nullable=False)
+    cache_read_tokens = Column(Integer, default=0, nullable=False)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

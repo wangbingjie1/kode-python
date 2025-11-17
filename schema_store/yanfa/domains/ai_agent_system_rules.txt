@@ -1,0 +1,31 @@
+# 用户已确认的业务规则（构建本体时必须遵守）
+
+## 规则 1: platform_ai_agent_categray
+**类型**: 命名一致性
+**问题**: 表名和相关表存在拼写错误，'categray' 应为 'category'
+**用户确认**: 是拼写错误
+
+## 规则 2: platform_ai_agent_categray_mapping
+**类型**: 数据完整性
+**问题**: 缺少外键约束，无法保证 categray_id 和 agent_id 的引用完整性
+**用户确认**: 的确有这个问题
+
+## 规则 3: platform_ai_role_agent_mapping, platform_ai_role_user, platform_ai_role_user_agent_mapping
+**类型**: 数据完整性
+**问题**: 所有角色相关映射表缺少外键约束
+**用户确认**: 的确有这个问题
+
+## 规则 4: platform_ai_agent_20250625bak
+**类型**: 业务逻辑
+**问题**: 备份表的用途和生命周期不明确
+**用户确认**: 备份表全部不用了
+
+## 规则 5: platform_ai_role
+**类型**: 业务逻辑
+**问题**: 角色类型 'recommend' 的具体业务含义和使用场景不清晰
+**用户确认**: 这个字段暂时没用
+
+## 规则 6: platform_ai_role_user_agent_mapping
+**类型**: 数据一致性
+**问题**: role_id 字段可为空，但业务逻辑不清晰
+**用户确认**: 角色功能没有启用

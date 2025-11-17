@@ -1,0 +1,1565 @@
+{
+  "domain_name": "conversation_messaging",
+  "display_name": "Conversation & Messaging",
+  "description": "Chat conversations, messages, tasks, and communication records across different AI models and user interactions.",
+  "table_count": 8,
+  "created_at": "2025-11-17T14:24:49.422107",
+  "connection": {
+    "name": "yanfa",
+    "db_type": "mysql",
+    "host": "legaldao.cpcugqubfjku.ap-southeast-1.rds.amazonaws.com",
+    "port": 3306,
+    "database": "yanfa",
+    "username": "wbjread",
+    "db_schema": "",
+    "ssl": false
+  },
+  "tables": {
+    "platform_ai_conversation": {
+      "name": "platform_ai_conversation",
+      "columns": [
+        {
+          "name": "id",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户 id"
+        },
+        {
+          "name": "agent_id",
+          "type": "int",
+          "nullable": false,
+          "default": null,
+          "comment": "使用的智能体id"
+        },
+        {
+          "name": "model",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "使用的模型"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "产品线"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "任务名称"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "device_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "终端类型 pc|mobile"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 14,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": "000029d6-eded-4728-a330-36890f0052f1",
+            "user_id": 514418030214648832,
+            "agent_id": 4115,
+            "model": "mj",
+            "product_no": "glbgpt",
+            "name": "Eren Yeage",
+            "create_at": 1750454124113,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "device_type": null
+          },
+          {
+            "id": "00002db5-6d34-40f8-a916-9f8ee603a88d",
+            "user_id": 564956064932432896,
+            "agent_id": 4336,
+            "model": "claude-3.7-sonnet",
+            "product_no": "glbgpt",
+            "name": "Hi",
+            "create_at": 1753466111936,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "device_type": "pc"
+          },
+          {
+            "id": "0000500e-30bc-407d-8d93-29b56b4822e7",
+            "user_id": 541194927049018368,
+            "agent_id": 6035,
+            "model": "Grok 4",
+            "product_no": "glbgpt",
+            "name": "Les boring",
+            "create_at": 1757945480116,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "device_type": "pc"
+          },
+          {
+            "id": "00005606-8beb-4d28-ac71-1d4a494ebc8f",
+            "user_id": 611239123331581952,
+            "agent_id": 6068,
+            "model": "GPT-5",
+            "product_no": "glbgpt",
+            "name": "Kaise ho?",
+            "create_at": 1756224700760,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "device_type": "mobile"
+          },
+          {
+            "id": "00007839-7c61-4af2-82aa-c64a2dc71894",
+            "user_id": 515614359884403712,
+            "agent_id": 4341,
+            "model": "deep-research",
+            "product_no": "glbgpt",
+            "name": "I am now w",
+            "create_at": 1752053795646,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "device_type": "pc"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_conversation_msg": {
+      "name": "platform_ai_conversation_msg",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户 id"
+        },
+        {
+          "name": "agent_id",
+          "type": "int",
+          "nullable": false,
+          "default": null,
+          "comment": "使用的智能体id"
+        },
+        {
+          "name": "model",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "使用的模型，由智能体背后的模型决定"
+        },
+        {
+          "name": "conversation_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "会话id"
+        },
+        {
+          "name": "role",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "消息对应的角色 assistant, user"
+        },
+        {
+          "name": "message",
+          "type": "longtext",
+          "nullable": true,
+          "default": null,
+          "comment": "消息内容"
+        },
+        {
+          "name": "file",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "用户上传的文件"
+        },
+        {
+          "name": "prompt_tokens",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "输入tokens"
+        },
+        {
+          "name": "completion_tokens",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "输出tokens"
+        },
+        {
+          "name": "total_tokens",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "总tokens"
+        },
+        {
+          "name": "prompt_price",
+          "type": "decimal",
+          "nullable": true,
+          "default": "0.0000000000",
+          "comment": ""
+        },
+        {
+          "name": "prompt_unit_price",
+          "type": "decimal",
+          "nullable": true,
+          "default": "0.0000000000",
+          "comment": ""
+        },
+        {
+          "name": "prompt_price_unit",
+          "type": "decimal",
+          "nullable": true,
+          "default": "0.0000000000",
+          "comment": ""
+        },
+        {
+          "name": "completion_unit_price",
+          "type": "decimal",
+          "nullable": true,
+          "default": "0.0000000000",
+          "comment": ""
+        },
+        {
+          "name": "completion_price_unit",
+          "type": "decimal",
+          "nullable": true,
+          "default": "0.0000000000",
+          "comment": ""
+        },
+        {
+          "name": "completion_price",
+          "type": "decimal",
+          "nullable": true,
+          "default": "0.0000000000",
+          "comment": ""
+        },
+        {
+          "name": "total_price",
+          "type": "decimal",
+          "nullable": true,
+          "default": "0.0000000000",
+          "comment": ""
+        },
+        {
+          "name": "currency",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "message_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "rating",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "点赞 like, 点踩 dislike, 撤销点赞 null"
+        },
+        {
+          "name": "citations",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "引文"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 29,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 67090033789637632,
+            "agent_id": 7,
+            "model": "gpt4o-mini",
+            "conversation_id": "320bcbf0-2107-4196-99f3-f63b9abfd5c6",
+            "role": "user",
+            "message": "图片.jpg",
+            "file": "[{\"transferMethod\":\"local_file\",\"type\":\"image\",\"uploadFileId\":\"be0fdd89-2a38-4097-a439-564d07e546d2\"}]",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "prompt_price": "0E-10",
+            "prompt_unit_price": "0E-10",
+            "prompt_price_unit": "0E-10",
+            "completion_unit_price": "0E-10",
+            "completion_price_unit": "0E-10",
+            "completion_price": "0E-10",
+            "total_price": "0E-10",
+            "currency": null,
+            "create_at": 1723798412663,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "message_id": "a32a9953-d064-45a5-af2b-10ff2dd9f836",
+            "rating": null,
+            "citations": null
+          },
+          {
+            "id": 2,
+            "user_id": 67090033789637632,
+            "agent_id": 7,
+            "model": "gpt4o-mini",
+            "conversation_id": "320bcbf0-2107-4196-99f3-f63b9abfd5c6",
+            "role": "assistant",
+            "message": "请查看您请求的图片。",
+            "file": "[{\"transferMethod\":\"local_file\",\"type\":\"image\",\"uploadFileId\":\"be0fdd89-2a38-4097-a439-564d07e546d2\"}]",
+            "prompt_tokens": 26027,
+            "completion_tokens": 85,
+            "total_tokens": 25780,
+            "prompt_price": "0.0039041000",
+            "prompt_unit_price": "0.1500000000",
+            "prompt_price_unit": "0.0000010000",
+            "completion_unit_price": "0.6000000000",
+            "completion_price_unit": "0.0000010000",
+            "completion_price": "0.0000510000",
+            "total_price": "0.0039551000",
+            "currency": "USD",
+            "create_at": 1723798439328,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "message_id": "a32a9953-d064-45a5-af2b-10ff2dd9f836",
+            "rating": null,
+            "citations": null
+          },
+          {
+            "id": 3,
+            "user_id": 67090033789637632,
+            "agent_id": 9,
+            "model": "gpt4o-mini",
+            "conversation_id": "a620b13e-987e-4807-bf15-f1bd9e71ae20",
+            "role": "user",
+            "message": "哈哈",
+            "file": "[]",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "prompt_price": "0E-10",
+            "prompt_unit_price": "0E-10",
+            "prompt_price_unit": "0E-10",
+            "completion_unit_price": "0E-10",
+            "completion_price_unit": "0E-10",
+            "completion_price": "0E-10",
+            "total_price": "0E-10",
+            "currency": null,
+            "create_at": 1723798972438,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "message_id": "e51d9213-1ef0-4236-91aa-012c289c3b2f",
+            "rating": null,
+            "citations": null
+          },
+          {
+            "id": 4,
+            "user_id": 67090033789637632,
+            "agent_id": 9,
+            "model": "gpt4o-mini",
+            "conversation_id": "a620b13e-987e-4807-bf15-f1bd9e71ae20",
+            "role": "assistant",
+            "message": "我是一名文案写作专家，帮你生成最好的TikTok文案。如果你有主题或内容，我很乐意帮忙哦！",
+            "file": "[]",
+            "prompt_tokens": 232,
+            "completion_tokens": 32,
+            "total_tokens": 264,
+            "prompt_price": "0.0000348000",
+            "prompt_unit_price": "0.1500000000",
+            "prompt_price_unit": "0.0000010000",
+            "completion_unit_price": "0.6000000000",
+            "completion_price_unit": "0.0000010000",
+            "completion_price": "0.0000192000",
+            "total_price": "0.0000540000",
+            "currency": "USD",
+            "create_at": 1723798974190,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "message_id": "e51d9213-1ef0-4236-91aa-012c289c3b2f",
+            "rating": null,
+            "citations": null
+          },
+          {
+            "id": 5,
+            "user_id": 67090033789637632,
+            "agent_id": 9,
+            "model": "gpt4o-mini",
+            "conversation_id": "36dbadfc-6ecf-461d-a924-13cf4c7ecbea",
+            "role": "user",
+            "message": "撰写一篇关于新 AI 产品发布的文章",
+            "file": "[]",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "prompt_price": "0E-10",
+            "prompt_unit_price": "0E-10",
+            "prompt_price_unit": "0E-10",
+            "completion_unit_price": "0E-10",
+            "completion_price_unit": "0E-10",
+            "completion_price": "0E-10",
+            "total_price": "0E-10",
+            "currency": null,
+            "create_at": 1723801032247,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "message_id": "6cf1b805-7e4e-4dcd-aadf-11945b64aac5",
+            "rating": null,
+            "citations": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "task": {
+      "name": "task",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "uuid",
+          "type": "char",
+          "nullable": false,
+          "default": null,
+          "comment": "task唯一标识"
+        },
+        {
+          "name": "robot_id",
+          "type": "int",
+          "nullable": false,
+          "default": null,
+          "comment": "使用的智能体id"
+        },
+        {
+          "name": "model",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "使用的模型"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户id"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "任务名称"
+        },
+        {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "创建时间"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "更新时间"
+        },
+        {
+          "name": "device_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "终端类型 pc|mobile"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 10,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "uuid": "712802b3-0a98-4da6-8a00-1348bff8f4cd",
+            "robot_id": 1,
+            "model": "gpt-3.5-turbo-1106",
+            "user_id": 5,
+            "name": "New Conversation",
+            "deleted_at": null,
+            "created_at": "2024-03-04T11:50:18",
+            "updated_at": "2024-03-04T11:50:18",
+            "device_type": null
+          },
+          {
+            "id": 2,
+            "uuid": "dde8e44e-f763-4eb3-b69f-ccc0f7b015b6",
+            "robot_id": 1,
+            "model": "gpt-3.5-turbo-1106",
+            "user_id": 4,
+            "name": "New Conversation",
+            "deleted_at": null,
+            "created_at": "2024-03-04T11:50:25",
+            "updated_at": "2024-03-04T11:50:25",
+            "device_type": null
+          },
+          {
+            "id": 3,
+            "uuid": "5c5113bb-6f02-43e4-99fa-7e13463f6fef",
+            "robot_id": 1,
+            "model": "gpt-3.5-turbo-1106",
+            "user_id": 2,
+            "name": "09 模块的特性.mp4-转写结果（修订后）.docx",
+            "deleted_at": null,
+            "created_at": "2024-03-04T11:54:04",
+            "updated_at": "2024-03-26T11:45:29",
+            "device_type": null
+          },
+          {
+            "id": 4,
+            "uuid": "b393073e-92dc-4dd0-bb1e-58d936a4acce",
+            "robot_id": 2,
+            "model": "gpt-4-1106-preview",
+            "user_id": 2,
+            "name": "New Conversation",
+            "deleted_at": null,
+            "created_at": "2024-03-04T11:54:12",
+            "updated_at": "2024-03-04T11:54:12",
+            "device_type": null
+          },
+          {
+            "id": 5,
+            "uuid": "46e07d1c-4201-4d02-bb03-f6e175902437",
+            "robot_id": 1,
+            "model": "gpt-3.5-turbo-1106",
+            "user_id": 1,
+            "name": "New Conversation",
+            "deleted_at": null,
+            "created_at": "2024-03-04T12:16:19",
+            "updated_at": "2024-03-04T12:16:19",
+            "device_type": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "message": {
+      "name": "message",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "task_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "task id"
+        },
+        {
+          "name": "role",
+          "type": "enum",
+          "nullable": false,
+          "default": null,
+          "comment": "消息对应的角色",
+          "enum_values": [
+            "assistant",
+            "user"
+          ]
+        },
+        {
+          "name": "message",
+          "type": "longtext",
+          "nullable": false,
+          "default": null,
+          "comment": "消息内容"
+        },
+        {
+          "name": "type",
+          "type": "tinyint",
+          "nullable": false,
+          "default": "1",
+          "comment": "消息类型：1、为纯文本内容；2为文件"
+        },
+        {
+          "name": "file",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "用户上传的文件"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "创建时间"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "更新时间"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 8,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "task_id": 2,
+            "role": "user",
+            "message": "hello",
+            "type": 1,
+            "file": "",
+            "created_at": "2024-03-04T11:52:16",
+            "updated_at": "2024-03-04T11:52:16"
+          },
+          {
+            "id": 2,
+            "task_id": 2,
+            "role": "assistant",
+            "message": "Hello! How can I assist you today?",
+            "type": 1,
+            "file": null,
+            "created_at": "2024-03-04T11:52:17",
+            "updated_at": "2024-03-04T11:52:17"
+          },
+          {
+            "id": 3,
+            "task_id": 3,
+            "role": "user",
+            "message": "hi",
+            "type": 1,
+            "file": "",
+            "created_at": "2024-03-04T11:54:59",
+            "updated_at": "2024-03-04T11:54:59"
+          },
+          {
+            "id": 4,
+            "task_id": 3,
+            "role": "assistant",
+            "message": "Hello! How can I assist you today?",
+            "type": 1,
+            "file": null,
+            "created_at": "2024-03-04T11:55:00",
+            "updated_at": "2024-03-04T11:55:00"
+          },
+          {
+            "id": 5,
+            "task_id": 2,
+            "role": "user",
+            "message": "123",
+            "type": 1,
+            "file": "",
+            "created_at": "2024-03-04T12:02:23",
+            "updated_at": "2024-03-04T12:02:23"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "note_chat_conversation": {
+      "name": "note_chat_conversation",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "conversation_id",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "会话ID platform_ai_conversation"
+        },
+        {
+          "name": "categroy_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "分类id"
+        },
+        {
+          "name": "categroy_records_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "记录id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户ID"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 0,
+        "rows": [],
+        "note": "前 0 行样例数据（快速采样，无排序）"
+      }
+    },
+    "candy_chat_girl_friend": {
+      "name": "candy_chat_girl_friend",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户ID"
+        },
+        {
+          "name": "telegram_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "chat id"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "名称"
+        },
+        {
+          "name": "occupation",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "职业"
+        },
+        {
+          "name": "characters",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "性格"
+        },
+        {
+          "name": "scene",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "场景"
+        },
+        {
+          "name": "conversation_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "会话ID"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 15,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 2,
+            "user_id": 219480212696470528,
+            "telegram_id": "7332519433",
+            "name": "hello",
+            "occupation": "a_wealthy_heiress",
+            "characters": "arrogant_and_harsh",
+            "scene": "dimly_lit_executive_lounge",
+            "conversation_id": null,
+            "create_at": 1732874287051,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 3,
+            "user_id": 219485300320113664,
+            "telegram_id": "6114928512",
+            "name": null,
+            "occupation": "a_teacher",
+            "characters": null,
+            "scene": null,
+            "conversation_id": "51e7e9da-fe1f-4881-b82b-8368a5b2e985",
+            "create_at": 1732874348168,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 4,
+            "user_id": 219471901179778048,
+            "telegram_id": "7781305408",
+            "name": null,
+            "occupation": null,
+            "characters": null,
+            "scene": null,
+            "conversation_id": "4a43c5ca-9911-4125-bef8-960e3a26e261",
+            "create_at": 1732874495999,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 5,
+            "user_id": 219506743061779456,
+            "telegram_id": "2142577698",
+            "name": "Hello",
+            "occupation": "a_YouTube_influencer",
+            "characters": null,
+            "scene": null,
+            "conversation_id": "51430877-b4ed-46a8-a38d-3d7b14f5e710",
+            "create_at": 1732875644153,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 6,
+            "user_id": 219535282750362624,
+            "telegram_id": "1848937451",
+            "name": "Lily",
+            "occupation": null,
+            "characters": null,
+            "scene": null,
+            "conversation_id": "967c6b7b-3e8b-42b9-8313-f0d162483486",
+            "create_at": 1732877388623,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "crush_chat_boy_friend": {
+      "name": "crush_chat_boy_friend",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户ID"
+        },
+        {
+          "name": "telegram_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "chat id"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "名称"
+        },
+        {
+          "name": "occupation",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "职业"
+        },
+        {
+          "name": "characters",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "性格"
+        },
+        {
+          "name": "scene",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "场景"
+        },
+        {
+          "name": "conversation_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "会话ID"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 15,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 225225946796397568,
+            "telegram_id": "7332519433",
+            "name": null,
+            "occupation": null,
+            "characters": "domineering_like_CEO",
+            "scene": null,
+            "conversation_id": "348001a7-1efc-4a06-9497-4a855e0a63d5",
+            "create_at": 1733216545136,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 2,
+            "user_id": 225228793185309696,
+            "telegram_id": "7716010429",
+            "name": null,
+            "occupation": "a_pianist",
+            "characters": "domineering_like_CEO",
+            "scene": "botanical_garden_after_hours",
+            "conversation_id": "0cb0d1be-7210-446c-b99f-7f3fce1f9145",
+            "create_at": 1733216782876,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 3,
+            "user_id": 225412541768012800,
+            "telegram_id": "6416031235",
+            "name": null,
+            "occupation": null,
+            "characters": null,
+            "scene": null,
+            "conversation_id": "d159f127-052f-47fc-b510-88bcccff6683",
+            "create_at": 1733227639203,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 4,
+            "user_id": 225481902268617728,
+            "telegram_id": "7083643657",
+            "name": null,
+            "occupation": null,
+            "characters": null,
+            "scene": null,
+            "conversation_id": "ce7ffd8c-7598-4e6e-9cb8-0d3b94dee759",
+            "create_at": 1733231913351,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 5,
+            "user_id": 225499561295090688,
+            "telegram_id": "7067689328",
+            "name": null,
+            "occupation": null,
+            "characters": null,
+            "scene": null,
+            "conversation_id": "2864e96f-7cbe-48e3-bd69-e7ea0906c845",
+            "create_at": 1733233019250,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "fantasy_image_session": {
+      "name": "fantasy_image_session",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户ID"
+        },
+        {
+          "name": "telegram_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "chat id"
+        },
+        {
+          "name": "reply_keyboard_markup",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "名称"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "session_input",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 228122472371721216,
+            "telegram_id": "6114928512",
+            "reply_keyboard_markup": "Deep Fake",
+            "create_at": 1733389224544,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "session_input": null
+          },
+          {
+            "id": 2,
+            "user_id": 228112946604020736,
+            "telegram_id": "7332519433",
+            "reply_keyboard_markup": "Face Generator",
+            "create_at": 1733389284424,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "session_input": null
+          },
+          {
+            "id": 3,
+            "user_id": 228171016826786816,
+            "telegram_id": "6538962171",
+            "reply_keyboard_markup": "Image Generator",
+            "create_at": 1733392062340,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "session_input": null
+          },
+          {
+            "id": 4,
+            "user_id": 228169955785315328,
+            "telegram_id": "6416031235",
+            "reply_keyboard_markup": "BG Remove",
+            "create_at": 1733392240014,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "session_input": null
+          },
+          {
+            "id": 5,
+            "user_id": 228178917150692352,
+            "telegram_id": "7559355484",
+            "reply_keyboard_markup": "BG Remove",
+            "create_at": 1733392532917,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "session_input": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    }
+  },
+  "relationships": []
+}

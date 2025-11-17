@@ -1,0 +1,3343 @@
+{
+  "domain_name": "ai_agent_system",
+  "display_name": "AI Agent & Robot System",
+  "description": "AI agent configurations, robot definitions, templates, categories, and role mappings for intelligent assistants.",
+  "table_count": 15,
+  "created_at": "2025-11-17T14:24:49.157302",
+  "connection": {
+    "name": "yanfa",
+    "db_type": "mysql",
+    "host": "legaldao.cpcugqubfjku.ap-southeast-1.rds.amazonaws.com",
+    "port": 3306,
+    "database": "yanfa",
+    "username": "wbjread",
+    "db_schema": "",
+    "ssl": false
+  },
+  "tables": {
+    "platform_ai_agent": {
+      "name": "platform_ai_agent",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "app name"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 asc"
+        },
+        {
+          "name": "agent_source",
+          "type": "varchar",
+          "nullable": false,
+          "default": "dify",
+          "comment": "agent来源：dify | dify-with-file"
+        },
+        {
+          "name": "agent_type",
+          "type": "varchar",
+          "nullable": false,
+          "default": "conversation",
+          "comment": "agent类型（用来区分app点击后不同的agent交互）: conversation|OCR|file|image|link|youtubelink"
+        },
+        {
+          "name": "upload_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "chat类模型上传文件类型\n- image_file：原both字段（可上传图片和文件）更名\n- file：仅支持上传文件字段为file，基本都是走dify来的，其他非dify场景上传统一标准\n- image：仅支持图片上传（可多张，如Midjourney）\n- one_image：仅支持上传一张图片（如i2v的模型生成、4o image、sora image\n- none：不支持上传任何类型"
+        },
+        {
+          "name": "is_enable",
+          "type": "tinyint",
+          "nullable": true,
+          "default": null,
+          "comment": "是否启用：1，启用；0，未启用"
+        },
+        {
+          "name": "agent_api_key",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "openai key | dify API-Key"
+        },
+        {
+          "name": "agent_api_base_url",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "desc",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "描述"
+        },
+        {
+          "name": "icon",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "图标文件地址"
+        },
+        {
+          "name": "prompt_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "提示词类型(引导文案|代入文本框提示词（不提交）｜代入文本框提示词（直接提交）) ：guide_prompt|input_prompt|submit_prompt"
+        },
+        {
+          "name": "prompt",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "初始化的prompt提示词"
+        },
+        {
+          "name": "i18n_config",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }"
+        },
+        {
+          "name": "model",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "模型名称"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "for_free",
+          "type": "smallint",
+          "nullable": false,
+          "default": "0",
+          "comment": "是否免费：0付费 1免费"
+        },
+        {
+          "name": "bg_pic",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "背景图标地址"
+        },
+        {
+          "name": "enhancement_agent_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "关联 增强型 AgentId"
+        },
+        {
+          "name": "display_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "显示类型：root｜relation"
+        },
+        {
+          "name": "scheme_url",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "跳转路由"
+        },
+        {
+          "name": "lowest_version",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "最低版本要求，默认空，不区分版本"
+        },
+        {
+          "name": "tag_ids",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "标签列表，逗号分隔"
+        },
+        {
+          "name": "scores",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "模型6个纬度评分，逗号分隔：Context Length,Math & Reasoning\n,Multilingual Translation,Response Speed\n,Coding,Text Writing"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 31,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "name": "万物扫描王",
+            "sort": 1,
+            "agent_source": "dify",
+            "agent_type": "image",
+            "upload_type": null,
+            "is_enable": 1,
+            "agent_api_key": "Bearer app-zePpJEPLUvl2O9pZigifv8tG",
+            "agent_api_base_url": "https://dify.glbgpt.com",
+            "desc": "图片解读助手",
+            "icon": "https://static.glbgpt.com/logo/003.png",
+            "prompt_type": "submit_prompt",
+            "prompt": "开始",
+            "i18n_config": "{\"en_US\":{\"name\":\"Image Scan Summary  \",\"desc\":\"Picture Interpretation Assistant\",\"prompt\":\"go\"},\"es\":{\"name\":\"Análisis de Imágenes\",\"desc\":\"Asistente de Interpretación de Imágenes\",\"prompt\":\"Empezar\"},\"zh_CN\":{\"name\":\"万物扫描王\",\"desc\":\"图片解读助手\",\"prompt\":\"开始\"}}",
+            "model": "gpt-4o-mini",
+            "create_at": 1724316964492,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "product_no": "chatpal",
+            "for_free": 0,
+            "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/1.png",
+            "enhancement_agent_id": 1001,
+            "display_type": "root",
+            "scheme_url": null,
+            "lowest_version": null,
+            "tag_ids": null,
+            "scores": null
+          },
+          {
+            "id": 2,
+            "name": "文件内容提取",
+            "sort": 2,
+            "agent_source": "dify-with-file",
+            "agent_type": "file",
+            "upload_type": null,
+            "is_enable": 1,
+            "agent_api_key": "Bearer app-P9l429iQGMeBdWW2YmFUOOyc",
+            "agent_api_base_url": "https://dify.glbgpt.com",
+            "desc": "解读 .doc .docx .xls .xlsx .pdf ...",
+            "icon": "https://static.glbgpt.com/logo/005.png",
+            "prompt_type": "submit_prompt",
+            "prompt": "帮我总结一下这篇文档的核心内容",
+            "i18n_config": "{\"en_US\":{\"name\":\"Document Summary  \",\"desc\":\"Interpret .doc .docx .xls .xlsx .pdf ...\",\"prompt\":\"Help me summarize the core content of this document\"},\"es\":{\"name\":\"Resumen de Documentos\",\"desc\":\"Interpretar .doc .docx .xls .xlsx .pdf ...\",\"prompt\":\"Ayúdame a resumir el contenido principal de este documento.\"},\"zh_CN\":{\"name\":\"文件内容提取\",\"desc\":\"解读 .doc .docx .xls .xlsx .pdf ...\",\"prompt\":\"帮我总结一下这篇文档的核心内容\"}}",
+            "model": "gpt-4o-mini",
+            "create_at": 1724316964496,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "product_no": "chatpal",
+            "for_free": 0,
+            "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/2.png",
+            "enhancement_agent_id": null,
+            "display_type": "root",
+            "scheme_url": null,
+            "lowest_version": null,
+            "tag_ids": null,
+            "scores": null
+          },
+          {
+            "id": 3,
+            "name": "链接内容提要",
+            "sort": 3,
+            "agent_source": "dify",
+            "agent_type": "link",
+            "upload_type": null,
+            "is_enable": 1,
+            "agent_api_key": "Bearer app-LXa2VQWRCKl6hVZjWZCfWvZm",
+            "agent_api_base_url": "https://dify.glbgpt.com",
+            "desc": "全面解读你输入的Url",
+            "icon": "https://static.glbgpt.com/logo/006.png",
+            "prompt_type": "submit_prompt",
+            "prompt": "开始",
+            "i18n_config": "{\"en_US\":{\"name\":\"Link Content Summary\",\"desc\":\"Fully interpret the URL you entered\",\"prompt\":\"go\"},\"es\":{\"name\":\"Resumen de Enlaces\",\"desc\":\"Interprete de manera integral la URL que ingresó\",\"prompt\":\"Empezar\"},\"zh_CN\":{\"name\":\"链接内容提要\",\"desc\":\"全面解读你输入的Url\",\"prompt\":\"开始\"}}",
+            "model": "gpt-4o-mini",
+            "create_at": 1724316964500,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "product_no": "chatpal",
+            "for_free": 0,
+            "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/3.png",
+            "enhancement_agent_id": null,
+            "display_type": "root",
+            "scheme_url": null,
+            "lowest_version": null,
+            "tag_ids": null,
+            "scores": null
+          },
+          {
+            "id": 4,
+            "name": "图像实验室",
+            "sort": 4,
+            "agent_source": "gpt-4o-image-dynamic",
+            "agent_type": "conversation",
+            "upload_type": null,
+            "is_enable": 1,
+            "agent_api_key": null,
+            "agent_api_base_url": null,
+            "desc": "用文字生成所有图片",
+            "icon": "https://static.glbgpt.com/logo/004.png",
+            "prompt_type": "submit_prompt",
+            "prompt": "请详细描述你想生成的图片内容",
+            "i18n_config": "{\"en_US\":{\"name\":\"Text to Image \",\"desc\":\"Please describe in detail the image content you want to generate\",\"prompt\":\"Please describe in detail the image content you want to generate\"},\"es\":{\"name\":\"Texto a Imagen\",\"desc\":\"Generar todas las imágenes con texto.\",\"prompt\":\"Describe en detalle el contenido de la imagen que deseas generar.\"},\"zh_CN\":{\"name\":\"图像实验室\",\"desc\":\"用文字生成所有图片\",\"prompt\":\"请详细描述你想生成的图片内容\"}}",
+            "model": "gpt-4o-image",
+            "create_at": 1724316964501,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "product_no": "chatpal",
+            "for_free": 0,
+            "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/4.png",
+            "enhancement_agent_id": null,
+            "display_type": "root",
+            "scheme_url": null,
+            "lowest_version": null,
+            "tag_ids": null,
+            "scores": null
+          },
+          {
+            "id": 5,
+            "name": "联网助手",
+            "sort": 5,
+            "agent_source": "dify",
+            "agent_type": "conversation",
+            "upload_type": null,
+            "is_enable": 1,
+            "agent_api_key": "Bearer app-WM6xyRpxruFXWKa6p7RYHrJi",
+            "agent_api_base_url": "https://dify.glbgpt.com",
+            "desc": "网上最新的信息",
+            "icon": "",
+            "prompt_type": "guide_prompt",
+            "prompt": "尝试向我询问最新资讯，我会给你最实时的解答",
+            "i18n_config": "{\"en_US\":{\"name\":\"Online Assistant  \",\"desc\":\"The latest information on the Internet\",\"prompt\":\"Try to ask me the latest information, I will give you the most real-time answer\"},\"es\":{\"name\":\"Asistente Conectado\",\"desc\":\"La última información en Internet.\",\"prompt\":\"Intente preguntarme la información más reciente, le daré la respuesta más en tiempo real.\"},\"zh_CN\":{\"name\":\"联网助手\",\"desc\":\"网上最新的信息\",\"prompt\":\"尝试向我询问最新资讯，我会给你最实时的解答\"}}",
+            "model": "gpt-4o-mini",
+            "create_at": 1724316964501,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "product_no": "chatpal",
+            "for_free": 0,
+            "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/5.png",
+            "enhancement_agent_id": null,
+            "display_type": "root",
+            "scheme_url": null,
+            "lowest_version": null,
+            "tag_ids": null,
+            "scores": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_agent_20250625bak": {
+      "name": "platform_ai_agent_20250625bak",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "app name"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 asc"
+        },
+        {
+          "name": "agent_source",
+          "type": "varchar",
+          "nullable": false,
+          "default": "dify",
+          "comment": "agent来源：dify | dify-with-file"
+        },
+        {
+          "name": "agent_type",
+          "type": "varchar",
+          "nullable": false,
+          "default": "conversation",
+          "comment": "agent类型（用来区分app点击后不同的agent交互）: conversation|OCR|file|image|link|youtubelink"
+        },
+        {
+          "name": "agent_api_key",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "openai key | dify API-Key"
+        },
+        {
+          "name": "agent_api_base_url",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "desc",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "描述"
+        },
+        {
+          "name": "icon",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "图标文件地址"
+        },
+        {
+          "name": "prompt_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "提示词类型(引导文案|代入文本框提示词（不提交）｜代入文本框提示词（直接提交）) ：guide_prompt|input_prompt|submit_prompt"
+        },
+        {
+          "name": "prompt",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "初始化的prompt提示词"
+        },
+        {
+          "name": "i18n_config",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }"
+        },
+        {
+          "name": "model",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "模型名称"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "for_free",
+          "type": "smallint",
+          "nullable": false,
+          "default": "0",
+          "comment": "是否免费：0付费 1免费"
+        },
+        {
+          "name": "bg_pic",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "背景图标地址"
+        },
+        {
+          "name": "enhancement_agent_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "关联 增强型 AgentId"
+        },
+        {
+          "name": "display_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "显示类型：root｜relation"
+        },
+        {
+          "name": "scheme_url",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "跳转路由"
+        },
+        {
+          "name": "lowest_version",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "最低版本要求，默认空，不区分版本"
+        },
+        {
+          "name": "tag_ids",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "标签列表，逗号分隔"
+        },
+        {
+          "name": "scores",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "模型6个纬度评分，逗号分隔：Context Length,Math & Reasoning\n,Multilingual Translation,Response Speed\n,Coding,Text Writing"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 29,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "name": "万物扫描王",
+            "sort": 1,
+            "agent_source": "dify",
+            "agent_type": "image",
+            "agent_api_key": "Bearer app-zePpJEPLUvl2O9pZigifv8tG",
+            "agent_api_base_url": "https://dify.glbgpt.com",
+            "desc": "图片解读助手",
+            "icon": "",
+            "prompt_type": "submit_prompt",
+            "prompt": "开始",
+            "i18n_config": "{\"en_US\":{\"name\":\"Image Scan Summary  \",\"desc\":\"Picture Interpretation Assistant\",\"prompt\":\"go\"},\"es\":{\"name\":\"Análisis de Imágenes\",\"desc\":\"Asistente de Interpretación de Imágenes\",\"prompt\":\"Empezar\"},\"zh_CN\":{\"name\":\"万物扫描王\",\"desc\":\"图片解读助手\",\"prompt\":\"开始\"}}",
+            "model": "gpt-4o-mini",
+            "create_at": 1724316964492,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "product_no": "chatpal",
+            "for_free": 0,
+            "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/1.png",
+            "enhancement_agent_id": 1001,
+            "display_type": "root",
+            "scheme_url": null,
+            "lowest_version": null,
+            "tag_ids": null,
+            "scores": null
+          },
+          {
+            "id": 2,
+            "name": "文件内容提取",
+            "sort": 2,
+            "agent_source": "dify-with-file",
+            "agent_type": "file",
+            "agent_api_key": "Bearer app-P9l429iQGMeBdWW2YmFUOOyc",
+            "agent_api_base_url": "https://dify.glbgpt.com",
+            "desc": "解读 .doc .docx .xls .xlsx .pdf ...",
+            "icon": "",
+            "prompt_type": "submit_prompt",
+            "prompt": "帮我总结一下这篇文档的核心内容",
+            "i18n_config": "{\"en_US\":{\"name\":\"Document Summary  \",\"desc\":\"Interpret .doc .docx .xls .xlsx .pdf ...\",\"prompt\":\"Help me summarize the core content of this document\"},\"es\":{\"name\":\"Resumen de Documentos\",\"desc\":\"Interpretar .doc .docx .xls .xlsx .pdf ...\",\"prompt\":\"Ayúdame a resumir el contenido principal de este documento.\"},\"zh_CN\":{\"name\":\"文件内容提取\",\"desc\":\"解读 .doc .docx .xls .xlsx .pdf ...\",\"prompt\":\"帮我总结一下这篇文档的核心内容\"}}",
+            "model": "gpt-4o-mini",
+            "create_at": 1724316964496,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "product_no": "chatpal",
+            "for_free": 0,
+            "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/2.png",
+            "enhancement_agent_id": null,
+            "display_type": "root",
+            "scheme_url": null,
+            "lowest_version": null,
+            "tag_ids": null,
+            "scores": null
+          },
+          {
+            "id": 3,
+            "name": "链接内容提要",
+            "sort": 3,
+            "agent_source": "dify",
+            "agent_type": "link",
+            "agent_api_key": "Bearer app-LXa2VQWRCKl6hVZjWZCfWvZm",
+            "agent_api_base_url": "https://dify.glbgpt.com",
+            "desc": "全面解读你输入的Url",
+            "icon": "",
+            "prompt_type": "submit_prompt",
+            "prompt": "开始",
+            "i18n_config": "{\"en_US\":{\"name\":\"Link Content Summary\",\"desc\":\"Fully interpret the URL you entered\",\"prompt\":\"go\"},\"es\":{\"name\":\"Resumen de Enlaces\",\"desc\":\"Interprete de manera integral la URL que ingresó\",\"prompt\":\"Empezar\"},\"zh_CN\":{\"name\":\"链接内容提要\",\"desc\":\"全面解读你输入的Url\",\"prompt\":\"开始\"}}",
+            "model": "gpt-4o-mini",
+            "create_at": 1724316964500,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "product_no": "chatpal",
+            "for_free": 0,
+            "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/3.png",
+            "enhancement_agent_id": null,
+            "display_type": "root",
+            "scheme_url": null,
+            "lowest_version": null,
+            "tag_ids": null,
+            "scores": null
+          },
+          {
+            "id": 4,
+            "name": "图像实验室",
+            "sort": 4,
+            "agent_source": "dify",
+            "agent_type": "conversation",
+            "agent_api_key": "Bearer app-Va2dhnaLrs6YpPT2cLStFSe9",
+            "agent_api_base_url": "https://dify.glbgpt.com",
+            "desc": "用文字生成所有图片",
+            "icon": "",
+            "prompt_type": "guide_prompt",
+            "prompt": "请详细描述你想生成的图片内容",
+            "i18n_config": "{\"en_US\":{\"name\":\"Text to Image \",\"desc\":\"Please describe in detail the image content you want to generate\",\"prompt\":\"Please describe in detail the image content you want to generate\"},\"es\":{\"name\":\"Texto a Imagen\",\"desc\":\"Generar todas las imágenes con texto.\",\"prompt\":\"Describe en detalle el contenido de la imagen que deseas generar.\"},\"zh_CN\":{\"name\":\"图像实验室\",\"desc\":\"用文字生成所有图片\",\"prompt\":\"请详细描述你想生成的图片内容\"}}",
+            "model": "gpt-4o-mini",
+            "create_at": 1724316964501,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "product_no": "chatpal",
+            "for_free": 0,
+            "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/4.png",
+            "enhancement_agent_id": null,
+            "display_type": "root",
+            "scheme_url": null,
+            "lowest_version": null,
+            "tag_ids": null,
+            "scores": null
+          },
+          {
+            "id": 5,
+            "name": "联网助手",
+            "sort": 5,
+            "agent_source": "dify",
+            "agent_type": "conversation",
+            "agent_api_key": "Bearer app-WM6xyRpxruFXWKa6p7RYHrJi",
+            "agent_api_base_url": "https://dify.glbgpt.com",
+            "desc": "网上最新的信息",
+            "icon": "",
+            "prompt_type": "guide_prompt",
+            "prompt": "尝试向我询问最新资讯，我会给你最实时的解答",
+            "i18n_config": "{\"en_US\":{\"name\":\"Online Assistant  \",\"desc\":\"The latest information on the Internet\",\"prompt\":\"Try to ask me the latest information, I will give you the most real-time answer\"},\"es\":{\"name\":\"Asistente Conectado\",\"desc\":\"La última información en Internet.\",\"prompt\":\"Intente preguntarme la información más reciente, le daré la respuesta más en tiempo real.\"},\"zh_CN\":{\"name\":\"联网助手\",\"desc\":\"网上最新的信息\",\"prompt\":\"尝试向我询问最新资讯，我会给你最实时的解答\"}}",
+            "model": "gpt-4o-mini",
+            "create_at": 1724316964501,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "product_no": "chatpal",
+            "for_free": 0,
+            "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/5.png",
+            "enhancement_agent_id": null,
+            "display_type": "root",
+            "scheme_url": null,
+            "lowest_version": null,
+            "tag_ids": null,
+            "scores": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_agent_categray": {
+      "name": "platform_ai_agent_categray",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "分类名称"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 asc"
+        },
+        {
+          "name": "icon",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "图标文件地址"
+        },
+        {
+          "name": "i18n_config",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "业务线"
+        },
+        {
+          "name": "parent_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": "0",
+          "comment": "父级分类"
+        },
+        {
+          "name": "lowest_version",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "最低版本要求，默认空，不区分版本"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 15,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "name": "首页",
+            "sort": 1,
+            "icon": "https://yanfa.s3.ap-southeast-1.amazonaws.com/AI.png",
+            "i18n_config": "{\"en_US\":{\"name\":\"front page\"},\"es\":{\"name\":\"página delantera\"},\"zh_CN\":{\"name\":\"首页\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "chatpal",
+            "parent_id": 0,
+            "lowest_version": null
+          },
+          {
+            "id": 2,
+            "name": "AI任务",
+            "sort": 2,
+            "icon": "https://yanfa.s3.ap-southeast-1.amazonaws.com/AI.png",
+            "i18n_config": "{\"en_US\":{\"name\":\"AI Task\"},\"es\":{\"name\":\"Tareas de IA\"},\"zh_CN\":{\"name\":\"AI任务\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "chatpal",
+            "parent_id": 0,
+            "lowest_version": null
+          },
+          {
+            "id": 101,
+            "name": "高级功能",
+            "sort": 101,
+            "icon": "https://yanfa.s3.ap-southeast-1.amazonaws.com/AI.png",
+            "i18n_config": "{\"en_US\":{\"name\":\"Advanced Features\"},\"es\":{\"name\":\"Funciones avanzadas\"},\"zh_CN\":{\"name\":\"高级功能\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "chatpal",
+            "parent_id": 1,
+            "lowest_version": null
+          },
+          {
+            "id": 102,
+            "name": "新手引导",
+            "sort": 102,
+            "icon": "https://yanfa.s3.ap-southeast-1.amazonaws.com/AI.png",
+            "i18n_config": "{\"en_US\":{\"name\":\"Beginner's Guide\"},\"es\":{\"name\":\"guía novato\"},\"zh_CN\":{\"name\":\"新手引导\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "chatpal",
+            "parent_id": 1,
+            "lowest_version": null
+          },
+          {
+            "id": 103,
+            "name": "推荐开场白",
+            "sort": 103,
+            "icon": "https://yanfa.s3.ap-southeast-1.amazonaws.com/AI.png",
+            "i18n_config": "{\"en_US\":{\"name\":\"Popular prompt\"},\"es\":{\"name\":\"Prompt popular.\"},\"zh_CN\":{\"name\":\"推荐开场白\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "chatpal",
+            "parent_id": 1,
+            "lowest_version": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_agent_categray_mapping": {
+      "name": "platform_ai_agent_categray_mapping",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "categray_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "分类id"
+        },
+        {
+          "name": "agent_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "agent id"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 asc"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 11,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "categray_id": 1,
+            "agent_id": 1000,
+            "sort": 0,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 2,
+            "categray_id": 1,
+            "agent_id": 1,
+            "sort": 1,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 3,
+            "categray_id": 101,
+            "agent_id": 1,
+            "sort": 1,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 4,
+            "categray_id": 1,
+            "agent_id": 2,
+            "sort": 2,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 5,
+            "categray_id": 101,
+            "agent_id": 2,
+            "sort": 2,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_agent_tag": {
+      "name": "platform_ai_agent_tag",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "分类名称"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 desc"
+        },
+        {
+          "name": "icon",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "图标文件地址"
+        },
+        {
+          "name": "i18n_config",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "多语言JSON  配置 ： { \"en\" : { \"key\" : \"value\" }, \"zh\" : { \"key\" : \"value\" } }"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "业务线"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 13,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 101,
+            "name": "Open AI",
+            "sort": 1,
+            "icon": null,
+            "i18n_config": "{\"zh\":{\"name\":\"OpenAI\"},\"en\":{\"name\":\"OpenAI\"},\"es\":{\"name\":\"OpenAI\"},\"ru\":{\"name\":\"OpenAI\"},\"ar\":{\"name\":\"OpenAI\"},\"fa\":{\"name\":\"OpenAI\"},\"tr\":{\"name\":\"OpenAI\"},\"pt\":{\"name\":\"OpenAI\"},\"fr\":{\"name\":\"OpenAI\"},\"de\":{\"name\":\"OpenAI\"},\"ja\":{\"name\":\"OpenAI\"},\"ko\":{\"name\":\"OpenAI\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 102,
+            "name": "Anthropic",
+            "sort": 2,
+            "icon": null,
+            "i18n_config": "{\"zh\":{\"name\":\"Anthropic\"},\"en\":{\"name\":\"Anthropic\"},\"es\":{\"name\":\"Anthropic\"},\"ru\":{\"name\":\"Anthropic\"},\"pt\":{\"name\":\"Anthropic\"},\"fr\":{\"name\":\"Anthropic\"},\"de\":{\"name\":\"Anthropic\"},\"ja\":{\"name\":\"Anthropic\"},\"ko\":{\"name\":\"Anthropic\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 103,
+            "name": "Google",
+            "sort": 3,
+            "icon": null,
+            "i18n_config": "{\"zh\":{\"name\":\"Google\"},\"en\":{\"name\":\"Google\"},\"es\":{\"name\":\"Google\"},\"ru\":{\"name\":\"Google\"},\"pt\":{\"name\":\"Google\"},\"fr\":{\"name\":\"Google\"},\"de\":{\"name\":\"Google\"},\"ja\":{\"name\":\"Google\"},\"ko\":{\"name\":\"Google\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 104,
+            "name": "xAI",
+            "sort": 4,
+            "icon": null,
+            "i18n_config": "{\"zh\":{\"name\":\"xAI\"},\"en\":{\"name\":\"xAI\"},\"es\":{\"name\":\"xAI\"},\"ru\":{\"name\":\"xAI\"},\"pt\":{\"name\":\"xAI\"},\"fr\":{\"name\":\"xAI\"},\"de\":{\"name\":\"xAI\"},\"ja\":{\"name\":\"xAI\"},\"ko\":{\"name\":\"xAI\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 105,
+            "name": "Meta",
+            "sort": 5,
+            "icon": null,
+            "i18n_config": "{\"zh\":{\"name\":\"Meta\"},\"en\":{\"name\":\"Meta\"},\"es\":{\"name\":\"Meta\"},\"ru\":{\"name\":\"Meta\"},\"pt\":{\"name\":\"Meta\"},\"fr\":{\"name\":\"Meta\"},\"de\":{\"name\":\"Meta\"},\"ja\":{\"name\":\"Meta\"},\"ko\":{\"name\":\"Meta\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_animation_template": {
+      "name": "platform_ai_animation_template",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "template name"
+        },
+        {
+          "name": "agent_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "agent id"
+        },
+        {
+          "name": "template_type",
+          "type": "varchar",
+          "nullable": false,
+          "default": "LivePortrait",
+          "comment": "agent类型 LivePortrait"
+        },
+        {
+          "name": "cover_img",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "驱动模版封面图"
+        },
+        {
+          "name": "driving",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "驱动模版 https://x.x.x/a.mp4"
+        },
+        {
+          "name": "driving_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": "video",
+          "comment": "驱动模版类型 video"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 15,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 245,
+            "name": "换脸1",
+            "agent_id": 141,
+            "template_type": "DeepLiveCam",
+            "cover_img": "https://yanfa.s3.ap-southeast-1.amazonaws.com/animations/driving/1fc1024a-2781-48de-b02b-c81e7cbded97.png",
+            "driving": "https://yanfa.s3.ap-southeast-1.amazonaws.com/animations/driving/1fc1024a-2781-48de-b02b-c81e7cbded97.mp4",
+            "driving_type": "video",
+            "sort": 0,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 246,
+            "name": "换脸2",
+            "agent_id": 141,
+            "template_type": "DeepLiveCam",
+            "cover_img": "https://yanfa.s3.ap-southeast-1.amazonaws.com/animations/driving/5140c5f4-b36e-44f2-b960-a57fe7183e00.png",
+            "driving": "https://yanfa.s3.ap-southeast-1.amazonaws.com/animations/driving/5140c5f4-b36e-44f2-b960-a57fe7183e00.mp4",
+            "driving_type": "video",
+            "sort": 0,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 247,
+            "name": "换脸3",
+            "agent_id": 141,
+            "template_type": "DeepLiveCam",
+            "cover_img": "https://yanfa.s3.ap-southeast-1.amazonaws.com/animations/driving/7bdf58a9-fa78-4fc5-af4f-fe2f6a92790f.png",
+            "driving": "https://yanfa.s3.ap-southeast-1.amazonaws.com/animations/driving/7bdf58a9-fa78-4fc5-af4f-fe2f6a92790f.mp4",
+            "driving_type": "video",
+            "sort": 0,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 248,
+            "name": "换脸4",
+            "agent_id": 141,
+            "template_type": "DeepLiveCam",
+            "cover_img": "https://yanfa.s3.ap-southeast-1.amazonaws.com/animations/driving/d3b4b06d-bf21-469c-8227-b6de0d3c3d8e.png",
+            "driving": "https://yanfa.s3.ap-southeast-1.amazonaws.com/animations/driving/d3b4b06d-bf21-469c-8227-b6de0d3c3d8e.mp4",
+            "driving_type": "video",
+            "sort": 0,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 249,
+            "name": "换脸5",
+            "agent_id": 141,
+            "template_type": "DeepLiveCam",
+            "cover_img": "https://yanfa.s3.ap-southeast-1.amazonaws.com/animations/driving/4f4fa0b1-51f9-4084-a61e-e410e03eb405.png",
+            "driving": "https://yanfa.s3.ap-southeast-1.amazonaws.com/animations/driving/4f4fa0b1-51f9-4084-a61e-e410e03eb405.mp4",
+            "driving_type": "video",
+            "sort": 0,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_voice_template": {
+      "name": "platform_ai_voice_template",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "template name"
+        },
+        {
+          "name": "agent_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "agent id"
+        },
+        {
+          "name": "template_type",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "agent类型"
+        },
+        {
+          "name": "icon",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "图标"
+        },
+        {
+          "name": "elevenlabs_voice_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "elevenlabs对应的音频id"
+        },
+        {
+          "name": "preview_url",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "音频url地址"
+        },
+        {
+          "name": "language",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "多语言"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序"
+        },
+        {
+          "name": "desc",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "多语言描述"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 17,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "name": "Mark",
+            "agent_id": null,
+            "template_type": "",
+            "icon": "https://static.futureshareai.com/logo2/c0543a23-6318-43a9-bc11-bdadce97fc56.webp",
+            "elevenlabs_voice_id": "WTUK291rZZ9CLPCiFTfh",
+            "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/workspace/f94e260200764678babc807b935bfb0b/voices/WTUK291rZZ9CLPCiFTfh/bnnCGcGCSiY3m9CS9dGc.mp3",
+            "language": "{\"en\": {\r\n\"languages\": \"\\\"🇺🇸English\\\", \\\"🇩🇪German\\\", \\\"🇪🇸Spanish\\\", \\\"🇵🇱Polish\\\", \\\"🇵🇹Portuguese\\\", \\\"🇵🇭Filipino\\\", \\\"🇮🇹Italian\\\", \\\"🇮🇳Hindi\\\", \\\"🇨🇿Czech\\\", \\\"🇫🇷French\\\", \\\"🇸🇦Arabic\\\", \\\"🇷🇴Romanian\\\", \\\"🇭🇺Hungarian\\\", \\\"🇹🇷Turkish\\\", \\\"🇭🇷Croatian\\\", \\\"🇰🇷Korean\\\", \\\"🇸🇰Slovak\\\", \\\"🇺🇦Ukrainian\\\", \\\"🇸🇪Swedish\\\", \\\"🇮🇳Tamil\\\", \\\"🇳🇴Norwegian\\\"\"\r\n},\r\n\"zh\": {\r\n\"languages\": \"\\\"🇺🇸英语\\\", \\\"🇩🇪德语\\\", \\\"🇪🇸西班牙语\\\", \\\"🇵🇱波兰语\\\", \\\"🇵🇹葡萄牙语\\\", \\\"🇵🇭菲律宾语\\\", \\\"🇮🇹意大利语\\\", \\\"🇮🇳印地语\\\", \\\"🇨🇿捷克语\\\", \\\"🇫🇷法语\\\", \\\"🇸🇦阿拉伯语\\\", \\\"🇷🇴罗马尼亚语\\\", \\\"🇭🇺匈牙利语\\\", \\\"🇹🇷土耳其语\\\", \\\"🇭🇷克罗地亚语\\\", \\\"🇰🇷韩语\\\", \\\"🇸🇰斯洛伐克语\\\", \\\"🇺🇦乌克兰语\\\", \\\"🇸🇪瑞典语\\\", \\\"🇮🇳泰米尔语\\\", \\\"🇳🇴挪威语\\\"\"\r\n},\r\n\"es\": {\r\n\"languages\": \"\\\"🇺🇸Inglés\\\", \\\"🇩🇪Alemán\\\", \\\"🇪🇸Español\\\", \\\"🇵🇱Polaco\\\", \\\"🇵🇹Portugués\\\", \\\"🇵🇭Filipino\\\", \\\"🇮🇹Italiano\\\", \\\"🇮🇳Hindi\\\", \\\"🇨🇿Checo\\\", \\\"🇫🇷Francés\\\", \\\"🇸🇦Árabe\\\", \\\"🇷🇴Rumano\\\", \\\"🇭🇺Húngaro\\\", \\\"🇹🇷Turco\\\", \\\"🇭🇷Croata\\\", \\\"🇰🇷Coreano\\\", \\\"🇸🇰Eslovaco\\\", \\\"🇺🇦Ucraniano\\\", \\\"🇸🇪Sueco\\\", \\\"🇮🇳Tamil\\\", \\\"🇳🇴Noruego\\\"\"\r\n},\r\n\"ru\": {\r\n\"languages\": \"\\\"🇺🇸Английский\\\", \\\"🇩🇪Немецкий\\\", \\\"🇪🇸Испанский\\\", \\\"🇵🇱Польский\\\", \\\"🇵🇹Португальский\\\", \\\"🇵🇭Филиппинский\\\", \\\"🇮🇹Итальянский\\\", \\\"🇮🇳Хинди\\\", \\\"🇨🇿Чешский\\\", \\\"🇫🇷Французский\\\", \\\"🇸🇦Арабский\\\", \\\"🇷🇴Румынский\\\", \\\"🇭🇺Венгерский\\\", \\\"🇹🇷Турецкий\\\", \\\"🇭🇷Хорватский\\\", \\\"🇰🇷Корейский\\\", \\\"🇸🇰Словацкий\\\", \\\"🇺🇦Украинский\\\", \\\"🇸🇪Шведский\\\", \\\"🇮🇳Тамильский\\\", \\\"🇳🇴Норвежский\\\"\"\r\n},\r\n\"br\": {\r\n\"languages\": \"\\\"🇺🇸Inglês\\\", \\\"🇩🇪Alemão\\\", \\\"🇪🇸Espanhol\\\", \\\"🇵🇱Polonês\\\", \\\"🇵🇹Português\\\", \\\"🇵🇭Filipino\\\", \\\"🇮🇹Italiano\\\", \\\"🇮🇳Hindi\\\", \\\"🇨🇿Tcheco\\\", \\\"🇫🇷Francês\\\", \\\"🇸🇦Árabe\\\", \\\"🇷🇴Romeno\\\", \\\"🇭🇺Húngaro\\\", \\\"🇹🇷Turco\\\", \\\"🇭🇷Croata\\\", \\\"🇰🇷Coreano\\\", \\\"🇸🇰Eslovaco\\\", \\\"🇺🇦Ucraniano\\\", \\\"🇸🇪Sueco\\\", \\\"🇮🇳Tâmil\\\", \\\"🇳🇴Norueguês\\\"\"\r\n},\r\n\"fr\": {\r\n\"languages\": \"\\\"🇺🇸Anglais\\\", \\\"🇩🇪Allemand\\\", \\\"🇪🇸Espagnol\\\", \\\"🇵🇱Polonais\\\", \\\"🇵🇹Portugais\\\", \\\"🇵🇭Philippin\\\", \\\"🇮🇹Italien\\\", \\\"🇮🇳Hindi\\\", \\\"🇨🇿Tchèque\\\", \\\"🇫🇷Français\\\", \\\"🇸🇦Arabe\\\", \\\"🇷🇴Roumain\\\", \\\"🇭🇺Hongrois\\\", \\\"🇹🇷Turc\\\", \\\"🇭🇷Croate\\\", \\\"🇰🇷Coréen\\\", \\\"🇸🇰Slovaque\\\", \\\"🇺🇦Ukrainien\\\", \\\"🇸🇪Suédois\\\", \\\"🇮🇳Tamoul\\\", \\\"🇳🇴Norvégien\\\"\"\r\n},\r\n\"de\": {\r\n\"languages\": \"\\\"🇺🇸Englisch\\\", \\\"🇩🇪Deutsch\\\", \\\"🇪🇸Spanisch\\\", \\\"🇵🇱Polnisch\\\", \\\"🇵🇹Portugiesisch\\\", \\\"🇵🇭Filipino\\\", \\\"🇮🇹Italienisch\\\", \\\"🇮🇳Hindi\\\", \\\"🇨🇿Tschechisch\\\", \\\"🇫🇷Französisch\\\", \\\"🇸🇦Arabisch\\\", \\\"🇷🇴Rumänisch\\\", \\\"🇭🇺Ungarisch\\\", \\\"🇹🇷Türkisch\\\", \\\"🇭🇷Kroatisch\\\", \\\"🇰🇷Koreanisch\\\", \\\"🇸🇰Slowakisch\\\", \\\"🇺🇦Ukrainisch\\\", \\\"🇸🇪Schwedisch\\\", \\\"🇮🇳Tamil\\\", \\\"🇳🇴Norwegisch\\\"\"\r\n},\r\n\"ja\": {\r\n\"languages\": \"\\\"🇺🇸英語\\\", \\\"🇩🇪ドイツ語\\\", \\\"🇪🇸スペイン語\\\", \\\"🇵🇱ポーランド語\\\", \\\"🇵🇹ポルトガル語\\\", \\\"🇵🇭フィリピン語\\\", \\\"🇮🇹イタリア語\\\", \\\"🇮🇳ヒンディー語\\\", \\\"🇨🇿チェコ語\\\", \\\"🇫🇷フランス語\\\", \\\"🇸🇦アラビア語\\\", \\\"🇷🇴ルーマニア語\\\", \\\"🇭🇺ハンガリー語\\\", \\\"🇹🇷トルコ語\\\", \\\"🇭🇷クロアチア語\\\", \\\"🇰🇷韓国語\\\", \\\"🇸🇰スロバキア語\\\", \\\"🇺🇦ウクライナ語\\\", \\\"🇸🇪スウェーデン語\\\", \\\"🇮🇳タミル語\\\", \\\"🇳🇴ノルウェー語\\\"\"\r\n},\r\n\"ko\": {\r\n\"languages\": \"\\\"🇺🇸영어\\\", \\\"🇩🇪독일어\\\", \\\"🇪🇸스페인어\\\", \\\"🇵🇱폴란드어\\\", \\\"🇵🇹포르투갈어\\\", \\\"🇵🇭필리핀어\\\", \\\"🇮🇹이탈리아어\\\", \\\"🇮🇳힌디어\\\", \\\"🇨🇿체코어\\\", \\\"🇫🇷프랑스어\\\", \\\"🇸🇦아랍어\\\", \\\"🇷🇴루마니아어\\\", \\\"🇭🇺헝가리어\\\", \\\"🇹🇷터키어\\\", \\\"🇭🇷크로아티아어\\\", \\\"🇰🇷한국어\\\", \\\"🇸🇰슬로바키아어\\\", \\\"🇺🇦우크라이나어\\\", \\\"🇸🇪스웨덴어\\\", \\\"🇮🇳타밀어\\\", \\\"🇳🇴노르웨이어\\\"\"\r\n}}",
+            "sort": 0,
+            "desc": "{\"en\": {\r\n\"desc\": \"A casual, young adult speaking in a natural manner. Perfect for conversational AI.\"\r\n},\r\n\"zh\": {\r\n\"desc\": \"一位年轻、随性的成年声音，自然流畅地说话。非常适合对话式 AI。\"\r\n},\r\n\"es\": {\r\n\"desc\": \"Un adulto joven y casual hablando de manera natural. Perfecto para IA conversacional.\"\r\n},\r\n\"ru\": {\r\n\"desc\": \"Неформальный молодой взрослый, говорящий естественным образом. Идеально подходит для разговорного ИИ.\"\r\n},\r\n\"br\": {\r\n\"desc\": \"Um jovem adulto casual falando de forma natural. Perfeito para IA conversacional.\"\r\n},\r\n\"fr\": {\r\n\"desc\": \"Un jeune adulte décontracté parlant de manière naturelle. Parfait pour l'IA conversationnelle.\"\r\n},\r\n\"de\": {\r\n\"desc\": \"Ein lässiger junger Erwachsener, der auf natürliche Weise spricht. Perfekt für konversationelle KI.\"\r\n},\r\n\"ja\": {\r\n\"desc\": \"カジュアルで若い大人が自然な話し方をします。会話型AIに最適です。\"\r\n},\r\n\"ko\": {\r\n\"desc\": \"캐주얼한 젊은 성인이 자연스럽게 말하는 목소리. 대화형 AI에 완벽합니다.\"\r\n}\r\n}",
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 2,
+            "name": "Brittney",
+            "agent_id": null,
+            "template_type": "",
+            "icon": "https://static.futureshareai.com/logo2/8df0b2f1-4834-4239-8dcd-a3115362347a.webp",
+            "elevenlabs_voice_id": "iNwc1Lv2YQLywnCvjfn1",
+            "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/glklRmLoFeWZciiTRthKn6JAIwp1/voices/iNwc1Lv2YQLywnCvjfn1/lzmIEYkIyyG9dc8woOdQ.mp3",
+            "language": "{\r\n\"en\": {\r\n\"languages\": \"\\\"🇺🇸 English\\\", \\\"🇮🇹 Italian\\\", \\\"🇪🇸 Spanish\\\", \\\"🇩🇪 German\\\", \\\"🇵🇱 Polish\\\", \\\"🇮🇳 Hindi\\\", \\\"🇷🇺 Russian\\\", \\\"🇭🇺 Hungarian\\\", \\\"🇷🇴 Romanian\\\", \\\"🇵🇹 Portuguese\\\", \\\"🇰🇷 Korean\\\", \\\"🇨🇿 Czech\\\", \\\"🇭🇷 Croatian\\\", \\\"🇸🇪 Swedish\\\"\"\r\n},\r\n\"zh\": {\r\n\"languages\": \"\\\"🇺🇸 英语\\\", \\\"🇮🇹 意大利语\\\", \\\"🇪🇸 西班牙语\\\", \\\"🇩🇪 德语\\\", \\\"🇵🇱 波兰语\\\", \\\"🇮🇳 印地语\\\", \\\"🇷🇺 俄语\\\", \\\"🇭🇺 匈牙利语\\\", \\\"🇷🇴 罗马尼亚语\\\", \\\"🇵🇹 葡萄牙语\\\", \\\"🇰🇷 韩语\\\", \\\"🇨🇿 捷克语\\\", \\\"🇭🇷 克罗地亚语\\\", \\\"🇸🇪 瑞典语\\\"\"\r\n},\r\n\"es\": {\r\n\"languages\": \"\\\"🇺🇸 Inglés\\\", \\\"🇮🇹 Italiano\\\", \\\"🇪🇸 Español\\\", \\\"🇩🇪 Alemán\\\", \\\"🇵🇱 Polaco\\\", \\\"🇮🇳 Hindi\\\", \\\"🇷🇺 Ruso\\\", \\\"🇭🇺 Húngaro\\\", \\\"🇷🇴 Rumano\\\", \\\"🇵🇹 Portugués\\\", \\\"🇰🇷 Coreano\\\", \\\"🇨🇿 Checo\\\", \\\"🇭🇷 Croata\\\", \\\"🇸🇪 Sueco\\\"\"\r\n},\r\n\"ru\": {\r\n\"languages\": \"\\\"🇺🇸 Английский\\\", \\\"🇮🇹 Итальянский\\\", \\\"🇪🇸 Испанский\\\", \\\"🇩🇪 Немецкий\\\", \\\"🇵🇱 Польский\\\", \\\"🇮🇳 Хинди\\\", \\\"🇷🇺 Русский\\\", \\\"🇭🇺 Венгерский\\\", \\\"🇷🇴 Румынский\\\", \\\"🇵🇹 Португальский\\\", \\\"🇰🇷 Корейский\\\", \\\"🇨🇿 Чешский\\\", \\\"🇭🇷 Хорватский\\\", \\\"🇸🇪 Шведский\\\"\"\r\n},\r\n\"br\": {\r\n\"languages\": \"\\\"🇺🇸 Inglês\\\", \\\"🇮🇹 Italiano\\\", \\\"🇪🇸 Espanhol\\\", \\\"🇩🇪 Alemão\\\", \\\"🇵🇱 Polonês\\\", \\\"🇮🇳 Hindi\\\", \\\"🇷🇺 Russo\\\", \\\"🇭🇺 Húngaro\\\", \\\"🇷🇴 Romeno\\\", \\\"🇵🇹 Português\\\", \\\"🇰🇷 Coreano\\\", \\\"🇨🇿 Tcheco\\\", \\\"🇭🇷 Croata\\\", \\\"🇸🇪 Sueco\\\"\"\r\n},\r\n\"fr\": {\r\n\"languages\": \"\\\"🇺🇸 Anglais\\\", \\\"🇮🇹 Italien\\\", \\\"🇪🇸 Espagnol\\\", \\\"🇩🇪 Allemand\\\", \\\"🇵🇱 Polonais\\\", \\\"🇮🇳 Hindi\\\", \\\"🇷🇺 Russe\\\", \\\"🇭🇺 Hongrois\\\", \\\"🇷🇴 Roumain\\\", \\\"🇵🇹 Portugais\\\", \\\"🇰🇷 Coréen\\\", \\\"🇨🇿 Tchèque\\\", \\\"🇭🇷 Croate\\\", \\\"🇸🇪 Suédois\\\"\"\r\n},\r\n\"de\": {\r\n\"languages\": \"\\\"🇺🇸 Englisch\\\", \\\"🇮🇹 Italienisch\\\", \\\"🇪🇸 Spanisch\\\", \\\"🇩🇪 Deutsch\\\", \\\"🇵🇱 Polnisch\\\", \\\"🇮🇳 Hindi\\\", \\\"🇷🇺 Russisch\\\", \\\"🇭🇺 Ungarisch\\\", \\\"🇷🇴 Rumänisch\\\", \\\"🇵🇹 Portugiesisch\\\", \\\"🇰🇷 Koreanisch\\\", \\\"🇨🇿 Tschechisch\\\", \\\"🇭🇷 Kroatisch\\\", \\\"🇸🇪 Schwedisch\\\"\"\r\n},\r\n\"ja\": {\r\n\"languages\": \"\\\"🇺🇸 英語\\\", \\\"🇮🇹 イタリア語\\\", \\\"🇪🇸 スペイン語\\\", \\\"🇩🇪 ドイツ語\\\", \\\"🇵🇱 ポーランド語\\\", \\\"🇮🇳 ヒンディー語\\\", \\\"🇷🇺 ロシア語\\\", \\\"🇭🇺 ハンガリー語\\\", \\\"🇷🇴 ルーマニア語\\\", \\\"🇵🇹 ポルトガル語\\\", \\\"🇰🇷 韓国語\\\", \\\"🇨🇿 チェコ語\\\", \\\"🇭🇷 クロアチア語\\\", \\\"🇸🇪 スウェーデン語\\\"\"\r\n},\r\n\"ko\": {\r\n\"languages\": \"\\\"🇺🇸 영어\\\", \\\"🇮🇹 이탈리아어\\\", \\\"🇪🇸 스페인어\\\", \\\"🇩🇪 독일어\\\", \\\"🇵🇱 폴란드어\\\", \\\"🇮🇳 힌디어\\\", \\\"🇷🇺 러시아어\\\", \\\"🇭🇺 헝가리어\\\", \\\"🇷🇴 루마니아어\\\", \\\"🇵🇹 포르투갈어\\\", \\\"🇰🇷 한국어\\\", \\\"🇨🇿 체코어\\\", \\\"🇭🇷 크로아티아어\\\", \\\"🇸🇪 스웨덴어\\\"\"\r\n}\r\n}",
+            "sort": 0,
+            "desc": "{\"en\": {\r\n\"desc\": \"A young, vibrant female voice that's perfect for celebrity news, hot topics, and fun conversations. Great for YouTube channels, informative videos, how-to's, and more!\"\r\n},\r\n\"zh\": {\r\n\"desc\": \"年轻、有活力的女性声音，非常适合娱乐新闻、热门话题和有趣的对话。非常适合 YouTube 频道、科普视频、教程等内容！\"\r\n},\r\n\"es\": {\r\n\"desc\": \"Una voz femenina joven y vibrante, perfecta para noticias de celebridades, temas candentes y conversaciones divertidas. Ideal para canales de YouTube, videos informativos, tutoriales y más.\"\r\n},\r\n\"ru\": {\r\n\"desc\": \"Молодой, энергичный женский голос, идеально подходящий для новостей о знаменитостях, горячих тем и веселых бесед. Отлично подойдет для каналов YouTube, познавательных видео, инструкций и многого другого!\"\r\n},\r\n\"br\": {\r\n\"desc\": \"Uma voz feminina jovem e vibrante, perfeita para notícias de celebridades, assuntos em alta e conversas divertidas. Ótima para canais no YouTube, vídeos informativos, tutoriais e muito mais!\"\r\n},\r\n\"fr\": {\r\n\"desc\": \"Une voix féminine jeune et dynamique, parfaite pour les actualités sur les célébrités, les sujets tendance et les conversations amusantes. Idéale pour les chaînes YouTube, les vidéos informatives, les tutoriels et plus encore !\"\r\n},\r\n\"de\": {\r\n\"desc\": \"Eine junge, lebendige weibliche Stimme, perfekt für Promi-News, heiße Themen und unterhaltsame Gespräche. Ideal für YouTube-Kanäle, informative Videos, Anleitungen und vieles mehr!\"\r\n},\r\n\"ja\": {\r\n\"desc\": \"若くて活気のある女性の声で、芸能ニュースや話題のトピック、楽しい会話にぴったり。YouTubeチャンネル、情報動画、ハウツー動画などにも最適です！\"\r\n},\r\n\"ko\": {\r\n\"desc\": \"젊고 생기 있는 여성 목소리로, 연예 뉴스, 핫이슈, 재미있는 대화에 딱 맞습니다. 유튜브 채널, 정보 영상, 사용법 영상 등에 매우 적합합니다!\"\r\n}\r\n}",
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 3,
+            "name": "Grandpa Spuds Oxley",
+            "agent_id": null,
+            "template_type": "default",
+            "icon": "https://static.futureshareai.com/logo2/167823c0-ee3e-4655-9e46-eabdc66cebab.webp",
+            "elevenlabs_voice_id": "NOpBlnGInO9m6vDvFkFC",
+            "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/Bi4YhYxPTDRSUfiEpED4qyJ0biq2/voices/NOpBlnGInO9m6vDvFkFC/M4xySW4rr1SbAKKwMAtI.mp3",
+            "language": "{\r\n\"en\": {\r\n\"languages\": \"\\\"🇺🇸 English\\\", \\\"🇩🇪 German\\\", \\\"🇪🇸 Spanish\\\", \\\"🇵🇱 Polish\\\", \\\"🇵🇹 Portuguese\\\", \\\"🇵🇭 Filipino\\\", \\\"🇮🇹 Italian\\\", \\\"🇮🇳 Hindi\\\", \\\"🇨🇿 Czech\\\", \\\"🇫🇷 French\\\", \\\"🇸🇦 Arabic\\\", \\\"🇷🇴 Romanian\\\", \\\"🇭🇺 Hungarian\\\", \\\"🇹🇷 Turkish\\\", \\\"🇭🇷 Croatian\\\", \\\"🇰🇷 Korean\\\", \\\"🇸🇰 Slovak\\\", \\\"🇺🇦 Ukrainian\\\", \\\"🇸🇪 Swedish\\\", \\\"🇮🇳 Tamil\\\", \\\"🇳🇴 Norwegian\\\"\"\r\n},\r\n\"zh\": {\r\n\"languages\": \"\\\"🇺🇸 英语\\\", \\\"🇩🇪 德语\\\", \\\"🇪🇸 西班牙语\\\", \\\"🇵🇱 波兰语\\\", \\\"🇵🇹 葡萄牙语\\\", \\\"🇵🇭 菲律宾语\\\", \\\"🇮🇹 意大利语\\\", \\\"🇮🇳 印地语\\\", \\\"🇨🇿 捷克语\\\", \\\"🇫🇷 法语\\\", \\\"🇸🇦 阿拉伯语\\\", \\\"🇷🇴 罗马尼亚语\\\", \\\"🇭🇺 匈牙利语\\\", \\\"🇹🇷 土耳其语\\\", \\\"🇭🇷 克罗地亚语\\\", \\\"🇰🇷 韩语\\\", \\\"🇸🇰 斯洛伐克语\\\", \\\"🇺🇦 乌克兰语\\\", \\\"🇸🇪 瑞典语\\\", \\\"🇮🇳 泰米尔语\\\", \\\"🇳🇴 挪威语\\\"\"\r\n},\r\n\"es\": {\r\n\"languages\": \"\\\"🇺🇸 Inglés\\\", \\\"🇩🇪 Alemán\\\", \\\"🇪🇸 Español\\\", \\\"🇵🇱 Polaco\\\", \\\"🇵🇹 Portugués\\\", \\\"🇵🇭 Filipino\\\", \\\"🇮🇹 Italiano\\\", \\\"🇮🇳 Hindi\\\", \\\"🇨🇿 Checo\\\", \\\"🇫🇷 Francés\\\", \\\"🇸🇦 Árabe\\\", \\\"🇷🇴 Rumano\\\", \\\"🇭🇺 Húngaro\\\", \\\"🇹🇷 Turco\\\", \\\"🇭🇷 Croata\\\", \\\"🇰🇷 Coreano\\\", \\\"🇸🇰 Eslovaco\\\", \\\"🇺🇦 Ucraniano\\\", \\\"🇸🇪 Sueco\\\", \\\"🇮🇳 Tamil\\\", \\\"🇳🇴 Noruego\\\"\"\r\n},\r\n\"ru\": {\r\n\"languages\": \"\\\"🇺🇸 Английский\\\", \\\"🇩🇪 Немецкий\\\", \\\"🇪🇸 Испанский\\\", \\\"🇵🇱 Польский\\\", \\\"🇵🇹 Португальский\\\", \\\"🇵🇭 Филиппинский\\\", \\\"🇮🇹 Итальянский\\\", \\\"🇮🇳 Хинди\\\", \\\"🇨🇿 Чешский\\\", \\\"🇫🇷 Французский\\\", \\\"🇸🇦 Арабский\\\", \\\"🇷🇴 Румынский\\\", \\\"🇭🇺 Венгерский\\\", \\\"🇹🇷 Турецкий\\\", \\\"🇭🇷 Хорватский\\\", \\\"🇰🇷 Корейский\\\", \\\"🇸🇰 Словацкий\\\", \\\"🇺🇦 Украинский\\\", \\\"🇸🇪 Шведский\\\", \\\"🇮🇳 Тамильский\\\", \\\"🇳🇴 Норвежский\\\"\"\r\n},\r\n\"br\": {\r\n\"languages\": \"\\\"🇺🇸 Inglês\\\", \\\"🇩🇪 Alemão\\\", \\\"🇪🇸 Espanhol\\\", \\\"🇵🇱 Polonês\\\", \\\"🇵🇹 Português\\\", \\\"🇵🇭 Filipino\\\", \\\"🇮🇹 Italiano\\\", \\\"🇮🇳 Hindi\\\", \\\"🇨🇿 Tcheco\\\", \\\"🇫🇷 Francês\\\", \\\"🇸🇦 Árabe\\\", \\\"🇷🇴 Romeno\\\", \\\"🇭🇺 Húngaro\\\", \\\"🇹🇷 Turco\\\", \\\"🇭🇷 Croata\\\", \\\"🇰🇷 Coreano\\\", \\\"🇸🇰 Eslovaco\\\", \\\"🇺🇦 Ucraniano\\\", \\\"🇸🇪 Sueco\\\", \\\"🇮🇳 Tâmil\\\", \\\"🇳🇴 Norueguês\\\"\"\r\n},\r\n\"fr\": {\r\n\"languages\": \"\\\"🇺🇸 Anglais\\\", \\\"🇩🇪 Allemand\\\", \\\"🇪🇸 Espagnol\\\", \\\"🇵🇱 Polonais\\\", \\\"🇵🇹 Portugais\\\", \\\"🇵🇭 Philippin\\\", \\\"🇮🇹 Italien\\\", \\\"🇮🇳 Hindi\\\", \\\"🇨🇿 Tchèque\\\", \\\"🇫🇷 Français\\\", \\\"🇸🇦 Arabe\\\", \\\"🇷🇴 Roumain\\\", \\\"🇭🇺 Hongrois\\\", \\\"🇹🇷 Turc\\\", \\\"🇭🇷 Croate\\\", \\\"🇰🇷 Coréen\\\", \\\"🇸🇰 Slovaque\\\", \\\"🇺🇦 Ukrainien\\\", \\\"🇸🇪 Suédois\\\", \\\"🇮🇳 Tamoul\\\", \\\"🇳🇴 Norvégien\\\"\"\r\n},\r\n\"de\": {\r\n\"languages\": \"\\\"🇺🇸 Englisch\\\", \\\"🇩🇪 Deutsch\\\", \\\"🇪🇸 Spanisch\\\", \\\"🇵🇱 Polnisch\\\", \\\"🇵🇹 Portugiesisch\\\", \\\"🇵🇭 Filipino\\\", \\\"🇮🇹 Italienisch\\\", \\\"🇮🇳 Hindi\\\", \\\"🇨🇿 Tschechisch\\\", \\\"🇫🇷 Französisch\\\", \\\"🇸🇦 Arabisch\\\", \\\"🇷🇴 Rumänisch\\\", \\\"🇭🇺 Ungarisch\\\", \\\"🇹🇷 Türkisch\\\", \\\"🇭🇷 Kroatisch\\\", \\\"🇰🇷 Koreanisch\\\", \\\"🇸🇰 Slowakisch\\\", \\\"🇺🇦 Ukrainisch\\\", \\\"🇸🇪 Schwedisch\\\", \\\"🇮🇳 Tamil\\\", \\\"🇳🇴 Norwegisch\\\"\"\r\n},\r\n\"ja\": {\r\n\"languages\": \"\\\"🇺🇸 英語\\\", \\\"🇩🇪 ドイツ語\\\", \\\"🇪🇸 スペイン語\\\", \\\"🇵🇱 ポーランド語\\\", \\\"🇵🇹 ポルトガル語\\\", \\\"🇵🇭 フィリピン語\\\", \\\"🇮🇹 イタリア語\\\", \\\"🇮🇳 ヒンディー語\\\", \\\"🇨🇿 チェコ語\\\", \\\"🇫🇷 フランス語\\\", \\\"🇸🇦 アラビア語\\\", \\\"🇷🇴 ルーマニア語\\\", \\\"🇭🇺 ハンガリー語\\\", \\\"🇹🇷 トルコ語\\\", \\\"🇭🇷 クロアチア語\\\", \\\"🇰🇷 韓国語\\\", \\\"🇸🇰 スロバキア語\\\", \\\"🇺🇦 ウクライナ語\\\", \\\"🇸🇪 スウェーデン語\\\", \\\"🇮🇳 タミル語\\\", \\\"🇳🇴 ノルウェー語\\\"\"\r\n},\r\n\"ko\": {\r\n\"languages\": \"\\\"🇺🇸 영어\\\", \\\"🇩🇪 독일어\\\", \\\"🇪🇸 스페인어\\\", \\\"🇵🇱 폴란드어\\\", \\\"🇵🇹 포르투갈어\\\", \\\"🇵🇭 필리핀어\\\", \\\"🇮🇹 이탈리아어\\\", \\\"🇮🇳 힌디어\\\", \\\"🇨🇿 체코어\\\", \\\"🇫🇷 프랑스어\\\", \\\"🇸🇦 아랍어\\\", \\\"🇷🇴 루마니아어\\\", \\\"🇭🇺 헝가리어\\\", \\\"🇹🇷 터키어\\\", \\\"🇭🇷 크로아티아어\\\", \\\"🇰🇷 한국어\\\", \\\"🇸🇰 슬로바키아어\\\", \\\"🇺🇦 우크라이나어\\\", \\\"🇸🇪 스웨덴어\\\", \\\"🇮🇳 타밀어\\\", \\\"🇳🇴 노르웨이어\\\"\"\r\n}\r\n}",
+            "sort": 0,
+            "desc": "{\r\n \"en\": {\r\n \"desc\": \"A friendly grandpa who knows how to enthrall his audience with tall tales and fun adventures.\"\r\n },\r\n \"zh\": {\r\n \"desc\": \"一位友善的爷爷，善于用离奇的故事和有趣的冒险吸引听众。\"\r\n },\r\n \"es\": {\r\n \"desc\": \"Un abuelo amable que sabe cautivar a su audiencia con historias increíbles y aventuras divertidas.\"\r\n },\r\n \"ru\": {\r\n \"desc\": \"Дружелюбный дедушка, который умеет увлекать свою аудиторию невероятными историями и веселыми приключениями.\"\r\n },\r\n \"de\": {\r\n \"desc\": \"Ein freundlicher Opa, der sein Publikum mit fantastischen Geschichten und lustigen Abenteuern fesseln kann.\"\r\n },\r\n \"fr\": {\r\n \"desc\": \"Un grand-père amical qui sait captiver son public avec des histoires incroyables et des aventures amusantes.\"\r\n },\r\n \"br\": {\r\n \"desc\": \"Um vovô amigável que sabe encantar seu público com histórias incríveis e aventuras divertidas.\"\r\n },\r\n \"ja\": {\r\n \"desc\": \"親しみやすいおじいさんで、不思議な物語や楽しい冒険で人々を魅了することができます。\"\r\n },\r\n \"ko\": {\r\n \"desc\": \"친근한 할아버지로, 기상천외한 이야기와 재미있는 모험으로 청중을 사로잡을 줄 압니다.\"\r\n }\r\n}",
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 4,
+            "name": "Alex",
+            "agent_id": null,
+            "template_type": "",
+            "icon": "https://static.futureshareai.com/logo2/565de958-5d9e-457d-86dd-a740a609adf3.webp",
+            "elevenlabs_voice_id": "I4UoRdEF5E8JGdw96654",
+            "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/YXDpjWZjlbUXTnavzZ8x6qC829u1/voices/I4UoRdEF5E8JGdw96654/7eec4951-1fa6-4dc9-a108-47f4b7775848.mp3",
+            "language": "{\n  \"en\": {\n    \"languages\": \"\\\"🇺🇸 English\\\", \\\"🇩🇪 German\\\", \\\"🇪🇸 Spanish\\\", \\\"🇵🇱 Polish\\\", \\\"🇵🇹 Portuguese\\\", \\\"🇵🇭 Filipino\\\", \\\"🇮🇹 Italian\\\", \\\"🇮🇳 Hindi\\\", \\\"🇨🇿 Czech\\\", \\\"🇫🇷 French\\\", \\\"🇸🇦 Arabic\\\", \\\"🇷🇴 Romanian\\\", \\\"🇭🇺 Hungarian\\\", \\\"🇹🇷 Turkish\\\", \\\"🇭🇷 Croatian\\\", \\\"🇰🇷 Korean\\\", \\\"🇸🇰 Slovak\\\", \\\"🇺🇦 Ukrainian\\\", \\\"🇸🇪 Swedish\\\", \\\"🇮🇳 Tamil\\\", \\\"🇳🇴 Norwegian\\\"\"\n  },\n  \"zh\": {\n    \"languages\": \"\\\"🇺🇸 英语\\\", \\\"🇩🇪 德语\\\", \\\"🇪🇸 西班牙语\\\", \\\"🇵🇱 波兰语\\\", \\\"🇵🇹 葡萄牙语\\\", \\\"🇵🇭 菲律宾语\\\", \\\"🇮🇹 意大利语\\\", \\\"🇮🇳 印地语\\\", \\\"🇨🇿 捷克语\\\", \\\"🇫🇷 法语\\\", \\\"🇸🇦 阿拉伯语\\\", \\\"🇷🇴 罗马尼亚语\\\", \\\"🇭🇺 匈牙利语\\\", \\\"🇹🇷 土耳其语\\\", \\\"🇭🇷 克罗地亚语\\\", \\\"🇰🇷 韩语\\\", \\\"🇸🇰 斯洛伐克语\\\", \\\"🇺🇦 乌克兰语\\\", \\\"🇸🇪 瑞典语\\\", \\\"🇮🇳 泰米尔语\\\", \\\"🇳🇴 挪威语\\\"\"\n  },\n  \"es\": {\n    \"languages\": \"\\\"🇺🇸 Inglés\\\", \\\"🇩🇪 Alemán\\\", \\\"🇪🇸 Español\\\", \\\"🇵🇱 Polaco\\\", \\\"🇵🇹 Portugués\\\", \\\"🇵🇭 Filipino\\\", \\\"🇮🇹 Italiano\\\", \\\"🇮🇳 Hindi\\\", \\\"🇨🇿 Checo\\\", \\\"🇫🇷 Francés\\\", \\\"🇸🇦 Árabe\\\", \\\"🇷🇴 Rumano\\\", \\\"🇭🇺 Húngaro\\\", \\\"🇹🇷 Turco\\\", \\\"🇭🇷 Croata\\\", \\\"🇰🇷 Coreano\\\", \\\"🇸🇰 Eslovaco\\\", \\\"🇺🇦 Ucraniano\\\", \\\"🇸🇪 Sueco\\\", \\\"🇮🇳 Tamil\\\", \\\"🇳🇴 Noruego\\\"\"\n  },\n  \"ru\": {\n    \"languages\": \"\\\"🇺🇸 Английский\\\", \\\"🇩🇪 Немецкий\\\", \\\"🇪🇸 Испанский\\\", \\\"🇵🇱 Польский\\\", \\\"🇵🇹 Португальский\\\", \\\"🇵🇭 Филиппинский\\\", \\\"🇮🇹 Итальянский\\\", \\\"🇮🇳 Хинди\\\", \\\"🇨🇿 Чешский\\\", \\\"🇫🇷 Французский\\\", \\\"🇸🇦 Арабский\\\", \\\"🇷🇴 Румынский\\\", \\\"🇭🇺 Венгерский\\\", \\\"🇹🇷 Турецкий\\\", \\\"🇭🇷 Хорватский\\\", \\\"🇰🇷 Корейский\\\", \\\"🇸🇰 Словацкий\\\", \\\"🇺🇦 Украинский\\\", \\\"🇸🇪 Шведский\\\", \\\"🇮🇳 Тамильский\\\", \\\"🇳🇴 Норвежский\\\"\"\n  },\n  \"br\": {\n    \"languages\": \"\\\"🇺🇸 Inglês\\\", \\\"🇩🇪 Alemão\\\", \\\"🇪🇸 Espanhol\\\", \\\"🇵🇱 Polonês\\\", \\\"🇵🇹 Português\\\", \\\"🇵🇭 Filipino\\\", \\\"🇮🇹 Italiano\\\", \\\"🇮🇳 Hindi\\\", \\\"🇨🇿 Tcheco\\\", \\\"🇫🇷 Francês\\\", \\\"🇸🇦 Árabe\\\", \\\"🇷🇴 Romeno\\\", \\\"🇭🇺 Húngaro\\\", \\\"🇹🇷 Turco\\\", \\\"🇭🇷 Croata\\\", \\\"🇰🇷 Coreano\\\", \\\"🇸🇰 Eslovaco\\\", \\\"🇺🇦 Ucraniano\\\", \\\"🇸🇪 Sueco\\\", \\\"🇮🇳 Tâmil\\\", \\\"🇳🇴 Norueguês\\\"\"\n  },\n  \"fr\": {\n    \"languages\": \"\\\"🇺🇸 Anglais\\\", \\\"🇩🇪 Allemand\\\", \\\"🇪🇸 Espagnol\\\", \\\"🇵🇱 Polonais\\\", \\\"🇵🇹 Portugais\\\", \\\"🇵🇭 Philippin\\\", \\\"🇮🇹 Italien\\\", \\\"🇮🇳 Hindi\\\", \\\"🇨🇿 Tchèque\\\", \\\"🇫🇷 Français\\\", \\\"🇸🇦 Arabe\\\", \\\"🇷🇴 Roumain\\\", \\\"🇭🇺 Hongrois\\\", \\\"🇹🇷 Turc\\\", \\\"🇭🇷 Croate\\\", \\\"🇰🇷 Coréen\\\", \\\"🇸🇰 Slovaque\\\", \\\"🇺🇦 Ukrainien\\\", \\\"🇸🇪 Suédois\\\", \\\"🇮🇳 Tamoul\\\", \\\"🇳🇴 Norvégien\\\"\"\n  },\n  \"de\": {\n    \"languages\": \"\\\"🇺🇸 Englisch\\\", \\\"🇩🇪 Deutsch\\\", \\\"🇪🇸 Spanisch\\\", \\\"🇵🇱 Polnisch\\\", \\\"🇵🇹 Portugiesisch\\\", \\\"🇵🇭 Filipino\\\", \\\"🇮🇹 Italienisch\\\", \\\"🇮🇳 Hindi\\\", \\\"🇨🇿 Tschechisch\\\", \\\"🇫🇷 Französisch\\\", \\\"🇸🇦 Arabisch\\\", \\\"🇷🇴 Rumänisch\\\", \\\"🇭🇺 Ungarisch\\\", \\\"🇹🇷 Türkisch\\\", \\\"🇭🇷 Kroatisch\\\", \\\"🇰🇷 Koreanisch\\\", \\\"🇸🇰 Slowakisch\\\", \\\"🇺🇦 Ukrainisch\\\", \\\"🇸🇪 Schwedisch\\\", \\\"🇮🇳 Tamil\\\", \\\"🇳🇴 Norwegisch\\\"\"\n  },\n  \"ja\": {\n    \"languages\": \"\\\"🇺🇸 英語\\\", \\\"🇩🇪 ドイツ語\\\", \\\"🇪🇸 スペイン語\\\", \\\"🇵🇱 ポーランド語\\\", \\\"🇵🇹 ポルトガル語\\\", \\\"🇵🇭 フィリピン語\\\", \\\"🇮🇹 イタリア語\\\", \\\"🇮🇳 ヒンディー語\\\", \\\"🇨🇿 チェコ語\\\", \\\"🇫🇷 フランス語\\\", \\\"🇸🇦 アラビア語\\\", \\\"🇷🇴 ルーマニア語\\\", \\\"🇭🇺 ハンガリー語\\\", \\\"🇹🇷 トルコ語\\\", \\\"🇭🇷 クロアチア語\\\", \\\"🇰🇷 韓国語\\\", \\\"🇸🇰 スロバキア語\\\", \\\"🇺🇦 ウクライナ語\\\", \\\"🇸🇪 スウェーデン語\\\", \\\"🇮🇳 タミル語\\\", \\\"🇳🇴 ノルウェー語\\\"\"\n  },\n  \"ko\": {\n    \"languages\": \"\\\"🇺🇸 영어\\\", \\\"🇩🇪 독일어\\\", \\\"🇪🇸 스페인어\\\", \\\"🇵🇱 폴란드어\\\", \\\"🇵🇹 포르투갈어\\\", \\\"🇵🇭 필리핀어\\\", \\\"🇮🇹 이탈리아어\\\", \\\"🇮🇳 힌디어\\\", \\\"🇨🇿 체코어\\\", \\\"🇫🇷 프랑스어\\\", \\\"🇸🇦 아랍어\\\", \\\"🇷🇴 루마니아어\\\", \\\"🇭🇺 헝가리어\\\", \\\"🇹🇷 터키어\\\", \\\"🇭🇷 크로아티아어\\\", \\\"🇰🇷 한국어\\\", \\\"🇸🇰 슬로바키아어\\\", \\\"🇺🇦 우크라이나어\\\", \\\"🇸🇪 스웨덴어\\\", \\\"🇮🇳 타밀어\\\", \\\"🇳🇴 노르웨이어\\\"\"\n  }\n}",
+            "sort": 0,
+            "desc": "{\"en\": {\r\n\"desc\": \"An upbeat and pleasant male voice. Great for YouTube, shorts, and social media.\"\r\n},\r\n\"zh\": {\r\n\"desc\": \"积极愉快的男性声音，非常适合用于 YouTube、短视频和社交媒体。\"\r\n},\r\n\"es\": {\r\n\"desc\": \"Una voz masculina animada y agradable. Ideal para YouTube, videos cortos y redes sociales.\"\r\n},\r\n\"ru\": {\r\n\"desc\": \"Жизнерадостный и приятный мужской голос. Отлично подходит для YouTube, коротких видео и социальных сетей.\"\r\n},\r\n\"br\": {\r\n\"desc\": \"Uma voz masculina animada e agradável. Ótima para YouTube, vídeos curtos e mídias sociais.\"\r\n},\r\n\"fr\": {\r\n\"desc\": \"Une voix masculine joyeuse et agréable. Idéale pour YouTube, vidéos courtes et réseaux sociaux.\"\r\n},\r\n\"de\": {\r\n\"desc\": \"Eine schwungvolle und angenehme männliche Stimme. Ideal für YouTube, Kurzvideos und soziale Medien.\"\r\n},\r\n\"ja\": {\r\n\"desc\": \"明るく心地よい男性の声。YouTube、ショート動画、SNSに最適です。\"\r\n},\r\n\"ko\": {\r\n\"desc\": \"경쾌하고 듣기 좋은 남성 목소리. 유튜브, 쇼츠, 소셜 미디어에 적합합니다.\"\r\n}\r\n}",
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          },
+          {
+            "id": 5,
+            "name": "Niraj-Hindi Narrator",
+            "agent_id": null,
+            "template_type": "",
+            "icon": "https://static.futureshareai.com/logo2/affe1692-5155-41c4-b5fa-b334aeb104ea.webp",
+            "elevenlabs_voice_id": "zgqefOY5FPQ3bB7OZTVR",
+            "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/workspace/514d94e9241c48e8b7905375729c436f/voices/zgqefOY5FPQ3bB7OZTVR/e098PrFS03OESyoSgjxV.mp3",
+            "language": "{\r\n\"en\": {\r\n\"languages\": \"\\\"🇮🇳Hindi\\\", \\\"🇩🇪German\\\", \\\"🇪🇸Spanish\\\", \\\"🇷🇺Russian\\\", \\\"🇬🇷Greek\\\", \\\"🇨🇿Czech\\\", \\\"🇫🇷French\\\", \\\"🇩🇰Danish\\\", \\\"🇸🇦Arabic\\\", \\\"🇹🇷Turkish\\\", \\\"🇷🇴Romanian\\\", \\\"🇨🇳Chinese\\\", \\\"🇰🇷Korean\\\", \\\"🇸🇰Slovak\\\", \\\"🇮🇳Tamil\\\", \\\"🇭🇷Croatian\\\", \\\"🇮🇹Italian\\\"\"\r\n},\r\n\"zh\": {\r\n\"languages\": \"\\\"🇮🇳印地语\\\", \\\"🇩🇪德语\\\", \\\"🇪🇸西班牙语\\\", \\\"🇷🇺俄语\\\", \\\"🇬🇷希腊语\\\", \\\"🇨🇿捷克语\\\", \\\"🇫🇷法语\\\", \\\"🇩🇰丹麦语\\\", \\\"🇸🇦阿拉伯语\\\", \\\"🇹🇷土耳其语\\\", \\\"🇷🇴罗马尼亚语\\\", \\\"🇨🇳中文\\\", \\\"🇰🇷韩语\\\", \\\"🇸🇰斯洛伐克语\\\", \\\"🇮🇳泰米尔语\\\", \\\"🇭🇷克罗地亚语\\\", \\\"🇮🇹意大利语\\\"\"\r\n},\r\n\"es\": {\r\n\"languages\": \"\\\"🇮🇳Hindi\\\", \\\"🇩🇪Alemán\\\", \\\"🇪🇸Español\\\", \\\"🇷🇺Ruso\\\", \\\"🇬🇷Griego\\\", \\\"🇨🇿Checo\\\", \\\"🇫🇷Francés\\\", \\\"🇩🇰Danés\\\", \\\"🇸🇦Árabe\\\", \\\"🇹🇷Turco\\\", \\\"🇷🇴Rumano\\\", \\\"🇨🇳Chino\\\", \\\"🇰🇷Coreano\\\", \\\"🇸🇰Eslovaco\\\", \\\"🇮🇳Tamil\\\", \\\"🇭🇷Croata\\\", \\\"🇮🇹Italiano\\\"\"\r\n},\r\n\"ru\": {\r\n\"languages\": \"\\\"🇮🇳Хинди\\\", \\\"🇩🇪Немецкий\\\", \\\"🇪🇸Испанский\\\", \\\"🇷🇺Русский\\\", \\\"🇬🇷Греческий\\\", \\\"🇨🇿Чешский\\\", \\\"🇫🇷Французский\\\", \\\"🇩🇰Датский\\\", \\\"🇸🇦Арабский\\\", \\\"🇹🇷Турецкий\\\", \\\"🇷🇴Румынский\\\", \\\"🇨🇳Китайский\\\", \\\"🇰🇷Корейский\\\", \\\"🇸🇰Словацкий\\\", \\\"🇮🇳Тамильский\\\", \\\"🇭🇷Хорватский\\\", \\\"🇮🇹Итальянский\\\"\"\r\n},\r\n\"br\": {\r\n\"languages\": \"\\\"🇮🇳Hindi\\\", \\\"🇩🇪Alemão\\\", \\\"🇪🇸Espanhol\\\", \\\"🇷🇺Russo\\\", \\\"🇬🇷Grego\\\", \\\"🇨🇿Tcheco\\\", \\\"🇫🇷Francês\\\", \\\"🇩🇰Dinamarquês\\\", \\\"🇸🇦Árabe\\\", \\\"🇹🇷Turco\\\", \\\"🇷🇴Romeno\\\", \\\"🇨🇳Chinês\\\", \\\"🇰🇷Coreano\\\", \\\"🇸🇰Eslovaco\\\", \\\"🇮🇳Tâmil\\\", \\\"🇭🇷Croata\\\", \\\"🇮🇹Italiano\\\"\"\r\n},\r\n\"fr\": {\r\n\"languages\": \"\\\"🇮🇳Hindi\\\", \\\"🇩🇪Allemand\\\", \\\"🇪🇸Espagnol\\\", \\\"🇷🇺Russe\\\", \\\"🇬🇷Grec\\\", \\\"🇨🇿Tchèque\\\", \\\"🇫🇷Français\\\", \\\"🇩🇰Danois\\\", \\\"🇸🇦Arabe\\\", \\\"🇹🇷Turc\\\", \\\"🇷🇴Roumain\\\", \\\"🇨🇳Chinois\\\", \\\"🇰🇷Coréen\\\", \\\"🇸🇰Slovaque\\\", \\\"🇮🇳Tamoul\\\", \\\"🇭🇷Croate\\\", \\\"🇮🇹Italien\\\"\"\r\n},\r\n\"de\": {\r\n\"languages\": \"\\\"🇮🇳Hindi\\\", \\\"🇩🇪Deutsch\\\", \\\"🇪🇸Spanisch\\\", \\\"🇷🇺Russisch\\\", \\\"🇬🇷Griechisch\\\", \\\"🇨🇿Tschechisch\\\", \\\"🇫🇷Französisch\\\", \\\"🇩🇰Dänisch\\\", \\\"🇸🇦Arabisch\\\", \\\"🇹🇷Türkisch\\\", \\\"🇷🇴Rumänisch\\\", \\\"🇨🇳Chinesisch\\\", \\\"🇰🇷Koreanisch\\\", \\\"🇸🇰Slowakisch\\\", \\\"🇮🇳Tamil\\\", \\\"🇭🇷Kroatisch\\\", \\\"🇮🇹Italienisch\\\"\"\r\n},\r\n\"ja\": {\r\n\"languages\": \"\\\"🇮🇳ヒンディー語\\\", \\\"🇩🇪ドイツ語\\\", \\\"🇪🇸スペイン語\\\", \\\"🇷🇺ロシア語\\\", \\\"🇬🇷ギリシャ語\\\", \\\"🇨🇿チェコ語\\\", \\\"🇫🇷フランス語\\\", \\\"🇩🇰デンマーク語\\\", \\\"🇸🇦アラビア語\\\", \\\"🇹🇷トルコ語\\\", \\\"🇷🇴ルーマニア語\\\", \\\"🇨🇳中国語\\\", \\\"🇰🇷韓国語\\\", \\\"🇸🇰スロバキア語\\\", \\\"🇮🇳タミル語\\\", \\\"🇭🇷クロアチア語\\\", \\\"🇮🇹イタリア語\\\"\"\r\n},\r\n\"ko\": {\r\n\"languages\": \"\\\"🇮🇳힌디어\\\", \\\"🇩🇪독일어\\\", \\\"🇪🇸스페인어\\\", \\\"🇷🇺러시아어\\\", \\\"🇬🇷그리스어\\\", \\\"🇨🇿체코어\\\", \\\"🇫🇷프랑스어\\\", \\\"🇩🇰덴마크어\\\", \\\"🇸🇦아랍어\\\", \\\"🇹🇷터키어\\\", \\\"🇷🇴루마니아어\\\", \\\"🇨🇳중국어\\\", \\\"🇰🇷한국어\\\", \\\"🇸🇰슬로바키아어\\\", \\\"🇮🇳타밀어\\\", \\\"🇭🇷크로아티아어\\\", \\\"🇮🇹이탈리아어\\\"\"\r\n}\r\n}",
+            "sort": 0,
+            "desc": "{\"en\": {\r\n\"desc\": \"Niraj is the pen name of a veteran Indian actor. The base tone and its variations make it perfect for narrations, documentaries, and social media.\"\r\n},\r\n\"zh\": {\r\n\"desc\": \"Niraj 是一位资深印度演员的笔名。这个声音的基础音色和变化，非常适合用于旁白、纪录片以及社交媒体。\"\r\n},\r\n\"es\": {\r\n\"desc\": \"Niraj es el seudónimo de un actor indio veterano. El tono base y sus variaciones lo hacen ideal para narraciones, documentales y redes sociales.\"\r\n},\r\n\"ru\": {\r\n\"desc\": \"Niraj — это псевдоним опытного индийского актёра. Его базовый тембр и вариации прекрасно подходят для озвучивания, документальных фильмов и социальных сетей.\"\r\n},\r\n\"br\": {\r\n\"desc\": \"Niraj é o pseudônimo de um ator indiano veterano. O tom base e suas variações o tornam perfeito para narrações, documentários e redes sociais.\"\r\n},\r\n\"fr\": {\r\n\"desc\": \"Niraj est le pseudonyme d’un acteur indien chevronné. Le ton de base et ses variations le rendent parfait pour les narrations, les documentaires et les réseaux sociaux.\"\r\n},\r\n\"de\": {\r\n\"desc\": \"Niraj ist das Pseudonym eines erfahrenen indischen Schauspielers. Der Grundton und seine Variationen eignen sich perfekt für Erzählungen, Dokumentationen und soziale Medien.\"\r\n},\r\n\"ja\": {\r\n\"desc\": \"Niraj はベテランインド人俳優のペンネームです。声の基本トーンとその変化は、ナレーション、ドキュメンタリー、SNSに最適です。\"\r\n},\r\n\"ko\": {\r\n\"desc\": \"Niraj는 인도 베테랑 배우의 필명입니다. 기본 음색과 그 변화를 통해 내레이션, 다큐멘터리, 소셜 미디어에 매우 적합합니다.\"\r\n}}",
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_role": {
+      "name": "platform_ai_role",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "分组名称"
+        },
+        {
+          "name": "type",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "类型：system｜recommend|user  system:系统内置的｜recommend 用于AI推荐"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "用户 id, 仅当type=user时有值"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 asc"
+        },
+        {
+          "name": "icon",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "图标文件地址"
+        },
+        {
+          "name": "i18n_config",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "多语言 JSON 配置 ： { \"en\" : { \"key\" : \"value\" }, \"zh\" : { \"key\" : \"value\" } }"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "业务线"
+        },
+        {
+          "name": "parent_role_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 16,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "name": "设计师",
+            "type": "system",
+            "user_id": null,
+            "sort": 99,
+            "icon": "",
+            "i18n_config": "{\"zh\":{\"name\":\"设计师\",\"desc\":\"将创意转化为视觉效果和用户体验。\"},\"en\":{\"name\":\"Designer\",\"desc\":\"Transforming creativity into visual effects and user experiences.  \"},\"es\":{\"name\":\"Diseñador  \",\"desc\":\"Transformar la creatividad en efectos visuales y experiencias de usuario  \"},\"ru\":{\"name\":\"Дизайнер  \",\"desc\":\"Преобразование креативности в визуальные эффекты и пользовательский опыт.  \"},\"ar\":{\"name\":\"مصمم  \",\"desc\":\"تحويل الإبداع إلى تأثيرات بصرية وتجارب مستخدم.  \"},\"fa\":{\"name\":\"طراح  \",\"desc\":\"تبدیل خلاقیت به جلوه‌های بصری تجربه‌های کاربری.  \"},\"tr\":{\"name\":\"Tasarımcı  \",\"desc\":\"Yaratıcılığı görsel efektlere ve kullanıcı deneyim dönüştürmek.  \"},\"pt\":{\"name\":\"Designer  \",\"desc\":\"Transformar a criatividade em efeitos visuais e experiências do usuário.  \"},\"fr\":{\"name\":\"Designer  \"},\"de\":{\"name\":\"Designer  \",\"desc\":\"Kreativität in visuelle Effekte und Benutzererlebn umwandeln.  \"},\"ja\":{\"name\":\"デザイナー  \",\"desc\":\"創造性を視覚効果とユーザー体験変える。  \"},\"ko\":{\"name\":\"디자이너  \",\"desc\":\"창의성을 시각적 효과와 사용자 경험으로 전환하다.  \"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt",
+            "parent_role_id": null
+          },
+          {
+            "id": 2,
+            "name": "学生",
+            "type": "system",
+            "user_id": null,
+            "sort": 98,
+            "icon": "",
+            "i18n_config": "{\"zh\":{\"name\":\"学生\",\"desc\":\"学习、探索新知识和发展技能。\"},\"en\":{\"name\":\"Student\",\"desc\":\"Learning, exploring new knowledge, and developing skills.  \"},\"es\":{\"name\":\"Estudiante  \",\"desc\":\"Aprender, explorar nuevos conocimientos y desarrollar habilidades.  \"},\"ru\":{\"name\":\"Студент  \",\"desc\":\"Изучение исследование новых знаний и развитие навыков.  \"},\"ar\":{\"name\":\"طالب  \",\"desc\":\"التعلم واستكشاف معارف جديدة وتطوير المهارات.  \"},\"fa\":{\"name\":\"دانش‌آموز  \",\"desc\":\"یادگیری، کشف دانش‌های جدید و توسعه مهارت‌ها.  \"},\"tr\":{\"name\":\"Öğrenci  \",\"desc\":\"Yeni bilgileri öğrenmek, keşfetmek ve beceriler geliştirmek.\"},\"pt\":{\"name\":\"Estudante  \",\"desc\":\"Aprender, explorar novos conhecimentos e desenvolver habilidades  \"},\"fr\":{\"name\":\"Étudiant  \"},\"de\":{\"name\":\"Student  \",\"desc\":\"Lernen, neues Wissen erkunden und Fähigkeiten entwickeln.  \"},\"ja\":{\"name\":\"学生  \",\"desc\":\"新しい知識を学び、探求し、スキルを発展させる。  \"},\"ko\":{\"name\":\"학생  \",\"desc\":\"새로운 지식을 배우고 탐구하며, 기술을 개발하다.  \"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt",
+            "parent_role_id": null
+          },
+          {
+            "id": 3,
+            "name": "开发者",
+            "type": "system",
+            "user_id": null,
+            "sort": 97,
+            "icon": "",
+            "i18n_config": "{\"zh\":{\"name\":\"开发者\",\"desc\":\"构建和优化软件应用程序与系统功能。\"},\"en\":{\"name\":\"Developer\",\"desc\":\"Building optimizing software applications and system functionalities.  \"},\"es\":{\"name\":\"Desarrollador  \",\"desc\":\"Construir y optimizar aplicaciones de software y funcionalidades del sistema.  \"},\"ru\":{\"name\":\"Разработчик  \",\"desc\":\"Создание и оптимизация программных приложений и функций систем.  \"},\"ar\":{\"name\":\"مطور  \",\"desc\":\"بناء وتحسين تطبيقات البرمجيات ووظائف الأنظمة.  \"},\"fa\":{\"name\":\"توسعهنده  \",\"desc\":\"ساخت و بهینه‌سازی برنامه‌های نرم‌افزاری و عملکردهایمی.  \"},\"tr\":{\"name\":\"Geliici  \",\"desc\":\"Yazılım uygulamaları ve sistem işlevlerini oluştur ve optimize etmek.  \"},\"pt\":{\"name\":\"Desenvolvedor  \",\"desc\":\"Construir e otimizar aplicações de software e funcionalidades do sistema.  \"},\"fr\":{\"name\":\"Développeur  \"},\"de\":{\"name\":\"Entwickler  \",\"desc\":\"Softwareanwendungen und Systemfunktionen erstellen und optimieren.  \"},\"ja\":{\"name\":\"開発者  \",\"desc\":\"ソフトウェアアプリケーションとシステム機構築し最適化する。  \"},\"ko\":{\"name\":\"개발자  \",\"desc\":\"소프트웨어 응용 프로그램과 시스템 기능을 구축하고 최적화하다.  \"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt",
+            "parent_role_id": null
+          },
+          {
+            "id": 4,
+            "name": "内容创作者",
+            "type": "system",
+            "user_id": null,
+            "sort": 96,
+            "icon": "",
+            "i18n_config": "{\"zh\":{\"name\":\"内容创作者\",\"desc\":\"制作引人入胜的文字、图像和视频内容。\"},\"en\":{\"name\":\"Content Creator\",\"desc\":\"Creating engaging text, images, and video content.\"},\"es\":{\"name\":\"Cor de contenido\",\"desc\":\"Crear contenido atractivo en texto, imágenes y video.\"},\"ru\":{\"name\":\"Создатель контента\",\"desc\":\"Создание увлекатель, изображений и видеоконтента.\"},\"ar\":{\"name\":\"صانع محتوى\",\"desc\":\"إنشاء محتوى جذاب من وصور وفيديوهات.\"},\"fa\":{\"name\":\"تولیدکننده محتوا\",\"desc\":\"ایجاد محتوای جذاب شامل متن، تصویر و ویدئو.\"},\"tr\":{\"name\":\"İçerik Üreticisi\",\"desc\":\"Etkileyici metin, görsel ve video içeriği üretmek.\"},\"pt\":{\"name\":\"Criador Conteúdo\",\"desc\":\"Criar conteúdo envolvente em texto, imagem e vídeo.\"},\"fr\":{\"name\":\"Créateur contenu\"},\"de\":{\"name\":\"Inhaltsersteller\",\"desc\":\"Fesselnde Texte, Bilder und Videoinhalte erstellen.\"},\"ja\":{\"name\":\"コンテンツクリエーター\",\"desc\":\"魅力的な文章、画像、ビデオコンテンツを作成する。\"},\"ko\":{\"name\":\"콘텐츠 제작자 \",\"desc\":\"매력적인, 이미지 및 비디오 콘텐츠를 제작하다.\"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt",
+            "parent_role_id": null
+          },
+          {
+            "id": 5,
+            "name": "产品经理",
+            "type": "system",
+            "user_id": null,
+            "sort": 95,
+            "icon": "",
+            "i18n_config": "{\"zh\":{\"name\":\"产品经理\",\"desc\":\"规划和推动产品进程，实现用户需求与商业目标的统一。\"},\"en\":{\"name\":\"Product Manager\",\"desc\":\"Plan and drive product processes to achieve the alignment of user needs and business goals.  \"},\"es\":{\"name\":\"Ger producto\",\"desc\":\"Planificar y dirigir los procesos del producto para lograr la alineación de las necesidades del usuario con los objetivos comerciales.  \"},\"ru\":{\"name\":\"Менеджер продукта\",\"desc\":\"Планируйте и управляйте процессами продукта, чтобы добиться соответствия потребностей пользователей и бизнес-целей.  \"},\"ar\":{\"name\":\"مدير المنتج\",\"desc\":\"خطط وقم بتوجيه عمليات المنتج لتحقيق التوافق بين احتياجات المستخدم والأهداف التجارية.  \"},\"fa\":{\"name\":\"مدیر محصول\",\"desc\":\"فرآیندهای محصول را برنامه‌ریزی و هدایت کنید تا نیازهای کاربر و اهداف تجاری را هماهنگ کنید.  \"},\"tr\":{\"name\":\"Ürünöneticisi\",\"desc\":\"Ürün süreçlerini planlayın ve yönlendirin, kullanıcı ihtiyaçları ile iş hedeflerinin uyumunu sağlayın.  \"},\"pt\":{\"name\":\"Designer Gerente de Produto\",\"desc\":\"Planeje e conduza processos de produto para alcançar a aliança das necessidades dos usuários com os objetivos de negócios.  \"},\"fr\":{\"name\":\"Chef de produit\"},\"de\":{\"name\":\"Produktmanager\",\"desc\":\"Planen und steuern Sie Produktprozesse, um die Bedürfnisse der Nutzer mit den Geschäftszielen in Einklang zu bringen.  \"},\"ja\":{\"name\":\"プロダクトマネージャー\",\"desc\":\"ユーザーのニーズとビジネス目標の調和を図るために、製品プロセスを計画し推進する。  \"},\"ko\":{\"name\":\"제품 관리자\",\"desc\":\"제품 프로세스를 기획하고 추진하여 사용자 요구와 비즈니스 목표의 조화를 이룬다.  \"}}",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt",
+            "parent_role_id": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_role_agent_mapping": {
+      "name": "platform_ai_role_agent_mapping",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "role_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "分类id"
+        },
+        {
+          "name": "agent_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "agent id"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 asc"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "业务线"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "role_id": 1,
+            "agent_id": 4115,
+            "sort": 99,
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 2,
+            "role_id": 1,
+            "agent_id": 4119,
+            "sort": 98,
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 3,
+            "role_id": 1,
+            "agent_id": 4108,
+            "sort": 0,
+            "is_del": 1,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 4,
+            "role_id": 1,
+            "agent_id": 4113,
+            "sort": 97,
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 5,
+            "role_id": 1,
+            "agent_id": 4116,
+            "sort": 95,
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_role_user": {
+      "name": "platform_ai_role_user",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "role_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "分类id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户 id"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 asc"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "业务线"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "role_id": 1,
+            "user_id": 239822889539343360,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": 1734086622064,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 2,
+            "role_id": 3,
+            "user_id": 239831034139513856,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": 1734087092872,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 3,
+            "role_id": 1,
+            "user_id": 239829815912305664,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": 1734087575993,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 4,
+            "role_id": 14,
+            "user_id": 239842098596025344,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": 1734087777672,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 5,
+            "role_id": 2,
+            "user_id": 133767403363374080,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": 1734087987772,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_role_user_agent_mapping": {
+      "name": "platform_ai_role_user_agent_mapping",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户 id"
+        },
+        {
+          "name": "role_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "分类id"
+        },
+        {
+          "name": "agent_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "agent id"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 asc"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "业务线"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 13,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 238292083067065344,
+            "role_id": null,
+            "agent_id": 4108,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": 1734086167347,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 2,
+            "user_id": 238292083067065344,
+            "role_id": null,
+            "agent_id": 4115,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": 1734086167354,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 3,
+            "user_id": 238292083067065344,
+            "role_id": null,
+            "agent_id": 4113,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": 1734086167360,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 4,
+            "user_id": 238292083067065344,
+            "role_id": null,
+            "agent_id": 4109,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": 1734086167365,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 5,
+            "user_id": 239822889539343360,
+            "role_id": 1,
+            "agent_id": 4115,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": 1734086622031,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_role_user_default_agent": {
+      "name": "platform_ai_role_user_default_agent",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "agent_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "agent id"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 asc"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "业务线"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 11,
+      "sample_data": {
+        "row_count": 1,
+        "rows": [
+          {
+            "id": 1,
+            "agent_id": 6068,
+            "sort": 0,
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          }
+        ],
+        "note": "前 1 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_role_guide": {
+      "name": "platform_ai_role_guide",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户 id"
+        },
+        {
+          "name": "role_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "用户 引导选择的角色id"
+        },
+        {
+          "name": "discover",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "discover GlobalGPT"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "业务线"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 238292083067065344,
+            "role_id": 1,
+            "discover": "X (Twitter)",
+            "is_del": 0,
+            "create_at": 1734086126905,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 2,
+            "user_id": 239816930020561920,
+            "role_id": 2,
+            "discover": "X (Twitter)",
+            "is_del": 0,
+            "create_at": 1734086221654,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 3,
+            "user_id": 239628342653883392,
+            "role_id": 1,
+            "discover": "Google",
+            "is_del": 0,
+            "create_at": 1734086498064,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 4,
+            "user_id": 198999466898887680,
+            "role_id": null,
+            "discover": "Other",
+            "is_del": 0,
+            "create_at": 1734086500590,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 5,
+            "user_id": 176037413972349952,
+            "role_id": null,
+            "discover": "Other",
+            "is_del": 0,
+            "create_at": 1734086502971,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "robot": {
+      "name": "robot",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "model",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "使用的模型"
+        },
+        {
+          "name": "is_enable",
+          "type": "tinyint",
+          "nullable": false,
+          "default": "1",
+          "comment": "是否启用：1，启用；0，未启用"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "case id"
+        },
+        {
+          "name": "desc",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "描述"
+        },
+        {
+          "name": "icon",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "图标文件地址"
+        },
+        {
+          "name": "owner_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": "0",
+          "comment": "0表示平台所有"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": false,
+          "default": "0",
+          "comment": "排序"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": ""
+        },
+        {
+          "name": "catalog",
+          "type": "tinyint",
+          "nullable": true,
+          "default": null,
+          "comment": "分类信息（取字典表配置 robot-catalog）"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "创建时间"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "更新时间"
+        },
+        {
+          "name": "available_plan_package",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "可用套餐 basic,pro,unlimited"
+        },
+        {
+          "name": "include_share_free_times",
+          "type": "smallint",
+          "nullable": true,
+          "default": "0",
+          "comment": "参与共享免费使用次数（一共3次）"
+        },
+        {
+          "name": "free_times",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "单模型免费使用次数"
+        },
+        {
+          "name": "price",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "价格 json"
+        },
+        {
+          "name": "unlimited_plan_limited",
+          "type": "smallint",
+          "nullable": true,
+          "default": "0",
+          "comment": "Unlimited套餐是否限量 1限量 0是不限量"
+        },
+        {
+          "name": "lifetime_plan_unlimited",
+          "type": "smallint",
+          "nullable": true,
+          "default": "0",
+          "comment": "lifetime 套餐是否不限量，不受余额为0限制 1不限量 0限量"
+        },
+        {
+          "name": "type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "brand",
+          "type": "tinyint",
+          "nullable": true,
+          "default": null,
+          "comment": "分类信息（取字典表配置 robot-brand）"
+        },
+        {
+          "name": "file_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "可上传文件类型（取字典表配置 robot-filetype）"
+        },
+        {
+          "name": "tag_ids",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "标签列表，逗号分隔"
+        },
+        {
+          "name": "i18n_config",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }"
+        },
+        {
+          "name": "scores",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "'模型6个纬度评分，逗号分隔：Context Length,Math & Reasoning"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 24,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "model": "gpt-3.5-turbo-1106",
+            "is_enable": 1,
+            "name": "GPT-3.5",
+            "desc": "OpenAI's second-best LLM",
+            "icon": null,
+            "owner_id": 0,
+            "sort": 3,
+            "is_del": 0,
+            "catalog": null,
+            "created_at": "2024-02-27T06:36:49",
+            "updated_at": "2025-10-13T13:13:18",
+            "available_plan_package": "old,basic,pro,unlimited-max,lifetime_basic,lifetime_pro,lifetime_unlimited,unlimited",
+            "include_share_free_times": 0,
+            "free_times": 0,
+            "price": "{\"type\":\"tokens\", \"input\" : 0.000, \"output\":0.000}",
+            "unlimited_plan_limited": 1,
+            "lifetime_plan_unlimited": 0,
+            "type": "chat",
+            "brand": null,
+            "file_type": null,
+            "tag_ids": null,
+            "i18n_config": null,
+            "scores": null
+          },
+          {
+            "id": 2,
+            "model": "gpt-4-1106-preview",
+            "is_enable": 1,
+            "name": "GPT-4",
+            "desc": "OpenAI's finest LLM\n",
+            "icon": null,
+            "owner_id": 0,
+            "sort": 2,
+            "is_del": 0,
+            "catalog": null,
+            "created_at": "2024-02-27T06:37:24",
+            "updated_at": "2025-10-13T13:12:52",
+            "available_plan_package": "old,basic,pro,unlimited-max,lifetime_basic,lifetime_pro,lifetime_unlimited,unlimited",
+            "include_share_free_times": 1,
+            "free_times": 0,
+            "price": "{\"type\":\"tokens\", \"input\" : 0.02, \"output\":0.08}",
+            "unlimited_plan_limited": 1,
+            "lifetime_plan_unlimited": 0,
+            "type": "chat",
+            "brand": null,
+            "file_type": null,
+            "tag_ids": null,
+            "i18n_config": null,
+            "scores": null
+          },
+          {
+            "id": 3,
+            "model": "claude-3-opus-20240229",
+            "is_enable": 1,
+            "name": "Claude3 Opus",
+            "desc": "Anthropic's finest LLM",
+            "icon": null,
+            "owner_id": 0,
+            "sort": 4,
+            "is_del": 0,
+            "catalog": null,
+            "created_at": "2024-03-19T11:38:51",
+            "updated_at": "2025-10-13T13:12:56",
+            "available_plan_package": "old,basic,pro,unlimited-max,lifetime_basic,lifetime_pro,lifetime_unlimited,unlimited",
+            "include_share_free_times": 1,
+            "free_times": 0,
+            "price": "{\"type\":\"tokens\", \"input\" : 0.05, \"output\":0.4}",
+            "unlimited_plan_limited": 1,
+            "lifetime_plan_unlimited": 0,
+            "type": "chat",
+            "brand": null,
+            "file_type": null,
+            "tag_ids": null,
+            "i18n_config": null,
+            "scores": null
+          },
+          {
+            "id": 4,
+            "model": "claude-3-sonnet-20240229",
+            "is_enable": 1,
+            "name": "Claude3 Sonnet",
+            "desc": "Anthropic's second-best LLM",
+            "icon": null,
+            "owner_id": 0,
+            "sort": 5,
+            "is_del": 0,
+            "catalog": null,
+            "created_at": "2024-03-18T08:13:29",
+            "updated_at": "2025-10-13T13:13:14",
+            "available_plan_package": "old,basic,pro,unlimited-max,lifetime_basic,lifetime_pro,lifetime_unlimited,unlimited",
+            "include_share_free_times": 0,
+            "free_times": 0,
+            "price": "{\"type\":\"tokens\", \"input\" : 0.01, \"output\":0.05}",
+            "unlimited_plan_limited": 1,
+            "lifetime_plan_unlimited": 0,
+            "type": "chat",
+            "brand": null,
+            "file_type": null,
+            "tag_ids": null,
+            "i18n_config": null,
+            "scores": null
+          },
+          {
+            "id": 5,
+            "model": "dall-e-3",
+            "is_enable": 1,
+            "name": "DALL·E-3",
+            "desc": "Create images from descriptions using text prompts",
+            "icon": null,
+            "owner_id": 0,
+            "sort": 6,
+            "is_del": 0,
+            "catalog": null,
+            "created_at": "2024-03-27T12:38:40",
+            "updated_at": "2025-07-29T11:09:25",
+            "available_plan_package": "old,basic,pro,unlimited-max,lifetime_basic,lifetime_pro,lifetime_unlimited,unlimited",
+            "include_share_free_times": 0,
+            "free_times": 0,
+            "price": "{\"type\":\"once\", \"s-s\" : 0.1, \"s-r\" : 0.12, \"h-s\" : 0.12, \"h-r\" : 0.18}",
+            "unlimited_plan_limited": 1,
+            "lifetime_plan_unlimited": 0,
+            "type": "chat",
+            "brand": null,
+            "file_type": null,
+            "tag_ids": null,
+            "i18n_config": null,
+            "scores": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "chatpal_agent_ad": {
+      "name": "chatpal_agent_ad",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "ad_position_code",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "运营位code"
+        },
+        {
+          "name": "ad_position_name",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "运营位name"
+        },
+        {
+          "name": "agent_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "运营位关联的 agent id"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "排序 asc"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "ext_config",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "is_new",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "是否展示new的标志 0不展示 1展示"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 14,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "ad_position_code": "advanced",
+            "ad_position_name": "万物扫描王",
+            "agent_id": 1,
+            "sort": 1,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "ext_config": null,
+            "is_new": 0
+          },
+          {
+            "id": 2,
+            "ad_position_code": "advanced",
+            "ad_position_name": "Document  Master",
+            "agent_id": 2,
+            "sort": 3,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "ext_config": null,
+            "is_new": 0
+          },
+          {
+            "id": 3,
+            "ad_position_code": "advanced",
+            "ad_position_name": "网页总结",
+            "agent_id": 3,
+            "sort": 4,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "ext_config": null,
+            "is_new": 0
+          },
+          {
+            "id": 4,
+            "ad_position_code": "advanced",
+            "ad_position_name": "图像实验室",
+            "agent_id": 4,
+            "sort": 2,
+            "create_at": null,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "ext_config": null,
+            "is_new": 0
+          },
+          {
+            "id": 5,
+            "ad_position_code": "advanced",
+            "ad_position_name": "联网查询",
+            "agent_id": 5,
+            "sort": 5,
+            "create_at": null,
+            "is_del": 1,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "ext_config": null,
+            "is_new": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    }
+  },
+  "relationships": []
+}

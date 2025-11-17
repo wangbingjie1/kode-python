@@ -77,16 +77,11 @@
               :group-behavior="item.groupBehavior"
             />
 
-            <!-- Token Usage Card (显示在消息底部) -->
-            <TokenUsageCard
-              v-if="!isTyping"
-              :usage="conversationTokenUsage"
-            />
-
-            <!-- Token Cost Card (开发者模式 - 真实成本分析) -->
-            <TokenCostCard
-              v-if="!isTyping && isDevelopmentMode"
-              :usage="conversationTokenUsage"
+            <!-- 真实成本分析 (显示在消息底部) -->
+            <RealTokenCostCard
+              v-if="!isTyping && currentConversationId"
+              :conversation-id="currentConversationId"
+              :show-details="true"
             />
           </template>
 
@@ -181,8 +176,7 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import ChatInput from '@/components/ChatInput.vue'
 import ContextPanel from '@/components/ContextPanel.vue'
 import MessageItem from '@/components/MessageItem.vue'
-import TokenUsageCard from '@/components/TokenUsageCard.vue'
-import TokenCostCard from '@/components/TokenCostCard.vue'
+import RealTokenCostCard from '@/components/RealTokenCostCard.vue'
 import UserInputDialog from '@/components/UserInputDialog.vue'
 import { notification } from '@/composables/useNotification'
 import { useChatStore } from '@/stores/chat'
@@ -213,13 +207,10 @@ const currentProjectId = ref<string | null>(null)
 
 const isConnected = computed(() => chatStore.isConnected)
 const isTyping = computed(() => chatStore.isTyping)
-const conversationTokenUsage = computed(() => chatStore.conversationTokenUsage)
 const pendingUserInputQuestion = computed(() => chatStore.pendingUserInput?.userInputQuestion || null)
 const currentConversationId = computed(() => route.params.conversationId as string)
 const conversationTitle = computed(() => chatStore.currentConversation?.title || '未命名会话')
 
-// 开发者模式（显示真实成本分析）
-const isDevelopmentMode = ref(import.meta.env.DEV || localStorage.getItem('dev_mode') === 'true')
 const lastUpdatedText = computed(() => {
   const updatedAt = chatStore.currentConversation?.updated_at
   if (!updatedAt) return ''

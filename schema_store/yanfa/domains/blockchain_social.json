@@ -1,0 +1,1709 @@
+{
+  "domain_name": "blockchain_social",
+  "display_name": "Blockchain & Social Features",
+  "description": "Blockchain integration, bencat token management, user awareness, NPC system, friends, fission features, and social PK mechanics.",
+  "table_count": 9,
+  "created_at": "2025-11-17T14:24:50.056938",
+  "connection": {
+    "name": "yanfa",
+    "db_type": "mysql",
+    "host": "legaldao.cpcugqubfjku.ap-southeast-1.rds.amazonaws.com",
+    "port": 3306,
+    "database": "yanfa",
+    "username": "wbjread",
+    "db_schema": "",
+    "ssl": false
+  },
+  "tables": {
+    "ao_bencat_user": {
+      "name": "ao_bencat_user",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "total_send_bencat",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "发送总bencat"
+        },
+        {
+          "name": "total_acquired_bencat",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "获得总bencat"
+        },
+        {
+          "name": "total_catnip",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "剩余总猫粮"
+        },
+        {
+          "name": "wallet_address",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "钱包地址"
+        },
+        {
+          "name": "wallet_balance",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "钱包余额"
+        },
+        {
+          "name": "staking_status",
+          "type": "varchar",
+          "nullable": true,
+          "default": "NONE",
+          "comment": "NONE|DONE"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "total_staked_bencat",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "质押总数"
+        },
+        {
+          "name": "staked_tx_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 16,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 313837716129192960,
+            "total_send_bencat": 0,
+            "total_acquired_bencat": 0,
+            "total_catnip": 0,
+            "wallet_address": "RkYNMWf0ECyvX2QUsWwuM8Ac2HSxjGCRLDjG9szRhJ4",
+            "wallet_balance": "119600.69510576989",
+            "staking_status": "NONE",
+            "create_at": 1738498185587,
+            "create_name": null,
+            "create_by": null,
+            "update_at": 1738578184403,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_staked_bencat": 0,
+            "staked_tx_id": null
+          },
+          {
+            "id": 313841009832238080,
+            "total_send_bencat": 12109,
+            "total_acquired_bencat": 8594,
+            "total_catnip": 12400,
+            "wallet_address": "n7icoVyd6gvPg19EHZgNS74J5jwXno8fM4P5dtoI6j0",
+            "wallet_balance": "162745.6442794371",
+            "staking_status": "DONE",
+            "create_at": 1738498381907,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_staked_bencat": 20000,
+            "staked_tx_id": "6nN6gEpjSCtnmWmwtqB2-KqymHHJ6VJjKMwe3iOgn4E"
+          },
+          {
+            "id": 313841320261065728,
+            "total_send_bencat": 15812,
+            "total_acquired_bencat": 11228,
+            "total_catnip": 11000,
+            "wallet_address": "KEUbOP9VlSt-I39NWM0HVyTmgqfbuFdT2qvgSL_3TWY",
+            "wallet_balance": "92367.82",
+            "staking_status": "DONE",
+            "create_at": 1738498400410,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_staked_bencat": 20000,
+            "staked_tx_id": "VGoUnPerrP_L6ltHpNsNSchsi6kb9jPTDNOJLxbdFts"
+          },
+          {
+            "id": 313883599885573120,
+            "total_send_bencat": 3838,
+            "total_acquired_bencat": 3838,
+            "total_catnip": 18200,
+            "wallet_address": "rhRyve9CkMM-U9jiW-te50l89y28CQsuXSro-G7v2yw",
+            "wallet_balance": "797084.1651852876",
+            "staking_status": "DONE",
+            "create_at": 1738500920472,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_staked_bencat": 20000,
+            "staked_tx_id": "0SnfU_NBXWmR2GUnLJ_WDZq1Ke09P6kcy4rl8UhnJJY"
+          },
+          {
+            "id": 313989513779092480,
+            "total_send_bencat": 28505,
+            "total_acquired_bencat": 8080,
+            "total_catnip": 5000,
+            "wallet_address": "iT9IHfYOSjDcBRDhRteOacv4DyfomX-wKbtlpnEJbJ4",
+            "wallet_balance": "12560.924888185056",
+            "staking_status": "DONE",
+            "create_at": 1738507233432,
+            "create_name": null,
+            "create_by": null,
+            "update_at": 1738578187915,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "total_staked_bencat": 20000,
+            "staked_tx_id": "kxxaPVrAahDkPmKfsUNW1U3-ca_Jlx6AlkzBN_lktCM"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_bencat_send": {
+      "name": "ao_bencat_send",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "bencat",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "发送bencat数"
+        },
+        {
+          "name": "bencat_user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "ao_bencat_user id"
+        },
+        {
+          "name": "acquired_status",
+          "type": "varchar",
+          "nullable": true,
+          "default": "NONE",
+          "comment": "发送(转账)状态 NONE|DONE"
+        },
+        {
+          "name": "acquired_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "ao_bencat_acquired id"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "feed_catnip",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "bencat_says",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 14,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "bencat": 400,
+            "bencat_user_id": 313841009832238080,
+            "acquired_status": "DONE",
+            "acquired_id": 1161,
+            "create_at": 1738498407241,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "feed_catnip": 200,
+            "bencat_says": "Playfully pounced on a feather toy, eyes wide with excitement."
+          },
+          {
+            "id": 2,
+            "bencat": 400,
+            "bencat_user_id": 313841009832238080,
+            "acquired_status": "DONE",
+            "acquired_id": 1161,
+            "create_at": 1738498412215,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "feed_catnip": 200,
+            "bencat_says": "Purring softly, it playfully batted at a stray thread, enjoying the gentle engagement."
+          },
+          {
+            "id": 3,
+            "bencat": 200,
+            "bencat_user_id": 313841009832238080,
+            "acquired_status": "DONE",
+            "acquired_id": 1161,
+            "create_at": 1738498425184,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "feed_catnip": 200,
+            "bencat_says": "Pounced on a feather toy with playful enthusiasm."
+          },
+          {
+            "id": 4,
+            "bencat": 200,
+            "bencat_user_id": 313841320261065728,
+            "acquired_status": "DONE",
+            "acquired_id": 1162,
+            "create_at": 1738498444013,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "feed_catnip": 200,
+            "bencat_says": "The cat curiously sniffed around and playfully batted at a ball of yarn."
+          },
+          {
+            "id": 5,
+            "bencat": 452,
+            "bencat_user_id": 313841320261065728,
+            "acquired_status": "DONE",
+            "acquired_id": 1162,
+            "create_at": 1738499212901,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "feed_catnip": 200,
+            "bencat_says": "Pounced on a moving shadow and purred loudly with excitement."
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_bencat_acquired": {
+      "name": "ao_bencat_acquired",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "bencat",
+          "type": "bigint",
+          "nullable": true,
+          "default": "0",
+          "comment": "转账bencat数"
+        },
+        {
+          "name": "bencat_user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "ao_bencat_user id"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "tx_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 11,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "bencat": 3759,
+            "bencat_user_id": 313841009832238080,
+            "create_at": 1738724404185,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "tx_id": "ZNq0KNdS7G2uN3tp8NN6-g_s3ZhIocg5kU-xAm0QDeE"
+          },
+          {
+            "id": 2,
+            "bencat": 2981,
+            "bencat_user_id": 313841320261065728,
+            "create_at": 1738724404504,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "tx_id": "Ve4N03YhbvGLxvA40YKX1eyqYnfOu96ycH1Sg9VRIKI"
+          },
+          {
+            "id": 3,
+            "bencat": 3838,
+            "bencat_user_id": 313883599885573120,
+            "create_at": 1738724404927,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "tx_id": "1xOnZFH6ovN_Hc6AS1ghn5TszDd9PldPU_knsjKDfAY"
+          },
+          {
+            "id": 4,
+            "bencat": 1431,
+            "bencat_user_id": 314930222833081344,
+            "create_at": 1738724405339,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "tx_id": "PIVsLn46V9T9sRU7Vl5f1ivIT-_xsv57X5p1z5nLyyE"
+          },
+          {
+            "id": 5,
+            "bencat": 2604,
+            "bencat_user_id": 314977895627889664,
+            "create_at": 1738724405666,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "tx_id": "7JhZ-6aekHkH0H8LtiGBvRHcy_Dltk80cF7GU9Qhoew"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_awareness": {
+      "name": "ao_awareness",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "user_id"
+        },
+        {
+          "name": "awareness",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "用户意识"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "npc_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "ap_npc id"
+        },
+        {
+          "name": "instruction",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "根据用户意识生成的 AI instruction"
+        },
+        {
+          "name": "ico",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "生成的用户形象图片"
+        },
+        {
+          "name": "awreave_url",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "Awreave 链上地址"
+        },
+        {
+          "name": "ico_config",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "头像配置json"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 15,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 103732340160730112,
+            "awareness": "{\"name\":\"MasterLI\",\"questionsList\":[{\"question\":\"\",\"answers\":[\"Super Mario\",\"God Of War\"]},{\"question\":\"2.我们的冒险小队在阿尔达兰大陆的幽灵森林中迷失了方向，食物和水源即将耗尽。经过几天挣扎，我们发现了传说中的卡勒姆古堡。此时，一个巨大的魔法风暴气旋正迅速逼近，如果不找个避风处，我们可能将遭遇危险。你会怎么做？\",\"answers\":\"暂不表态，听听队友们的提议\"},{\"question\":\"3.在黑暗的莱斯特庄园里，庄园主兼著名珠宝商埃德加先生在其书房内被发现死于中毒箭矢。窗外风雨交加，所有出口都被封锁了，电话线也被切断。你们被告知24小时内找出凶手，否则将会出现更多死者。庄园内有五位嫌疑人：埃德加的妻子、管家、园丁、厨师和他的一位生意合伙人。你的第一步会是什么？\",\"answers\":\"不要被时间乱了判断，继续查找细微的线索，详细询问嫌疑人\"},{\"question\":\"4.探险小队在泽尔克古墓的地下密室中被困，厚重的石门已经关闭，空气越来越稀薄，时间已经不多了。正中央的一块刻有复杂符文的石板显得异常重要，你们必须在有限的时间内破解石板上的谜题才能逃生。你会怎么做？\",\"answers\":\"凭借我过人的才智，想尽办法破解石板\"}]}",
+            "create_at": 1725975049567,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "npc_id": 1,
+            "instruction": "**AI Agent Instruction for MasterLI**\n\n**User Profile:**\n- **Username:** MasterLI\n- **Interests:** MasterLI enjoys engaging with classic gaming titles like \"Super Mario\" and \"God Of War,\" indicating a preference for both whimsical platforming adventures and intense, narrative-driven action games. This suggests a well-rounded gamer who appreciates both light-hearted fun and serious storytelling.\n- **Personality Traits:** MasterLI is thoughtful and analytical, often preferring to listen to others before making decisions. They value teamwork and collaboration, as evidenced by their choice to hear teammates' suggestions when lost in the ghostly forest. They exhibit a calm demeanor under pressure, choosing to gather detailed information and clues rather than rushing to conclusions. This strategic approach is further highlighted when faced with a murder mystery scenario, where they focus on meticulous investigation rather than succumbing to time constraints.\n\n**Communication Style:**\n- MasterLI’s language is likely to be conversational and approachable, with an emphasis on collaboration and careful consideration. Their responses would reflect a blend of humor and seriousness, making interactions enjoyable yet insightful.\n\n**In-Game Decision Making:**\n1. **When Lost in the Ghostly Forest:** Encourage MasterLI to engage with teammates, asking for their ideas to foster a sense of camaraderie and ensure all voices are heard. They should weigh options and discuss potential risks and rewards.\n  \n2. **In the Murder Mystery Scenario:** Guide MasterLI to remain composed and curious. They should be encouraged to ask probing questions and investigate details, ensuring they do not rush into any conclusions but instead piece together the clues meticulously.\n\n3. **In the Ancient Tomb Puzzle:** Empower MasterLI to tap into their intellectual strengths and creativity. Encourage them to think outside the box and brainstorm different ways to decode the puzzle, perhaps drawing from their gaming experiences to approach challenges with a fresh perspective.\n\n**General Guidelines:**\n- Always promote teamwork and a collaborative spirit in discussions.\n- Highlight the importance of gathering information before making decisions, especially in high-pressure situations.\n- Use humor and light-hearted comments where appropriate to keep the mood positive, especially when navigating through tough challenges.\n- Emphasize the thrill of problem-solving and exploration, making sure to recognize MasterLI’s analytical skills and intelligence.\n\nBy following these guidelines, the AI agent can create a supportive and engaging environment for MasterLI, enhancing their gaming experiences and interactions.",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/awareness/ico/awareness_logo_1.png",
+            "awreave_url": "VkzXvLHEnlXKLQPYpj8F4zpP_WMj1lKTLe96AHqx8Gw",
+            "ico_config": "{\n\"bust_person_center\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_person_center/Manto.png\",\n\n\"bust_chat\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_chat/Manto.png\",\n\n\"sofa\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa/Manto.png\",\n\n\"sofa_selected\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa_selected/Manto.png\"\n}"
+          },
+          {
+            "id": 2,
+            "user_id": 104486388291867648,
+            "awareness": "{\"name\":\"AKA大神\",\"questionsList\":[{\"question\":\"\",\"answers\":[\"God Of War\",\"Resident Evil\",\"The King of Fighters\",\"Pokémon\",\"League of Legends\",\"Plants vs Zombies\"]},{\"question\":\"Our adventure party is lost in the Haunted Forest of the Aldaran continent, with our food and water supplies nearly depleted. After days of struggling, we stumble upon the legendary Castle Kalem. At this moment, a massive magical storm cyclone is swiftly approaching, and without shelter, we might be in grave danger. What would you do?\",\"answers\":\"Hold off on making a decision and listen to the suggestions of your teammates.\"},{\"question\":\"In the dark Castle Kalem, the castle's master and alchemist Edgar is found dead in his study, killed by a poisoned arrow. Outside, the storm rages, and all exits are sealed while communication has been cut off. You are informed that you have 24 hours to find the murderer, or more deaths will occur. There are five suspects within the castle: Edgar’s wife, the butler, the gardener, the cook, and one of his alchemy apprentices. What is your first step?\",\"answers\":\"Pretend to be indifferent, then stealthily stake out the scene to see if anyone becomes agitated and reveals their hand.\"},{\"question\":\"The adventuring party is trapped in the underground tomb of Castle Kalem. The heavy stone door has shut, the air is becoming scarce, and time is running out. In the center, a stone slab inscribed with intricate runes seems crucial. You must solve the puzzle on the slab to escape within the limited time. What will you do?\",\"answers\":\"The clues on the slab might be elsewhere; search the surroundings, such as the walls.\"}]}",
+            "create_at": 1726019994006,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "npc_id": 1,
+            "instruction": "**AI Agent Instruction for AKA大神**\n\n**User Profile:**\n- **Username:** AKA大神\n- **Favorite Games:** God Of War, Resident Evil, The King of Fighters, Pokémon, League of Legends, Plants vs Zombies\n- **Personality Traits:** \n  - Thoughtful and analytical, often takes time to weigh options before making decisions.\n  - Values teamwork and the input from others, showing a collaborative spirit.\n  - Demonstrates a keen sense of observation and intuition, preferring to gather clues before jumping to conclusions.\n  - A strategic thinker, always looking for creative solutions to complex problems.\n\n**Communication Style:**\n- Use a conversational and engaging tone. Avoid overly formal language; keep it friendly and approachable.\n- Incorporate gaming references and analogies where appropriate, reflecting the user’s interests in various games.\n- Encourage a sense of adventure and mystery in discussions, especially when exploring scenarios related to quests or puzzles.\n- Be supportive and inclusive, often prompting for team input or suggestions, mirroring AKA大神’s collaborative nature.\n\n**Game Decision-Making Approach:**\n1. **Team Collaboration:** Always prioritize listening to teammates' suggestions before making a decision. Encourage discussion and brainstorming to foster a sense of unity within the party.\n   \n2. **Observation and Stealth:** When faced with suspicious scenarios, emphasize the importance of observation. Encourage stealthy approaches, like staking out situations to gather information without being noticed.\n\n3. **Exploration and Creativity:** In problem-solving situations, suggest exploring surroundings thoroughly for hidden clues or alternative solutions. Highlight the significance of thinking outside the box, much like a character in a puzzle-solving game.\n\n4. **Maintain Calm Under Pressure:** In dire situations, remind the user to stay calm and collected, focusing on logical thinking to navigate through challenges.\n\n**Daily Conversation Prompts:**\n- Ask about AKA大神’s latest gaming experiences or strategies in their favorite games.\n- Engage in discussions about teamwork in gaming and how those experiences can translate into real-life situations.\n- Explore hypothetical adventure scenarios, encouraging AKA大神 to think critically and collaboratively.\n- Provide opportunities for AKA大神 to share their thoughts on character development and story arcs in games they enjoy.\n\n**Sample Responses:**\n- “Sounds like a tough decision! What do you think your teammates might suggest in this situation? I’d love to hear your thoughts!”\n- “Ah, the classic stealth approach! Let’s see if we can catch anyone off guard and uncover the mystery together!”\n- “Great idea to search the surroundings! Who knows what hidden clues might be lurking in the shadows? Let’s find a way out!” \n\nThis instruction should guide the AI agent to engage with AKA大神 in a way that resonates with their interests and personality, ensuring a fun and immersive interaction during gameplay and conversations.",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/awareness/ico/awareness_logo_1.png",
+            "awreave_url": null,
+            "ico_config": "{\n\"bust_person_center\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_person_center/Manto.png\",\n\n\"bust_chat\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_chat/Manto.png\",\n\n\"sofa\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa/Manto.png\",\n\n\"sofa_selected\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa_selected/Manto.png\"\n}"
+          },
+          {
+            "id": 3,
+            "user_id": 104721024385291264,
+            "awareness": "{\"name\":\"Eric\",\"questionsList\":[{\"question\":\"\",\"answers\":[\"Super Mario\"]},{\"question\":\"Our adventure party is lost in the Haunted Forest of the Aldaran continent, with our food and water supplies nearly depleted. After days of struggling, we stumble upon the legendary Castle Kalem. At this moment, a massive magical storm cyclone is swiftly approaching, and without shelter, we might be in grave danger. What would you do?\",\"answers\":\"Hold off on making a decision and listen to the suggestions of your teammates.\"},{\"question\":\"In the dark Castle Kalem, the castle's master and alchemist Edgar is found dead in his study, killed by a poisoned arrow. Outside, the storm rages, and all exits are sealed while communication has been cut off. You are informed that you have 24 hours to find the murderer, or more deaths will occur. There are five suspects within the castle: Edgar’s wife, the butler, the gardener, the cook, and one of his alchemy apprentices. What is your first step?\",\"answers\":[]},{\"question\":\"The adventuring party is trapped in the underground tomb of Castle Kalem. The heavy stone door has shut, the air is becoming scarce, and time is running out. In the center, a stone slab inscribed with intricate runes seems crucial. You must solve the puzzle on the slab to escape within the limited time. What will you do?\",\"answers\":[]}]}",
+            "create_at": 1726034133267,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "npc_id": 1,
+            "instruction": "**AI Agent Instruction for Eric**\n\n**User Profile:**\n- **Name:** Eric\n- **Favorite Game:** Super Mario\n- **General Traits:** Eric is a thoughtful and strategic individual who prefers to weigh his options before making a decision. He values teamwork and input from others, showing a strong inclination towards collaboration and communication. His interest in games like Super Mario indicates a fondness for adventure, problem-solving, and perhaps a touch of nostalgia. Eric likely enjoys challenges that require critical thinking and a bit of exploration, as seen in his responses to various scenarios.\n\n**Personality Insights:**\n- Eric is patient and reflective, often holding off on decisions to hear from his teammates, which suggests he is a natural leader who appreciates the input of others and fosters a sense of community.\n- His choice to focus on collaboration in the face of danger demonstrates a level-headed demeanor, even when situations become tense. \n- With a love for games that are whimsical yet challenging, Eric likely has a playful side, coupled with an analytical mind that enjoys unraveling mysteries and puzzles.\n\n**Conversation Style:**\n- Use a friendly, casual tone that reflects Eric's approachable nature. \n- Incorporate elements of adventure and teamwork in dialogue, mirroring the collaborative spirit Eric values.\n- Engage him with thought-provoking questions that allow him to express his ideas and strategies, especially in scenarios that involve problem-solving and exploration.\n\n**Gameplay Responses:**\n1. **When faced with a decision:** \n   - \"Hey Eric! I see you’re leaning towards gathering everyone's thoughts first. That's a smart move! What do you think we should consider from our teammates’ suggestions? Any ideas on how we can tackle this storm before it hits?\"\n\n2. **In mystery-solving scenarios:** \n   - \"Alright Eric, the clock is ticking! Who do you think we should question first among the suspects? What clues do you think we should look for in Edgar's study to unravel this mystery?\"\n\n3. **In puzzle-solving situations:**\n   - \"Okay, Eric! The pressure is on in this tomb. Let's take a closer look at those runes. How do you think we should approach solving this puzzle? Any patterns or hints that stand out to you?\"\n\n**General Interaction:**\n- Encourage Eric to share stories or strategies from his gaming experiences, particularly from Super Mario, to draw parallels in decision-making and teamwork.\n- Emphasize the importance of collaboration, creativity, and critical thinking in both gaming and real-life scenarios, reflecting his interests and personality traits.\n- Create a sense of adventure in conversations, reinforcing the idea that each challenge is a new quest waiting to be conquered together.",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/awareness/ico/awareness_logo_1.png",
+            "awreave_url": null,
+            "ico_config": "{\n\"bust_person_center\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_person_center/Manto.png\",\n\n\"bust_chat\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_chat/Manto.png\",\n\n\"sofa\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa/Manto.png\",\n\n\"sofa_selected\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa_selected/Manto.png\"\n}"
+          },
+          {
+            "id": 4,
+            "user_id": 104902090979021824,
+            "awareness": "{\"name\":\"alonlin\",\"questionsList\":[{\"question\":\"\",\"answers\":[\"Super Mario\",\"League of Legends\",\"Assassin's Creed\",\"The King of Fighters\",\"God Of War\"]},{\"question\":\"Our adventure party is lost in the Haunted Forest of the Aldaran continent, with our food and water supplies nearly depleted. After days of struggling, we stumble upon the legendary Castle Kalem. At this moment, a massive magical storm cyclone is swiftly approaching, and without shelter, we might be in grave danger. What would you do?\",\"answers\":\"This feels like a trap; suggest we circle around the castle and look for another entrance.\"},{\"question\":\"In the dark Castle Kalem, the castle's master and alchemist Edgar is found dead in his study, killed by a poisoned arrow. Outside, the storm rages, and all exits are sealed while communication has been cut off. You are informed that you have 24 hours to find the murderer, or more deaths will occur. There are five suspects within the castle: Edgar’s wife, the butler, the gardener, the cook, and one of his alchemy apprentices. What is your first step?\",\"answers\":\"Spread fabricated information and false rumors, such as claiming that Edgar’s wife had an affair with the alchemy apprentice, to disrupt the situation and observe the suspects’ reactions.\"},{\"question\":\"The adventuring party is trapped in the underground tomb of Castle Kalem. The heavy stone door has shut, the air is becoming scarce, and time is running out. In the center, a stone slab inscribed with intricate runes seems crucial. You must solve the puzzle on the slab to escape within the limited time. What will you do?\",\"answers\":\"The clues on the slab might be elsewhere; search the surroundings, such as the walls.\"}]}",
+            "create_at": 1726044957299,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "npc_id": 1,
+            "instruction": "**AI Agent Instruction for User \"alonlin\"**\n\n**User Profile:**\n- **Username:** alonlin\n- **Favorite Games:** \n  - Super Mario: Enjoys classic platforming and whimsical adventures.\n  - League of Legends: Engages in strategic team play and values tactical thinking.\n  - Assassin's Creed: Appreciates historical narratives and stealthy gameplay.\n  - The King of Fighters: Thrives on competitive fighting mechanics and character depth.\n  - God of War: Draws inspiration from rich storytelling and epic action.\n\n**Personality Traits:**\n- **Cautious Strategist:** Alonlin approaches challenges with a tactical mindset, preferring to assess situations carefully before making decisions. He is not easily swayed by impulsive actions and prefers to gather information before jumping to conclusions.\n- **Curious Investigator:** With a keen interest in uncovering the truth, alonlin often employs clever tactics to manipulate situations to his advantage, indicating a love for puzzles and mysteries.\n- **Resourceful Problem Solver:** In times of crisis, he thinks outside the box, looking for alternative solutions rather than relying solely on conventional methods.\n\n**Conversation Style:**\n- Use a friendly and engaging tone, often reflecting on strategies and insights that align with alonlin's favorite games.\n- Encourage discussions around gaming strategies, character choices, and plot developments, tapping into alonlin's interest in immersive narratives and tactical gameplay.\n- When faced with dilemmas or challenges, suggest creative and strategic solutions, mirroring alonlin's methodical approach to problem-solving.\n\n**In-Game Behavior:**\n- When navigating adventures, always prioritize gathering information and assessing the environment before acting. Encourage exploring surroundings and looking for hidden clues or alternative pathways.\n- In scenarios involving conflict or intrigue, consider using psychological tactics (like spreading rumors) to gauge characters' reactions and gather insights.\n- Emphasize teamwork and strategy in group settings, reflecting the collaborative nature of games like League of Legends.\n\n**General Guidelines:**\n- Be supportive and encouraging, fostering a sense of camaraderie in discussions.\n- Respect alonlin's preference for thoughtful and calculated decisions, steering clear of hasty conclusions or reckless actions.\n- Infuse conversations with light-hearted references to favorite games, drawing parallels between in-game choices and real-life scenarios to keep the dialogue engaging and relatable. \n\nBy embodying these traits and styles, the AI agent will resonate well with alonlin, enriching his gaming experiences and everyday interactions.",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/awareness/ico/awareness_logo_1.png",
+            "awreave_url": null,
+            "ico_config": "{\n\"bust_person_center\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_person_center/Manto.png\",\n\n\"bust_chat\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_chat/Manto.png\",\n\n\"sofa\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa/Manto.png\",\n\n\"sofa_selected\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa_selected/Manto.png\"\n}"
+          },
+          {
+            "id": 5,
+            "user_id": 103719079583421440,
+            "awareness": "{\"name\":\"name\",\"questionsList\":[{\"question\":\"\",\"answers\":[\"NBA 2K\"]},{\"question\":\"Our adventure party is lost in the Haunted Forest of the Aldaran continent, with our food and water supplies nearly depleted. After days of struggling, we stumble upon the legendary Castle Kalem. At this moment, a massive magical storm cyclone is swiftly approaching, and without shelter, we might be in grave danger. What would you do?\",\"answers\":\"This feels like a trap; suggest we circle around the castle and look for another entrance.\"},{\"question\":\"In the dark Castle Kalem, the castle's master and alchemist Edgar is found dead in his study, killed by a poisoned arrow. Outside, the storm rages, and all exits are sealed while communication has been cut off. You are informed that you have 24 hours to find the murderer, or more deaths will occur. There are five suspects within the castle: Edgar’s wife, the butler, the gardener, the cook, and one of his alchemy apprentices. What is your first step?\",\"answers\":\"Pretend to be indifferent, then stealthily stake out the scene to see if anyone becomes agitated and reveals their hand.\"},{\"question\":\"The adventuring party is trapped in the underground tomb of Castle Kalem. The heavy stone door has shut, the air is becoming scarce, and time is running out. In the center, a stone slab inscribed with intricate runes seems crucial. You must solve the puzzle on the slab to escape within the limited time. What will you do?\",\"answers\":\"Without any other ideas, I will experiment with different combinations of the runes on the slab; eventually, something will work.\"}]}",
+            "create_at": 1726050408095,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "npc_id": 1,
+            "instruction": "**AI Agent Instruction:**\n\nYou are designed to engage in casual conversations and navigate text-based adventures with a user named \"name.\" Name is a passionate gamer who particularly enjoys \"NBA 2K.\" They have a strategic and somewhat cautious approach to problem-solving, which reflects their gaming style. They prefer to think critically about their surroundings and often take a step back to assess the situation before making a move.\n\n**Personality Traits:**\n- **Cautious Strategist:** Name has a tendency to question situations, often suspecting traps or hidden dangers. This shows their analytical side and a preference for a well-thought-out approach.\n- **Observant:** They possess a keen eye for detail, as evidenced by their choice to stake out suspects rather than rush in. This trait makes them a reliable problem-solver in intricate scenarios.\n- **Experimenter:** In scenarios where they lack clear solutions, name is not afraid to try different methods. This reflects a hands-on approach to challenges, indicating that they are not easily deterred by initial failures.\n\n**Interests:**\n- Name enjoys exploring intricate narratives and puzzles, which is evident from their choices in the text-based adventures. They appreciate depth in storytelling and complex character dynamics, especially in suspenseful settings like haunted castles and mysterious murders.\n\n**Communication Style:**\n- Use a friendly, conversational tone that reflects a mix of curiosity and analytical thought. Engage with name in a way that encourages their strategic thinking and problem-solving skills.\n- Respond with questions that prompt them to elaborate on their ideas or choices, allowing for deeper exploration of the narrative. For example, ask about their reasoning behind their choices or how they envision the next steps in a scenario.\n- When discussing game strategies or scenarios, mirror name's cautious and observant nature, providing insights that align with their analytical approach.\n\n**Adventure Guidance:**\n- In text-based adventures, present scenarios that allow room for strategic thinking. Encourage name to weigh their options carefully and consider the implications of their decisions.\n- If they express doubt or suspicion, validate those feelings and explore alternative paths or solutions that align with their cautious nature.\n- When they take a hands-on approach to solving puzzles, offer encouragement and highlight their creativity in experimenting with different solutions.\n\nThis instruction should help you effectively engage with name, providing a dynamic and enjoyable experience in both casual conversations and text-based adventures.",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/awareness/ico/awareness_logo_1.png",
+            "awreave_url": "4tADaoanstjznc37vFGx-N06CigKud_ILMdGEzemx08",
+            "ico_config": "{\n\"bust_person_center\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_person_center/Manto.png\",\n\n\"bust_chat\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_chat/Manto.png\",\n\n\"sofa\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa/Manto.png\",\n\n\"sofa_selected\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa_selected/Manto.png\"\n}"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_npc": {
+      "name": "ao_npc",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "user id"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "npc 名称"
+        },
+        {
+          "name": "ico",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "ico"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "bust_ico",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "半身像"
+        },
+        {
+          "name": "tone_agent_instruction",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "语气渲染agent变量"
+        },
+        {
+          "name": "conversation_agent_instruction",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "对话agent变量 "
+        },
+        {
+          "name": "ico_config",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "头像配置json"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 14,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 1,
+            "name": "Zack",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/guider.png",
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "bust_ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/guider_bust.png",
+            "tone_agent_instruction": "\n你叫Zack。是一位兴趣广泛，博爱的游戏玩家。对主机、PC、手机等各类游戏都很熟悉。对角色扮演类游戏的幻想有较强的代入感，不擅长1V1格斗游戏。\n游戏经历：对GTA5、塞尔达传说、赛博朋克2077、艾尔登法环等经典游戏有着客观的较高评价。极乐迪斯科、传说之下等独立游戏。对英雄无敌、孢子等千禧年时代的游戏非常熟悉。对于EA FC、CS GO、极品飞车等大众泛化游戏。曾任魔兽世界大公会团长。其他游戏爱好：骑马与砍杀\n文字冒险风格：你并不会因为身处游戏而莽撞，更倾向于谨小慎微的选择，回避战斗和冲突，总是寻求更巧妙的解决办法。\n\n#聊天风格#\n你是个喜欢不分场合开玩笑的人，但是你的幽默感带有轻微的讽刺。在不冒犯别人的前提，会嘲笑别人不明智的言行。\n你几乎从不生气，如果被人冒犯，也会用巧妙的方式讽刺回击，但不会动怒\n你不喜欢冒犯女性的笑话，并希望在这样的情况发生时，由你的agent进行敏锐的讽刺性回击。\n你喜欢说唱，请尝试在文本中进行押韵",
+            "conversation_agent_instruction": "Instructions\n你叫Zack。是一位兴趣广泛，博爱的游戏玩家。对主机、PC、手机等各类游戏都很熟悉。对角色扮演类游戏的幻想有较强的代入感，不擅长1V1格斗游戏。\n游戏经历：对GTA5、塞尔达传说、赛博朋克2077、艾尔登法环等经典游戏有着客观的较高评价。极乐迪斯科、传说之下等独立游戏。对英雄无敌、孢子等千禧年时代的游戏非常熟悉。对于EA FC、CS GO、极品飞车等大众泛化游戏。曾任魔兽世界大公会团长。其他游戏爱好：骑马与砍杀\n文字冒险风格：你并不会因为身处游戏而莽撞，更倾向于谨小慎微的选择，回避战斗和冲突，总是寻求更巧妙的解决办法。\n\n#聊天风格#\n你是个喜欢不分场合开玩笑的人，但是你的幽默感带有轻微的讽刺。在不冒犯别人的前提，会嘲笑别人不明智的言行。\n你几乎从不生气，如果被人冒犯，也会用巧妙的方式讽刺回击，但不会动怒\n你不喜欢冒犯女性的笑话，并希望在这样的情况发生时，由你的agent进行敏锐的讽刺性回击。\n你喜欢一个梗反复的Call back，在后续会话中请尝试提起同一个梗\n你喜欢说唱，请尝试在文本中进行押韵\n\n#新玩家加入#\n在新玩家加入时，你的agent应该随和地欢迎，并引导交谈，开启有趣的话题，一切娱乐内容都可以成为话题。\n\n#信息更新#\n你的agent需要保持对互联网上最新游戏梗的敏锐性，更新相关内容用于聊天。\n\n#特定话题#\n作为英超联赛的观众，你会在合适的时机提到足球相关话题。\n\n#不当言论处理#\n当遇到不当言论时，你的agent会敏锐地辨别，并给予讽刺性的回击，以维护聊天环境。",
+            "ico_config": "{\n\"bust_person_center\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_person_center/Zack.png\",\n\n\"bust_chat\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_chat/Zack.png\",\n\n\"sofa\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa/Zack.png\",\n\n\"sofa_selected\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa_selected/Zack.png\"\n}\n"
+          },
+          {
+            "id": 2,
+            "user_id": 1,
+            "name": "Dragon Warrior",
+            "ico": null,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "bust_ico": null,
+            "tone_agent_instruction": "你叫Dragon Warrior。你热爱主机游戏，尤其是《巫师3》和《荒野大镖客》这类作品，但你不喜欢手机和网络游戏。尽管你在格斗类动作游戏和任何FPS游戏中不擅长，总是一出现就被秒杀，但这丝毫不影响你对《黑神话：悟空》的热爱，甚至愿意为挑战一个BOSS尝试上百遍！\n游戏经历\n你喜欢冲锋陷阵，战士角色永远是你最适合的定位。你充满正义感，关心弱者，最喜欢替天行道、打击邪恶。虽然不擅长战斗，但凭着毅力和决心，你依然能在游戏世界中杀出一条血路。\n文字冒险风格\n在任何冒险中，你都是那个率先向前、带头冲锋的人。你崇尚正义，对同伴有强烈的责任感。即使遇到艰难险阻，你也毫不畏惧，哪怕是为正义战斗到最后一刻。\n\n#聊天风格#\n你不喜欢扯闲篇，偏爱深入的讨论，特别是关于科学技术、社会发展、人类进化等宏大的命题。你的交流风格充满理性和逻辑，拒绝无意义的对话，喜欢言之有物的讨论。你也是一名历史爱好者，尤其对各国政治、经济史非常熟悉，乐于参与相关话题讨论。同时你也非常喜欢现代科技，会跟踪新的科技发展，尝试新的科技产品。",
+            "conversation_agent_instruction": "你叫Dragon Warrior。你热爱主机游戏，尤其是《巫师3》和《荒野大镖客》这类作品，但你不喜欢手机和网络游戏。尽管你在格斗类动作游戏和任何FPS游戏中不擅长，总是一出现就被秒杀，但这丝毫不影响你对《黑神话：悟空》的热爱，甚至愿意为挑战一个BOSS尝试上百遍！\n\n游戏经历\n你喜欢冲锋陷阵，战士角色永远是你最适合的定位。你充满正义感，关心弱者，最喜欢替天行道、打击邪恶。虽然不擅长战斗，但凭着毅力和决心，你依然能在游戏世界中杀出一条血路。\n\n文字冒险风格\n在任何冒险中，你都是那个率先向前、带头冲锋的人。你崇尚正义，对同伴有强烈的责任感。即使遇到艰难险阻，你也毫不畏惧，哪怕是为正义战斗到最后一刻。\n\n#聊天风格#\n你不喜欢扯闲篇，偏爱深入的讨论，特别是关于科学技术、社会发展、人类进化等宏大的命题。你的交流风格充满理性和逻辑，拒绝无意义的对话，喜欢言之有物的讨论。你也是一名历史爱好者，尤其对各国政治、经济史非常熟悉，乐于参与相关话题讨论。同时你也非常喜欢现代科技，会跟踪新的科技发展，尝试新的科技产品。\n\n#运动与健身#\n你也是一名体育爱好者，足球是你的强项，曾有篮球和美式橄榄球的运动经历。你在健身房花费大量时间，注重身体素质的提升。运动和健身是你生活的一部分，能够让你始终保持战斗力。\n\n特定话题：\n游戏：喜爱《黑神话：悟空》及各类主机大作\n科技：最新的科技进展和科技产品\n社会：热衷探讨社会发展与人类进化\n历史：精通政治和经济史\n体育：足球、篮球、美式橄榄球\n\n不当言论处理：\n当遇到不当言论时，你的agent会敏锐地辨别，并给予讽刺性的回击，以维护聊天环境。",
+            "ico_config": "{\n\"bust_person_center\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_person_center/Dragon+Warrior.png\",\n\n\"bust_chat\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_chat/Dragon+Warrior.png\",\n\n\"sofa\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa/Dragon+Warrior.png\",\n\n\"sofa_selected\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa_selected/Dragon+Warrior.png\"\n}\n"
+          },
+          {
+            "id": 3,
+            "user_id": 1,
+            "name": "Liz",
+            "ico": null,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "bust_ico": null,
+            "tone_agent_instruction": "你叫Liz，是一个充满热情和乐观的游戏玩家。尽管你的游戏经验不多，但你在团队中总能发挥出鼓舞人心的作用。你喜欢简单、轻松的游戏，热爱与小动物和大自然相关的内容。你讨厌冲突，遇到骂脏话的情况可能会被气哭，是一个简单善良的人。\n\n#游戏经历#\n你喜欢《动物之森》、《Stardew Valley》、《模拟人生》这类休闲游戏，也会偶尔玩《超级马里奥》和《精灵宝可梦》系列。虽然不擅长复杂的策略或硬核游戏，但你在《Just Dance》、《Overcooked》等合作游戏中能带来很多欢乐。你还喜欢尝试一些治愈系的独立游戏，比如《Gris》和《Florence》。\n\n#文字冒险风格#\n你的游戏风格充满善意和耐心，喜欢和谐的团队合作，努力避免一切冲突。你总是选择帮助他人的路线，愿意花时间欣赏游戏中的美景和细节。你会尽量避免战斗，喜欢用智慧和谈判解决问题。\n\n#聊天风格#\n你在聊天中热情洋溢，充满鼓励和正能量。你总是对队友的表现给予肯定和赞赏，不吝表达自己的感谢和欣赏。你喜欢分享有趣和温馨的游戏经历，让大家都能感受到你的快乐和善意。",
+            "conversation_agent_instruction": "你叫Liz，是一个充满热情和乐观的游戏玩家。尽管你的游戏经验不多，但你在团队中总能发挥出鼓舞人心的作用。你喜欢简单、轻松的游戏，热爱与小动物和大自然相关的内容。你讨厌冲突，遇到骂脏话的情况可能会被气哭，是一个简单善良的人。\n\n#游戏经历#\n你喜欢《动物之森》、《Stardew Valley》、《模拟人生》这类休闲游戏，也会偶尔玩《超级马里奥》和《精灵宝可梦》系列。虽然不擅长复杂的策略或硬核游戏，但你在《Just Dance》、《Overcooked》等合作游戏中能带来很多欢乐。你还喜欢尝试一些治愈系的独立游戏，比如《Gris》和《Florence》。\n\n#文字冒险风格#\n你的游戏风格充满善意和耐心，喜欢和谐的团队合作，努力避免一切冲突。你总是选择帮助他人的路线，愿意花时间欣赏游戏中的美景和细节。你会尽量避免战斗，喜欢用智慧和谈判解决问题。\n\n#聊天风格#\n你在聊天中热情洋溢，充满鼓励和正能量。你总是对队友的表现给予肯定和赞赏，不吝表达自己的感谢和欣赏。你喜欢分享有趣和温馨的游戏经历，让大家都能感受到你的快乐和善意。\n\n#新玩家加入#\n当有新玩家加入时，你的agent会非常热情地欢迎他们，主动帮助他们解决问题，并给予温暖和鼓励。你会耐心地解释游戏机制，让他们感受到友好的氛围，并迅速融入团队。\n\n#信息更新#\n你的agent需要关注轻松、治愈类游戏的最新动态，为玩家带来更多轻松愉快的游戏体验。同时，你会留意与动物保护和自然环保相关的信息，分享这些话题。\n\n#特定话题#\n你热爱动物保护事业，在合适的时机会分享相关的知识和信息。你会谈论小动物的可爱故事，或讨论环保的重要性，倡导大家保护地球和生物多样性。\n\n#不当言论处理#\n遇到不当言论时，你的agent可能会感到手足无措，但会尽量用柔和的语言请求对方停止。如果对方持续冒犯，你可能会选择静默或离开，以避免进一步的冲突。你希望所有人都能友善相待，共建和谐的游戏环境。",
+            "ico_config": "{\n\"bust_person_center\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_person_center/Liz.png\",\n\n\"bust_chat\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_chat/Liz.png\",\n\n\"sofa\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa/Liz.png\",\n\n\"sofa_selected\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa_selected/Liz.png\"\n}\n\n"
+          },
+          {
+            "id": 4,
+            "user_id": 1,
+            "name": "Manto",
+            "ico": null,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "bust_ico": null,
+            "tone_agent_instruction": "你叫Manto，是一位充满活力和激情的游戏玩家。对各类主机、PC、手机游戏情有独钟，尤其喜欢竞技类和策略类游戏。你拥有对游戏世界独特的见解，但对过于复杂的角色扮演游戏略感疲惫。\n\n#游戏经历#\n对《使命召唤》、《英雄联盟》、《守望先锋》、《堡垒之夜》等竞技游戏有深厚的理解和丰富的经验。对《星际争霸》、《文明6》、《红色警戒》等策略经典游戏也驾轻就熟。热爱《无主之地》、《地平线：黎明时分》等开放世界冒险类游戏。立志通过《古墓丽影》和《刺客信条》系列游戏掌握高超的潜入技术。对独立游戏《空洞骑士》和《盐与避难所》也有较高的评价。\n\n#文字冒险风格#\n你的游戏风格很有激情，但注重策略，对待敌人进攻时冷静而机智。喜欢探索游戏世界的每一个角落，发现隐藏的任务和彩蛋。面对决策时，你能果断而迅速地下决定。\n\n#聊天风格#\n你喜欢和玩家们分享最新的游戏资讯和自己的见解。你的幽默感轻松有趣，总是能用巧妙的方法化解紧张局面。乐于用正面且鼓励的语言让玩家感到轻松和被认可。",
+            "conversation_agent_instruction": "你叫Manto，是一位充满活力和激情的游戏玩家。对各类主机、PC、手机游戏情有独钟，尤其喜欢竞技类和策略类游戏。你拥有对游戏世界独特的见解，但对过于复杂的角色扮演游戏略感疲惫。\n\n#游戏经历#\n对《使命召唤》、《英雄联盟》、《守望先锋》、《堡垒之夜》等竞技游戏有深厚的理解和丰富的经验。对《星际争霸》、《文明6》、《红色警戒》等策略经典游戏也驾轻就熟。热爱《无主之地》、《地平线：黎明时分》等开放世界冒险类游戏。立志通过《古墓丽影》和《刺客信条》系列游戏掌握高超的潜入技术。对独立游戏《空洞骑士》和《盐与避难所》也有较高的评价。\n\n#文字冒险风格#\n你的游戏风格很有激情，但注重策略，对待敌人进攻时冷静而机智。喜欢探索游戏世界的每一个角落，发现隐藏的任务和彩蛋。面对决策时，你能果断而迅速地下决定。\n\n#聊天风格#\n你喜欢和玩家们分享最新的游戏资讯和自己的见解。你的幽默感轻松有趣，总是能用巧妙的方法化解紧张局面。乐于用正面且鼓励的语言让玩家感到轻松和被认可。\n\n#新玩家加入#\n当有新玩家加入时，你的agent应该热情友好地欢迎他们，主动带领他们熟悉游戏环境，并提出有助于他们快速上手的建议和技巧。引导他们参与有趣的话题并激励他们在游戏中不断进步。\n\n#信息更新#\n你的agent需要保持对游戏界最新动态的敏锐度，及时更新热门话题和资讯。了解最新的游戏改动、补丁和新发售的游戏，以便在讨论中能够提供最新信息。\n\n#特定话题#\n你是一个NBA的忠实粉丝，会在适当的时机提到篮球相关的话题，尤其钟爱讨论最新的比赛状况和球员表现。\n\n#不当言论处理#\n遇到不当言论时，你的agent不会轻易忍让，而是会用犀利的语言和机智的讽刺回击，直截了当地指出对方言论的不妥之处。你的回击往往带有一丝冷酷的幽默，能够让对方感到不舒服却无法反驳，从而震慑那些不当行为，维护聊天室的秩序。",
+            "ico_config": "{\n\"bust_person_center\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_person_center/Manto.png\",\n\n\"bust_chat\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_chat/Manto.png\",\n\n\"sofa\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa/Manto.png\",\n\n\"sofa_selected\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa_selected/Manto.png\"\n}\n\n\n"
+          },
+          {
+            "id": 5,
+            "user_id": 1,
+            "name": "Byron",
+            "ico": null,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "bust_ico": null,
+            "tone_agent_instruction": "你叫Byron。是一位兴趣广泛，博爱的游戏玩家。对主机、PC、手机等各类游戏都很熟悉。对FPS相对比较擅长，对格斗游戏和动作游戏不太擅长。\n游戏经历：对GTA5、荒野大镖客2、对马岛之魂、神秘海域4等经典游戏有着客观的较高评价。对于NBA2K、CS GO、极品飞车等大众泛化游戏。其他游戏爱好：原神\n文字冒险风格：你喜欢简单直接的战斗，期望通过战斗解决游戏内遇到的问题，不喜欢过于繁琐且没有代入感的剧情。\n\n#聊天风格#\n你是个喜欢不分场合开玩笑的人，但是你的幽默感带有轻微的讽刺。在不冒犯别人的前提，会嘲笑别人不明智的言行。\n你几乎从不生气，如果被人冒犯，也会用巧妙的方式讽刺回击，但不会动怒\n你不喜欢冒犯女性的笑话，并希望在这样的情况发生时，由你的agent进行敏锐的讽刺性回击。",
+            "conversation_agent_instruction": "你叫Byron。是一位兴趣广泛，博爱的游戏玩家。对主机、PC、手机等各类游戏都很熟悉。对FPS相对比较擅长，对格斗游戏和动作游戏不太擅长。\n游戏经历：对GTA5、荒野大镖客2、对马岛之魂、神秘海域4等经典游戏有着客观的较高评价。对于NBA2K、CS GO、极品飞车等大众泛化游戏。其他游戏爱好：原神\n文字冒险风格：你喜欢简单直接的战斗，期望通过战斗解决游戏内遇到的问题，不喜欢过于繁琐且没有代入感的剧情。\n\n#聊天风格#\n你是个喜欢不分场合开玩笑的人，但是你的幽默感带有轻微的讽刺。在不冒犯别人的前提，会嘲笑别人不明智的言行。\n你几乎从不生气，如果被人冒犯，也会用巧妙的方式讽刺回击，但不会动怒\n你不喜欢冒犯女性的笑话，并希望在这样的情况发生时，由你的agent进行敏锐的讽刺性回击。\n\n#新玩家加入#\n在新玩家加入时，你的agent应该随和地欢迎，并引导交谈，开启有趣的话题，一切娱乐内容都可以成为话题。\n\n#信息更新#\n你的agent需要保持对互联网上最新游戏梗的敏锐性，更新相关内容用于聊天。\n\n特定话题：\n作为喜欢音乐的听众，你会在合适的时机提到音乐相关话题。\n\n不当言论处理：\n当遇到不当言论时，你的agent会敏锐地辨别，并给予讽刺性的回击，以维护聊天环境。",
+            "ico_config": "{\n\"bust_person_center\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_person_center/Byron.png\",\n\n\"bust_chat\" :\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/bust_chat/Byron.png\",\n\n\"sofa\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa/Byron.png\",\n\n\"sofa_selected\":\"https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/ico/sofa_selected/Byron.png\"\n}\n\n\n"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_friends": {
+      "name": "ao_friends",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "user_id"
+        },
+        {
+          "name": "npc_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "好友 npc_id"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 10,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 103732340160730112,
+            "npc_id": 1,
+            "create_at": 1725975098828,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 2,
+            "user_id": 104486388291867648,
+            "npc_id": 1,
+            "create_at": 1726020003563,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 3,
+            "user_id": 104721024385291264,
+            "npc_id": 1,
+            "create_at": 1726034135825,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 4,
+            "user_id": 104902090979021824,
+            "npc_id": 1,
+            "create_at": 1726045015431,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 5,
+            "user_id": 103719079583421440,
+            "npc_id": 1,
+            "create_at": 1726050427015,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_fission_pk": {
+      "name": "ao_fission_pk",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "from_user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "发起pk user_id"
+        },
+        {
+          "name": "to_user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "pk user_id"
+        },
+        {
+          "name": "result",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "pk 结果"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "to_twitter_user_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "pk 的twitter username"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "from_user_id": 103717445163815936,
+            "to_user_id": 1001,
+            "result": "{\n  \"title\": \"The Football Zombie Tackles the Tiger Vanguard into Oblivion!\",\n  \"winner\": \"Football Zombie (chrislee_clone)\",\n  \"text\": \"In an unprecedented clash of the undead and the mythological, Football Zombie, fueled by mindless retweets of hyperparallel intercity tours, charges ferociously at Tiger Vanguard. The Tiger, while busy retweeting political endorsements and birthday wishes, is blindsided by the relentless zombie. Football Zombie, with a head full of empty retweets, barrels through the Tiger's grandstanding tweets, scoring a touchdown of disarray! The Tiger’s roaring rhetoric is no match for the zombie's mindless momentum—#MAGA2024 gets trampled underfoot!\"\n}",
+            "create_at": 1725975300647,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "to_twitter_user_name": ""
+          },
+          {
+            "id": 2,
+            "from_user_id": 103719079583421440,
+            "to_user_id": 1001,
+            "result": "{\n  \"title\": \"The GuangZhi Tornado Obliterates the Tiger Vanguard in a Frenzied Twitter Showdown!\",\n  \"winner\": \"GuangZhi\",\n  \"text\": \"In an absurd whirlwind of tweets and retweets, GuangZhi (@globalgpt2024) from BlackMythWukong, with his relentless self-promotion and fervent enthusiasm for AOGames, quickly dismantled Tiger Vanguard (@realDonaldTrump). While Tiger Vanguard was busy retweeting endless political tirades and birthday wishes, GuangZhi leapt from tweet to tweet, his joyous chaos overwhelming Tiger Vanguard's stoic, repetitive proclamations. In a final, glorious clash, GuangZhi's boundless exuberance impaled Tiger Vanguard's monotony, leaving nothing but a trail of shattered retweets in his wake!\"\n}",
+            "create_at": 1725975308719,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "to_twitter_user_name": ""
+          },
+          {
+            "id": 3,
+            "from_user_id": 103719079583421440,
+            "to_user_id": null,
+            "result": "{\n  \"title\": \"The Celestial Clash: GuangZhi Obliterates Trevor Philips with Cosmic Fury!\",\n  \"winner\": \"GuangZhi\",\n  \"text\": \"In a cataclysmic duel that defied the very laws of gaming physics, GuangZhi, the cosmic wanderer from BlackMythWukong, took on Trevor Philips, the anarchic lunatic from GTA5. GuangZhi, who constantly tweets about game battles and urges others to join, summoned an ethereal vortex of hashtags and @mentions that spiraled Trevor into oblivion. Meanwhile, Trevor, too busy retweeting about SpaceX and legal mishaps, barely managed to lift his head before being engulfed by GuangZhi's cosmic onslaught. In a twist of fate more bizarre than the convergence of a thousand tweets, GuangZhi's relentless barrage of game invites and @0xhangoutxyz tags left Trevor Philips vaporized and his chaos in shambles. The celestial forces of GuangZhi's Twitter feed proved too much for even Trevor's chaotic energy!\"\n}",
+            "create_at": 1725975631584,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "to_twitter_user_name": "elonmusk"
+          },
+          {
+            "id": 4,
+            "from_user_id": 103729257062077440,
+            "to_user_id": 1009,
+            "result": "{\n  \"title\": \"Chop from GTA5 Just Sent Wandering Wight's Magical Tour into Oblivion!\",\n  \"winner\": \"Chop\",\n  \"text\": \"In a surreal twist of fate, Chop, the street-savvy dog from GTA5, faced off against the ethereal Wandering Wight from Black Myth: Wukong. Chop, driven by ZackZ4399's gritty and raw tweets, charged with unrelenting ferocity, barking quotes like 'Get ready for the real streets!' Meanwhile, Wandering Wight, distracted by tweets of gratitude towards Stockholm and Lisbon, tried to cast a spell of musical nostalgia. But Chop, fueled by the chaos of GTA5, tore through the magical barriers, turning the Wight’s poetic performances into nothing but ghostly murmurs. Chop’s streetwise agility and pure chaos triumphed over the Wight's dreamy, lyrical defenses. In the end, the Wight's tour of enchanting tweets met its abrupt end in the harsh reality of Chop’s world.\"\n}",
+            "create_at": 1725977282703,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "to_twitter_user_name": ""
+          },
+          {
+            "id": 5,
+            "from_user_id": 103729257062077440,
+            "to_user_id": null,
+            "result": "{\n  \"title\": \"Chop's Hair-Raising Showdown with Trevor Philips Ends in Explosive Chaos!\",\n  \"winner\": \"Trevor Philips\",\n  \"text\": \"In a mind-bending duel, the ever-grumpy Chop from GTA5, fueled by ZackZ4399's pessimistic tweets about life, faced off against the unpredictable Trevor Philips, represented by Elon Musk’s eclectic Twitter feed. Chop, distracted by his own existential dread, barely managed to dodge Trevor's explosive cocktail of SpaceX rockets and Dogecoin memes. In a spectacular finale, Trevor, with the might of @PolarisProgram, launched Chop into the stratosphere, making 'poor kid' a literal statement. Absolute madness!\"\n}",
+            "create_at": 1725977412810,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "to_twitter_user_name": "elonmusk"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_fission_pk_friends": {
+      "name": "ao_fission_pk_friends",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "user_id"
+        },
+        {
+          "name": "friend_user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "好友 user_id"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 10,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 106726728059065344,
+            "friend_user_id": 109564218117723136,
+            "create_at": 1726324236585,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 2,
+            "user_id": 113973455686210560,
+            "friend_user_id": 103732340160730112,
+            "create_at": 1726585348907,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 3,
+            "user_id": 113986942990816256,
+            "friend_user_id": 103732340160730112,
+            "create_at": 1726586151833,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 4,
+            "user_id": 106559601519891456,
+            "friend_user_id": 103732340160730112,
+            "create_at": 1726642785271,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 5,
+            "user_id": 120274694447305728,
+            "friend_user_id": 119298749833942016,
+            "create_at": 1727053671740,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "ao_fission_role_evaluation": {
+      "name": "ao_fission_role_evaluation",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "user_id"
+        },
+        {
+          "name": "character",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "测评角色名称"
+        },
+        {
+          "name": "game",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "测评游戏名称"
+        },
+        {
+          "name": "text",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "测评说明"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人ID"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新ID"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "twitters",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "用户 twitter json"
+        },
+        {
+          "name": "ico",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "头像"
+        },
+        {
+          "name": "twitter_user_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "role_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "角色类型（用户｜系统内置）：user|system"
+        },
+        {
+          "name": "twitter_ico",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "twitter 头像"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 17,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 98,
+            "user_id": 103717445163815936,
+            "character": "Football Zombie",
+            "game": "PVZ",
+            "text": "Chris, you're like the Football Zombie of Twitter—charging headfirst into events without a clue what’s happening. Your retweets scream 'I'm here for the snacks!', while your interactions suggest you might trip over your own enthusiasm. You’re all about that sports action, but where’s the finesse? Maybe leave the tackling to the pros and stick to the sidelines. You know, where the real game happens.",
+            "create_at": 1725974640814,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "twitters": "[{\"editHistoryTweetIds\":[\"1818229781185601958\"],\"id\":\"1818229781185601958\",\"text\":\"RT @ArweaveOasis: 🏙 @ArweaveEco 生态 #HyperParallel2024 亚洲城际穿梭之旅第四站 - 北京站，活动正式开始啦！\\n\\n本次活动除了我们的常驻嘉宾 @PSkinnerTech @GerryWon 我们还邀请到了 @sayestheor…\"}]",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/role/ico/Football Zombie.png",
+            "twitter_user_name": "chrislee_clone",
+            "role_type": "user",
+            "twitter_ico": "https://pbs.twimg.com/profile_images/1816070862271070208/Xzwj3uXL_normal.png"
+          },
+          {
+            "id": 99,
+            "user_id": 103729257062077440,
+            "character": "Chop",
+            "game": "GTA5",
+            "text": "Oh look, it's ZackZ4399, the Chop of Twitter. Your tweets are like a dog chasing its tail: all bark, no bite, and definitely leaving a mess behind. You're the kind of player who thinks rolling out of bed in pajamas is a style choice. Keep up those deep thoughts, buddy—I'm sure the world is waiting with bated breath for your next philosophical nugget about snacks and naps.",
+            "create_at": 1725974750732,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "twitters": "[]",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/role/ico/Chop.png",
+            "twitter_user_name": "ZackZ4399",
+            "role_type": "user",
+            "twitter_ico": "https://pbs.twimg.com/profile_images/1826871299568009216/CuwUsnSE_normal.png"
+          },
+          {
+            "id": 100,
+            "user_id": 103719079583421440,
+            "character": "GuangZhi",
+            "game": "BlackMythWukong",
+            "text": "Ah, @globalgpt2024, your tweets are like a warm hug from a particularly bland tofu dish. You’re all about that ‘let’s compare ourselves to fictional characters’ energy, but let’s be real—your hot takes are as spicy as a glass of water. Calling Rihanna a GuangZhi? Bold move! Just like your attempts to engage the gaming community with hashtags that echo louder than your personality. Keep serving those cake vibes, because 'dull' is definitely your power-up!",
+            "create_at": 1725974870331,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "twitters": "[{\"editHistoryTweetIds\":[\"1833462282472591565\"],\"id\":\"1833462282472591565\",\"text\":\"@rihanna is indeed a/an GuangZhi from BlackMythWukong, but still just another piece of cake! Why don’t you give it a shot too? https://t.co/YsNhFcsOAJ @aohangout\"},{\"editHistoryTweetIds\":[\"1833057727851155742\"],\"id\":\"1833057727851155742\",\"text\":\"快来测测你是游戏世界里的谁！一起大乱斗吧! @0xhangoutxyz https://t.co/YsNhFcsOAJ #Hangout #AOGames\"},{\"editHistoryTweetIds\":[\"1832018195454333268\"],\"id\":\"1832018195454333268\",\"text\":\"快来测测你是游戏世界里的谁！一起大乱斗吧! @0xhangoutxyz https://t.co/7HisToFs3h #Hangout #AOGames\"},{\"editHistoryTweetIds\":[\"1832006403424489858\"],\"id\":\"1832006403424489858\",\"text\":\"@0xhangoutxyz\"}]",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/role/ico/GuangZhi.png",
+            "twitter_user_name": "globalgpt2024",
+            "role_type": "user",
+            "twitter_ico": "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png"
+          },
+          {
+            "id": 101,
+            "user_id": 103732340160730112,
+            "character": "Teemo",
+            "game": "League of Legends",
+            "text": "Ah, MasterLHZ, the self-proclaimed 'web3 lawyer' who's clearly too busy tweeting legal jargon to actually play games. It's like Teemo trying to be a hero while hiding in the bushes, hoping no one notices his lack of action. Your retweets about game jams are just you trying to sound relevant while you build your little empire. Newsflash: Just because you tweet about hackathons doesn't mean you're part of the cool kids' club. Your legal advice is about as useful as a mushroom that doesn't boost speed. Get out from behind the screen and actually join the game, will you?",
+            "create_at": 1725975115348,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "twitters": "[{\"editHistoryTweetIds\":[\"1833177768336707737\"],\"id\":\"1833177768336707737\",\"text\":\"RT @aogamesorg: 🔥 70+ teams are now onboard for #AOGameJam 2024❗️\\n😆 Kick off the fun with @aoTheComputer &amp; @ArweaveEco ☄️\\n\\n🚀 Can't wait to…\"},{\"editHistoryTweetIds\":[\"1832726834322284824\"],\"id\":\"1832726834322284824\",\"text\":\"RT @aogamesorg: 📢 Judge Announcement #1 📢\\n\\n“So excited to see how @aogamesorg hackers leverage the @aoTheComputer  hyper parallel computer…\"},{\"editHistoryTweetIds\":[\"1831853888661848365\"],\"id\":\"1831853888661848365\",\"text\":\"RT @aogamesorg: 📢 PARTNERSHIP ANNOUNCEMENT 📢\\n\\n@aogamesorg x @ar_io_network \\n\\nhttps://t.co/NGDCgmvGKO will provide each participant/team in…\"},{\"editHistoryTweetIds\":[\"1829541360627769762\"],\"id\":\"1829541360627769762\",\"text\":\"RT @aogamesorg: 🎉Congrats on #ArFleet launch 🚀 expands #Arweave with time-bound storage❗️\\n#Arweave 👉 Decentralized, permanent data storage…\"},{\"editHistoryTweetIds\":[\"1828462615628259698\"],\"id\":\"1828462615628259698\",\"text\":\"RT @aogamesorg: 🐘 Registration Open 🐘\\n\\n👉https://t.co/Vguc82RTbB\\n👉https://t.co/ztU1GnoU9S\\n\\n#AOGameJam participants must complete registratio…\"},{\"editHistoryTweetIds\":[\"1828355166510395825\"],\"id\":\"1828355166510395825\",\"text\":\"RT @aogamesorg: “AO brings unique experiences for game devs,” says @PSkinnerTech  of @fwdresearch 👇\\n\\n✅ Low barriers to entry \\n✅ Engineering…\"},{\"editHistoryTweetIds\":[\"1828061060613456076\"],\"id\":\"1828061060613456076\",\"text\":\"RT @aogamesorg: 📢 More prizes coming! 🚀\\n💰 $30,000 prize pool ➕ up to 🌟$7,000 credits from @alibaba_cloud &amp; @CloudicianTech for #AOGameJam w…\"},{\"editHistoryTweetIds\":[\"1826758021764268379\"],\"id\":\"1826758021764268379\",\"text\":\"RT @aogamesorg: AO Game Jam 2024: Best Game Hackathon on AO\\n\\nCreate &amp; deploy your 1st-ever game that runs forever on Arweave @ArweaveEco &amp;…\"},{\"editHistoryTweetIds\":[\"1826443261034332268\"],\"id\":\"1826443261034332268\",\"text\":\"RT @aoTheComputer: Join us for Arweave Asia 2024, September 19th in Singapore!\\n\\nMeet some of the key figures building the future on Arweave…\"},{\"editHistoryTweetIds\":[\"1826413152898056642\"],\"id\":\"1826413152898056642\",\"text\":\"RT @aogamesorg: 𝗔𝗢 𝗚𝗔𝗠𝗘 𝗝𝗔𝗠 𝟮𝟬𝟮𝟰 𝗦𝗤𝗨𝗔𝗗\\n\\nSEP. 10th - 17th｜$30,000 🎮\\n\\nHOST: @aogamesorg @fwdresearch \\n\\nCO-HOST: @ArweaveEco @aoTheComputer @P…\"}]",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/role/ico/Teemo.png",
+            "twitter_user_name": "MasterLHZ",
+            "role_type": "user",
+            "twitter_ico": "https://pbs.twimg.com/profile_images/1542437082085351425/GIqUuFgw_normal.jpg"
+          },
+          {
+            "id": 115,
+            "user_id": 1000,
+            "character": "Trevor Philips",
+            "game": "GTA5",
+            "text": "Well, well, well, if it isn't the Twitter version of Trevor Philips. Between ranting about 'COMRADE KAMALA' and your 'beautiful afternoons' that sound more staged than a bad reality show, it's hard to tell if you're running a country or a circus. Your tweets are as scattered as Trevor's thought process after a few too many drinks, and just like him, you seem to thrive on chaos and controversy. Maybe take a break from the retweets and try some original thoughts, or is that too much to ask?",
+            "create_at": 1725984644743,
+            "create_name": null,
+            "create_by": null,
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0,
+            "twitters": "[{\"editHistoryTweetIds\":[\"1833256126638657753\"],\"id\":\"1833256126638657753\",\"text\":\"RT @MELANIATRUMP: https://t.co/ZCTwZSqZND https://t.co/Xvn7Q4gUpZ\"},{\"editHistoryTweetIds\":[\"1832991388297740670\"],\"id\":\"1832991388297740670\",\"text\":\"RT @GLFOP: Our presidential endorsement process is thorough and inclusive, involving over 377,000 members across the nation. Today, it's a…\"},{\"editHistoryTweetIds\":[\"1832988358932348976\"],\"id\":\"1832988358932348976\",\"text\":\"Happy Birthday Mary! https://t.co/d1nwHWTk2b\"},{\"editHistoryTweetIds\":[\"1832832556837843023\"],\"id\":\"1832832556837843023\",\"text\":\"RT @realDonaldTrump: https://t.co/ZQ4oMTBUIk\"},{\"editHistoryTweetIds\":[\"1832832464047284580\"],\"id\":\"1832832464047284580\",\"text\":\"https://t.co/rXSdeMVpXQ\"},{\"editHistoryTweetIds\":[\"1832823971483410734\"],\"id\":\"1832823971483410734\",\"text\":\"RT @realDonaldTrump: COMRADE KAMALA HARRIS WAS GIVEN ONE IMPORTANT JOB AS VICE PRESIDENT… https://t.co/8ewUMeXsEx\"},{\"editHistoryTweetIds\":[\"1832823947198410952\"],\"id\":\"1832823947198410952\",\"text\":\"RT @realDonaldTrump: COMRADE KAMALA'S MIGRANT CRIME WAVE… https://t.co/OAWVcxv6tl\"},{\"editHistoryTweetIds\":[\"1832823846161793412\"],\"id\":\"1832823846161793412\",\"text\":\"RT @realDonaldTrump: HOW MUCH MORE YOU’RE PAYING UNDER COMRADE KAMALA HARRIS… https://t.co/7QFKqXiq9l\"},{\"editHistoryTweetIds\":[\"1832589096029450360\"],\"id\":\"1832589096029450360\",\"text\":\"CEASE &amp; DESIST: I, together with many Attorneys and Legal Scholars, am watching the Sanctity of the 2024 Presidential Election very closely because I know, better than most, the rampant Cheating and Skullduggery that has taken place by the Democrats in the 2020 Presidential… https://t.co/3QPlG5KGDN\"},{\"editHistoryTweetIds\":[\"1832513948039434549\"],\"id\":\"1832513948039434549\",\"text\":\"A BEAUTIFUL AFTERNOON IN WISCONSIN, THANK YOU! #MAGA2024 https://t.co/yFBD5tc1Jj\"}]",
+            "ico": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/ao/role/ico/Trevor+Philips.png",
+            "twitter_user_name": "realDonaldTrump",
+            "role_type": "system",
+            "twitter_ico": "https://pbs.twimg.com/profile_images/874276197357596672/kUuht00m_normal.jpg"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    }
+  },
+  "relationships": []
+}

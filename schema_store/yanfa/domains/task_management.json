@@ -1,0 +1,1544 @@
+{
+  "domain_name": "task_management",
+  "display_name": "Task & Job Management",
+  "description": "AI task execution, batch processing, SEO tasks, and task-related metadata including tags and extensions.",
+  "table_count": 7,
+  "created_at": "2025-11-17T14:24:49.665868",
+  "connection": {
+    "name": "yanfa",
+    "db_type": "mysql",
+    "host": "legaldao.cpcugqubfjku.ap-southeast-1.rds.amazonaws.com",
+    "port": 3306,
+    "database": "yanfa",
+    "username": "wbjread",
+    "db_schema": "",
+    "ssl": false
+  },
+  "tables": {
+    "platform_ai_task": {
+      "name": "platform_ai_task",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "用户ID"
+        },
+        {
+          "name": "template_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "template id"
+        },
+        {
+          "name": "input_source_url",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "输入图片 https://x.x.x/a.png"
+        },
+        {
+          "name": "output_file_url",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "输出的图片 s3 url"
+        },
+        {
+          "name": "status",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "状态:processing｜success|failed"
+        },
+        {
+          "name": "failed_reason",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "失败原因"
+        },
+        {
+          "name": "finish_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "完成时间"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "model",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "input",
+          "type": "longtext",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "output",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "third_task_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "三方taskid"
+        },
+        {
+          "name": "model_group",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "模型分组 如 gpt、flux"
+        },
+        {
+          "name": "conversation_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "会话Id"
+        },
+        {
+          "name": "source_input",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "初始输入"
+        },
+        {
+          "name": "device_info",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "设备信息"
+        },
+        {
+          "name": "share_status",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否分享：0否，1是"
+        },
+        {
+          "name": "hide_prompt",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否隐藏prompt: 0否，1是"
+        },
+        {
+          "name": "bill_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "账单ID"
+        },
+        {
+          "name": "provider",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "供应商"
+        },
+        {
+          "name": "ref_task_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "关联id"
+        },
+        {
+          "name": "ref_all_task_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "关联所有任务id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 30,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 146994274355909632,
+            "user_id": 77258418590585856,
+            "template_id": 71,
+            "input_source_url": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/upload_files/20241010/1ffeae25-c4e5-4768-bb4c-a2ae6e12de69.jpg",
+            "output_file_url": null,
+            "status": "processing",
+            "failed_reason": null,
+            "finish_at": null,
+            "create_at": 1728553541507,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "model": null,
+            "input": null,
+            "output": null,
+            "product_no": null,
+            "third_task_id": null,
+            "model_group": null,
+            "conversation_id": null,
+            "source_input": null,
+            "device_info": null,
+            "share_status": 0,
+            "hide_prompt": 0,
+            "bill_id": null,
+            "provider": null,
+            "ref_task_id": null,
+            "ref_all_task_id": null
+          },
+          {
+            "id": 146995012083651584,
+            "user_id": 77258418590585856,
+            "template_id": 71,
+            "input_source_url": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/upload_files/20241010/d35d80f2-c716-470a-9076-1e932812dda0.jpg",
+            "output_file_url": null,
+            "status": "processing",
+            "failed_reason": null,
+            "finish_at": null,
+            "create_at": 1728553585479,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "model": null,
+            "input": null,
+            "output": null,
+            "product_no": null,
+            "third_task_id": null,
+            "model_group": null,
+            "conversation_id": null,
+            "source_input": null,
+            "device_info": null,
+            "share_status": 0,
+            "hide_prompt": 0,
+            "bill_id": null,
+            "provider": null,
+            "ref_task_id": null,
+            "ref_all_task_id": null
+          },
+          {
+            "id": 146995884482106368,
+            "user_id": 77258418590585856,
+            "template_id": 71,
+            "input_source_url": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/upload_files/20241010/86bb7c31-c223-4248-acb3-e0a5461b966e.jpg",
+            "output_file_url": null,
+            "status": "processing",
+            "failed_reason": null,
+            "finish_at": null,
+            "create_at": 1728553637478,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "model": null,
+            "input": null,
+            "output": null,
+            "product_no": null,
+            "third_task_id": null,
+            "model_group": null,
+            "conversation_id": null,
+            "source_input": null,
+            "device_info": null,
+            "share_status": 0,
+            "hide_prompt": 0,
+            "bill_id": null,
+            "provider": null,
+            "ref_task_id": null,
+            "ref_all_task_id": null
+          },
+          {
+            "id": 146999794831725568,
+            "user_id": 76041187596702720,
+            "template_id": 199,
+            "input_source_url": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/upload_files/20241010/0ec9692e-3c2c-44de-a5b4-c575ce130953.jpg",
+            "output_file_url": null,
+            "status": "processing",
+            "failed_reason": null,
+            "finish_at": null,
+            "create_at": 1728553870553,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "model": null,
+            "input": null,
+            "output": null,
+            "product_no": null,
+            "third_task_id": null,
+            "model_group": null,
+            "conversation_id": null,
+            "source_input": null,
+            "device_info": null,
+            "share_status": 0,
+            "hide_prompt": 0,
+            "bill_id": null,
+            "provider": null,
+            "ref_task_id": null,
+            "ref_all_task_id": null
+          },
+          {
+            "id": 147005669206135808,
+            "user_id": 77258418590585856,
+            "template_id": 71,
+            "input_source_url": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/upload_files/20241010/efd1f933-019b-4b2d-89b6-661452996557.jpg",
+            "output_file_url": null,
+            "status": "processing",
+            "failed_reason": null,
+            "finish_at": null,
+            "create_at": 1728554220693,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "model": null,
+            "input": null,
+            "output": null,
+            "product_no": null,
+            "third_task_id": null,
+            "model_group": null,
+            "conversation_id": null,
+            "source_input": null,
+            "device_info": null,
+            "share_status": 0,
+            "hide_prompt": 0,
+            "bill_id": null,
+            "provider": null,
+            "ref_task_id": null,
+            "ref_all_task_id": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_task_batch": {
+      "name": "platform_ai_task_batch",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "task_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "任务ID"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "用户id"
+        },
+        {
+          "name": "group_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "批量任务id"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "产品线"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 0,
+        "rows": [],
+        "note": "前 0 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_task_ext": {
+      "name": "platform_ai_task_ext",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "task_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "任务ID"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "用户id"
+        },
+        {
+          "name": "like_num",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "点赞数"
+        },
+        {
+          "name": "share_num",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "分享数"
+        },
+        {
+          "name": "media_type",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "媒体类型：1图片,2视频"
+        },
+        {
+          "name": "media_w",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "媒体长"
+        },
+        {
+          "name": "media_h",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "媒体宽"
+        },
+        {
+          "name": "prompt",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "提示词"
+        },
+        {
+          "name": "title",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "标题"
+        },
+        {
+          "name": "tag_ids",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "标签id集合，多个以逗号隔开"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": "glbgpt",
+          "comment": "业务线"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 19,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 362779658875311104,
+            "task_id": 362779658875311104,
+            "user_id": 229639681933841408,
+            "like_num": 9,
+            "share_num": 0,
+            "media_type": 1,
+            "media_w": 1024,
+            "media_h": 1024,
+            "prompt": "a girl dog",
+            "title": "A Playful Girl Dog",
+            "tag_ids": "6",
+            "create_at": 1741415358676,
+            "is_del": 0,
+            "create_name": "mq",
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": "mq",
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 362809998339740672,
+            "task_id": 362809998339740672,
+            "user_id": 136837376176559104,
+            "like_num": 0,
+            "share_num": 0,
+            "media_type": 1,
+            "media_w": 1024,
+            "media_h": 1024,
+            "prompt": "Create a surreal, grand, and hypnotic infinite library with towering, spiraling bookshelves that defy gravity. The architecture should feel endless, with floating staircases, curved archways, and mirrored reflections creating a dreamlike effect. The floor is black and glossy, reflecting infinite bookshelves above. Add glowing ethereal lights and mist weaving through the air, enhancing the mystique. The atmosphere is mesmerizing, as if the library exists outside of time and space, drawing the viewer into an intellectual labyrinth of knowledge and wonder, 8k resolution, hdr, hyperdetailed, hyperrealistic surrealism, dream-like quality",
+            "title": "Infinite Surreal Library of Knowledge",
+            "tag_ids": "3",
+            "create_at": 1741417166725,
+            "is_del": 0,
+            "create_name": "mq",
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": "mq",
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 362826629661070336,
+            "task_id": 362826629661070336,
+            "user_id": 362822950753145856,
+            "like_num": 0,
+            "share_num": 0,
+            "media_type": 1,
+            "media_w": 1,
+            "media_h": 1,
+            "prompt": "A large, grey elephant with a slightly chubby belly stands in front of a jungle mirror, poking his b",
+            "title": "Chubby Elephant Poking Its Reflection in the Jungle",
+            "tag_ids": "6",
+            "create_at": 1741418192429,
+            "is_del": 0,
+            "create_name": "mq",
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": "mq",
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 362826656185848832,
+            "task_id": 362826656185848832,
+            "user_id": 362822950753145856,
+            "like_num": 0,
+            "share_num": 0,
+            "media_type": 1,
+            "media_w": 1,
+            "media_h": 1,
+            "prompt": "The elephant sits alone under a tree, belly full, holding his phone with a disappointed look. The sc",
+            "title": "Lonely Elephant Reflecting on His Phone",
+            "tag_ids": "6",
+            "create_at": 1741418193816,
+            "is_del": 0,
+            "create_name": "mq",
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": "mq",
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 362826686938485760,
+            "task_id": 362826686938485760,
+            "user_id": 362822950753145856,
+            "like_num": 0,
+            "share_num": 0,
+            "media_type": 1,
+            "media_w": 1,
+            "media_h": 1,
+            "prompt": "A group of animals (monkeys, giraffes, tigers) point and laugh at the elephant, who sits in front of",
+            "title": "Animals Having Fun: The Playful Scene with an Elephant",
+            "tag_ids": "6",
+            "create_at": 1741418193434,
+            "is_del": 0,
+            "create_name": "mq",
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": "mq",
+            "product_no": "glbgpt"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_tasktags": {
+      "name": "platform_ai_tasktags",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "task_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "任务ID"
+        },
+        {
+          "name": "tag_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "标签id"
+        },
+        {
+          "name": "tag_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "标称名 "
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 11,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 362779778765296640,
+            "task_id": 362779658875311104,
+            "tag_id": "6",
+            "tag_name": "Animals",
+            "create_at": 1741415359845,
+            "is_del": 0,
+            "create_name": "mq",
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": "mq"
+          },
+          {
+            "id": 362810119253136384,
+            "task_id": 362809998339740672,
+            "tag_id": "3",
+            "tag_name": "Illustrations",
+            "create_at": 1741417168279,
+            "is_del": 0,
+            "create_name": "mq",
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": "mq"
+          },
+          {
+            "id": 362827347004494848,
+            "task_id": 362826629661070336,
+            "tag_id": "6",
+            "tag_name": "Animals",
+            "create_at": 1741418195133,
+            "is_del": 0,
+            "create_name": "mq",
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": "mq"
+          },
+          {
+            "id": 362827361617449984,
+            "task_id": 362826686938485760,
+            "tag_id": "6",
+            "tag_name": "Animals",
+            "create_at": 1741418196004,
+            "is_del": 0,
+            "create_name": "mq",
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": "mq"
+          },
+          {
+            "id": 362827368143787008,
+            "task_id": 362826656185848832,
+            "tag_id": "6",
+            "tag_name": "Animals",
+            "create_at": 1741418196393,
+            "is_del": 0,
+            "create_name": "mq",
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "create_by": "mq"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_tag": {
+      "name": "platform_ai_tag",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "标称名 "
+        },
+        {
+          "name": "icon",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 10,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 0,
+            "name": "All",
+            "icon": "●",
+            "create_at": 1741072854,
+            "is_del": 0,
+            "create_name": "admin",
+            "update_at": 1741072854,
+            "update_by": "admin",
+            "update_name": "admin",
+            "create_by": "admin"
+          },
+          {
+            "id": 1,
+            "name": "Characters",
+            "icon": "👤",
+            "create_at": 1741072854,
+            "is_del": 0,
+            "create_name": "admin",
+            "update_at": 1741072854,
+            "update_by": "admin",
+            "update_name": "admin",
+            "create_by": "admin"
+          },
+          {
+            "id": 2,
+            "name": "Photography",
+            "icon": "📷",
+            "create_at": 1741072854,
+            "is_del": 0,
+            "create_name": "admin",
+            "update_at": 1741072854,
+            "update_by": "admin",
+            "update_name": "admin",
+            "create_by": "admin"
+          },
+          {
+            "id": 3,
+            "name": "Illustrations",
+            "icon": "✏️",
+            "create_at": 1741072854,
+            "is_del": 0,
+            "create_name": "admin",
+            "update_at": 1741072854,
+            "update_by": "admin",
+            "update_name": "admin",
+            "create_by": "admin"
+          },
+          {
+            "id": 4,
+            "name": "Portraits",
+            "icon": "🎭",
+            "create_at": 1741072854,
+            "is_del": 0,
+            "create_name": "admin",
+            "update_at": 1741072854,
+            "update_by": "admin",
+            "update_name": "admin",
+            "create_by": "admin"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "platform_ai_template_effect": {
+      "name": "platform_ai_template_effect",
+      "columns": [
+        {
+          "name": "id",
+          "type": "int",
+          "nullable": false,
+          "default": null,
+          "comment": "id"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "名字"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除：0否，1是"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人Id"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 9,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "name": "sakura_season",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null
+          },
+          {
+            "id": 2,
+            "name": "muscling",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null
+          },
+          {
+            "id": 3,
+            "name": "french_kiss",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null
+          },
+          {
+            "id": 4,
+            "name": "slice_therapy",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null
+          },
+          {
+            "id": 5,
+            "name": "beast_companion",
+            "is_del": 0,
+            "create_at": null,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    },
+    "seo_task": {
+      "name": "seo_task",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "用户ID"
+        },
+        {
+          "name": "input_file",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "输入的文件"
+        },
+        {
+          "name": "input_file_document",
+          "type": "longtext",
+          "nullable": true,
+          "default": null,
+          "comment": "输入的文本"
+        },
+        {
+          "name": "output_file",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "输出文档key"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "业务线"
+        },
+        {
+          "name": "type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "任务类型:Proof_Reading|Grammar_Checker|Spell_Checker"
+        },
+        {
+          "name": "status",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "状态:processing|completed|failed"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "third_task_id",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "三方任务id"
+        },
+        {
+          "name": "file_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "summary",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "uuid",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "device_info",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "设备信息"
+        },
+        {
+          "name": "model",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "model_group",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "input",
+          "type": "longtext",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "output",
+          "type": "longtext",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "failed_reason",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 25,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 209695342873023488,
+            "user_id": null,
+            "input_file": "SEO/input/22d414e8-bae2-40d8-8a70-e6743693191f.docx",
+            "input_file_document": null,
+            "output_file": "SEO/output/fixed-6a8f8149-5dac-4297-99e4-493f2b344d6b-股权转让问题.docx",
+            "product_no": "Proof_Reading",
+            "type": "Proof_Reading",
+            "status": "completed",
+            "create_at": 1732290816423,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": 1732290843898,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "third_task_id": "5d690372-36d4-41a5-8701-92773a02fcfb",
+            "file_name": "股权转让问题.docx",
+            "summary": "{\"grammarCheck\": 4, \"spellingCheck\": 0, \"sentenceFlowCheck\": 6}",
+            "uuid": "3f829697-8bee-47b2-ba3f-1f844c4dabb7",
+            "device_info": null,
+            "model": null,
+            "model_group": null,
+            "input": null,
+            "output": null,
+            "failed_reason": null
+          },
+          {
+            "id": 209695885045535744,
+            "user_id": null,
+            "input_file": null,
+            "input_file_document": "Sample\r\n\r\nPart 1 Practical Guide\r\n\r\nLegal Structuring Guide for Web3 founders of dApps.\r\n\r\nWhat are Decentralized Apps (DeFi, GameFi, SocialFi and other FI+ projects)?\r\nToday, the number of Web3 projects running as dApps (Decentralized Applications) is multiplying. These include:\r\n    • DeFi (staking, yielding, crypto lending applications);\r\n    • GameFi (play-to-earn games); and \r\n    • SocialFi (move-to-earn, social platforms for creators, such as NFT platforms, etc.).\r\nMany analysts predict that these applications will become an indispensable element of the metaverse, to which the world is moving every day.\r\nMost dApps are a set of smart contracts developed by a group of enthusiasts. Each DApp smart contract is responsible for the autonomous operation of a specific part of the dApp, including:\r\n    • Various transaction algorithms (token issuance, token mining/minting, token swap);\r\n    • the formation and storage of Treasury, reserve funds and liquidity pools, which are automatically filled with virtual assets following the rules programmed in smart contracts;\r\n    • the participation of key contributors and stakeholders of the dApp ecosystem (validators, oracles, supervisors, guardians) in a DAO (DAO members can vote with private keys to change the rules of operation of specific smart contracts and manage the Treasury).\r\nThe legal status of dApps\r\nThese smart contracts are usually uploaded (deployed) once to the blockchain network (e.g., Ethereum, NEAR, Solana, etc.) and operate entirely autonomously. These decentralized applications (smart contracts) do not require administrators, servers, domain providers, etc. They \"live\" in a blockchain network and operate autonomously, without the need for human intervention and centralized services for their storage and operation. That's why dApps are also called \"on-chain entities''.\r\nSince dApps do not have owners, administrators, or other final beneficiaries and are entirely autonomous applications, they require a particular approach to their legal",
+            "output_file": "SEO/output/fixed-11e1744c-c383-4872-8cd6-111724008634_document_11e1744c-c383-4872-8cd6-111724008634.docx",
+            "product_no": "Proof_Reading",
+            "type": "Spell_Checker",
+            "status": "completed",
+            "create_at": 1732290848739,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": 1732290860805,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "third_task_id": "6b6de2d3-140c-42af-b9df-ca484378df6f",
+            "file_name": null,
+            "summary": "{\"grammarCheck\": 0, \"spellingCheck\": 0, \"sentenceFlowCheck\": 0}",
+            "uuid": "4d66c3a2-12bd-4958-8507-af4c2cd0dce5",
+            "device_info": null,
+            "model": null,
+            "model_group": null,
+            "input": null,
+            "output": null,
+            "failed_reason": null
+          },
+          {
+            "id": 209698166814020608,
+            "user_id": null,
+            "input_file": null,
+            "input_file_document": "Sample\r\n\r\nPart 1 Practical Guide\r\n\r\nLegal Structuring Guide for Web3 founders of dApps.\r\n\r\nWhat are Decentralized Apps (DeFi, GameFi, SocialFi and other FI+ projects)?\r\nToday, the number of Web3 projects running as dApps (Decentralized Applications) is multiplying. These include:\r\n    • DeFi (staking, yielding, crypto lending applications);\r\n    • GameFi (play-to-earn games); and \r\n    • SocialFi (move-to-earn, social platforms for creators, such as NFT platforms, etc.).\r\nMany analysts predict that these applications will become an indispensable element of the metaverse, to which the world is moving every day.\r\nMost dApps are a set of smart contracts developed by a group of enthusiasts. Each DApp smart contract is responsible for the autonomous operation of a specific part of the dApp, including:\r\n    • Various transaction algorithms (token issuance, token mining/minting, token swap);\r\n    • the formation and storage of Treasury, reserve funds and liquidity pools, which are automatically filled with virtual assets following the rules programmed in smart contracts;\r\n    • the participation of key contributors and stakeholders of the dApp ecosystem (validators, oracles, supervisors, guardians) in a DAO (DAO members can vote with private keys to change the rules of operation of specific smart contracts and manage the Treasury).\r\nThe legal status of dApps\r\nThese smart contracts are usually uploaded (deployed) once to the blockchain network (e.g., Ethereum, NEAR, Solana, etc.) and operate entirely autonomously. These decentralized applications (smart contracts) do not require administrators, servers, domain providers, etc. They \"live\" in a blockchain network and operate autonomously, without the need for human intervention and centralized services for their storage and operation. That's why dApps are also called \"on-chain entities''.\r\nSince dApps do not have owners, administrators, or other final beneficiaries and are entirely autonomous applications, they require a particular approach to their legal",
+            "output_file": "SEO/output/fixed-b789f936-e725-48de-9c3a-dd655f593acc_document_b789f936-e725-48de-9c3a-dd655f593acc.docx",
+            "product_no": "Proof_Reading",
+            "type": "Grammar_Checker",
+            "status": "completed",
+            "create_at": 1732290984743,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": 1732290993806,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "third_task_id": "47ab6438-693f-4ae1-bac3-1bd9466f3ea4",
+            "file_name": null,
+            "summary": "{\"grammarCheck\": 2, \"spellingCheck\": 0, \"sentenceFlowCheck\": 0}",
+            "uuid": "57e09ca0-4baf-467d-a090-5d0e467d374b",
+            "device_info": null,
+            "model": null,
+            "model_group": null,
+            "input": null,
+            "output": null,
+            "failed_reason": null
+          },
+          {
+            "id": 209721767978079232,
+            "user_id": 209721428205900800,
+            "input_file": null,
+            "input_file_document": "hello i whadkls",
+            "output_file": "SEO/output/fixed-bce146ef-b3bb-4d45-a2a8-83c70a4a1b7e_document_bce146ef-b3bb-4d45-a2a8-83c70a4a1b7e.docx",
+            "product_no": "Proof_Reading",
+            "type": "Proof_Reading",
+            "status": "completed",
+            "create_at": 1732292391482,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": 1732292397539,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "third_task_id": "bbfa3cb5-0ab0-4bde-944c-ca209f077beb",
+            "file_name": null,
+            "summary": "{\"grammarCheck\": 1, \"spellingCheck\": 0, \"sentenceFlowCheck\": 0}",
+            "uuid": "4d800d6b-8f85-4e6c-9779-324c1a53cf13",
+            "device_info": null,
+            "model": null,
+            "model_group": null,
+            "input": null,
+            "output": null,
+            "failed_reason": null
+          },
+          {
+            "id": 209729634814661632,
+            "user_id": null,
+            "input_file": null,
+            "input_file_document": "Sample\r\n\r\nPart 1 Practical Guide\r\n\r\nLegal Structuring Guide for Web3 founders of dApps.\r\n\r\nWhat are Decentralized Apps (DeFi, GameFi, SocialFi and other FI+ projects)?\r\nToday, the number of Web3 projects running as dApps (Decentralized Applications) is multiplying. These include:\r\n    • DeFi (staking, yielding, crypto lending applications);\r\n    • GameFi (play-to-earn games); and \r\n    • SocialFi (move-to-earn, social platforms for creators, such as NFT platforms, etc.).\r\nMany analysts predict that these applications will become an indispensable element of the metaverse, to which the world is moving every day.\r\nMost dApps are a set of smart contracts developed by a group of enthusiasts. Each DApp smart contract is responsible for the autonomous operation of a specific part of the dApp, including:\r\n    • Various transaction algorithms (token issuance, token mining/minting, token swap);\r\n    • the formation and storage of Treasury, reserve funds and liquidity pools, which are automatically filled with virtual assets following the rules programmed in smart contracts;\r\n    • the participation of key contributors and stakeholders of the dApp ecosystem (validators, oracles, supervisors, guardians) in a DAO (DAO members can vote with private keys to change the rules of operation of specific smart contracts and manage the Treasury).\r\nThe legal status of dApps\r\nThese smart contracts are usually uploaded (deployed) once to the blockchain network (e.g., Ethereum, NEAR, Solana, etc.) and operate entirely autonomously. These decentralized applications (smart contracts) do not require administrators, servers, domain providers, etc. They \"live\" in a blockchain network and operate autonomously, without the need for human intervention and centralized services for their storage and operation. That's why dApps are also called \"on-chain entities''.\r\nSince dApps do not have owners, administrators, or other final beneficiaries and are entirely autonomous applications, they require a particular approach to their legal",
+            "output_file": "SEO/output/fixed-e21e9eb5-4a5c-4bb1-aaca-d904c3f679a0_document_e21e9eb5-4a5c-4bb1-aaca-d904c3f679a0.docx",
+            "product_no": "Proof_Reading",
+            "type": "Proof_Reading",
+            "status": "completed",
+            "create_at": 1732292860382,
+            "is_del": 0,
+            "create_name": null,
+            "update_at": 1732292887464,
+            "update_by": null,
+            "update_name": null,
+            "create_by": null,
+            "third_task_id": "76d30a10-9075-46a9-864d-280fb444ca7f",
+            "file_name": null,
+            "summary": "{\"grammarCheck\": 5, \"spellingCheck\": 1, \"sentenceFlowCheck\": 0}",
+            "uuid": "76a39cb9-0faf-4c61-834c-322232189687",
+            "device_info": null,
+            "model": null,
+            "model_group": null,
+            "input": null,
+            "output": null,
+            "failed_reason": null
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      }
+    }
+  },
+  "relationships": []
+}

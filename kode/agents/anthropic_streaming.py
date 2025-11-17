@@ -236,9 +236,52 @@ class AnthropicStreamingAgent:
                 for item in msg["content"]:
                     if isinstance(item, dict) and item.get("type") == "tool_result":
                         result_text = item.get("content", "")
-                        if len(result_text) > 2000:
-                            # Truncate long results (keep first 1000 + last 500 chars)
-                            item["content"] = result_text[:1000] + "\n...[truncated]...\n" + result_text[-500:]
+
+                        # Aggressive trimming for schema/ontology results
+                        # These are large JSON objects that should be summarized
+                        try:
+                            import json
+                            result_data = json.loads(result_text)
+
+                            # Check if this is a schema/ontology/uncertainty result
+                            is_large_data = any(key in result_data for key in [
+                                "schema", "ontology", "entities", "concepts",
+                                "relationships", "uncertainties", "domains"
+                            ])
+
+                            if is_large_data:
+                                # Create a summary instead of full content
+                                summary = {"status": result_data.get("status", "success")}
+
+                                # Add metadata only
+                                if "metadata" in result_data:
+                                    summary["metadata"] = result_data["metadata"]
+
+                                # Add counts instead of full lists
+                                for key in ["entities", "concepts", "relationships", "uncertainties"]:
+                                    if key in result_data:
+                                        data = result_data[key]
+                                        if isinstance(data, list):
+                                            summary[f"{key}_count"] = len(data)
+                                        elif isinstance(data, dict):
+                                            summary[f"{key}_count"] = len(data)
+
+                                # Keep small important fields
+                                for key in ["message", "file_path", "cache_hit"]:
+                                    if key in result_data:
+                                        summary[key] = result_data[key]
+
+                                # Replace with summary
+                                item["content"] = json.dumps(summary, ensure_ascii=False, indent=2)
+                                logger.info(f"Trimmed large data result: {len(result_text)} -> {len(item['content'])} chars")
+                            elif len(result_text) > 2000:
+                                # Standard truncation for other long results
+                                item["content"] = result_text[:1000] + "\n...[truncated]...\n" + result_text[-500:]
+                        except (json.JSONDecodeError, Exception):
+                            # Not JSON or error parsing, use standard truncation
+                            if len(result_text) > 2000:
+                                item["content"] = result_text[:1000] + "\n...[truncated]...\n" + result_text[-500:]
+
                         trimmed_content.append(item)
                     else:
                         trimmed_content.append(item)
@@ -506,6 +549,37 @@ class AnthropicStreamingAgent:
 
                         logger.info(f"{'='*80}\n")
 
+                        # 🔍 准备完整的请求和响应内容（用于追踪）
+                        request_data = {
+                            "system": enhanced_system_prompt,
+                            "messages": messages,
+                            "tools": self.anthropic_tools,
+                            "model": self.model,
+                        }
+
+                        response_data = {
+                            "content": full_text,
+                            "content_blocks": [
+                                {
+                                    "type": block.type,
+                                    "text": getattr(block, "text", None) if hasattr(block, "text") else None,
+                                    "tool_use": {
+                                        "id": block.id,
+                                        "name": block.name,
+                                        "input": block.input
+                                    } if isinstance(block, ToolUseBlock) else None
+                                }
+                                for block in content_blocks
+                            ],
+                            "stop_reason": getattr(final_message, "stop_reason", None),
+                            "usage": {
+                                "input_tokens": input_tokens,
+                                "output_tokens": output_tokens,
+                                "cache_creation_input_tokens": cache_creation,
+                                "cache_read_input_tokens": cache_read,
+                            }
+                        }
+
                         # Yield token usage event for this iteration
                         yield {
                             "type": "token_usage",
@@ -517,15 +591,20 @@ class AnthropicStreamingAgent:
                                 "total_tokens": input_tokens + output_tokens,
                                 "cache_creation_input_tokens": cache_creation,
                                 "cache_read_input_tokens": cache_read,
+                                # 🔍 添加完整的请求和响应数据
+                                "request_data": request_data,
+                                "response_data": response_data,
                             }
                         }
 
             except Exception as e:
-                logger.error(f"Error streaming from Anthropic: {e}", exc_info=True)
+                from kode.utils.logger import safe_log_exception
+                error_message = str(e)
+                safe_log_exception(logger, f"Error streaming from Anthropic: {error_message}", e)
                 yield {
                     "type": "error",
-                    "content": f"Error: {str(e)}",
-                    "metadata": {"error": str(e)}
+                    "content": f"Error: {error_message}",
+                    "metadata": {"error": error_message}
                 }
                 return
 
@@ -600,6 +679,17 @@ class AnthropicStreamingAgent:
                         if self.verbose:
                             logger.info(f"Tool result: {str(result)[:200]}")
 
+                        # Check if tool requires user input
+                        requires_user_input = False
+                        try:
+                            import json
+                            result_data = json.loads(str(result))
+                            if isinstance(result_data, dict) and result_data.get("requires_user_input"):
+                                requires_user_input = True
+                                logger.info(f"[Tool '{tool_name}'] Requires user input - Agent will pause after this iteration")
+                        except (json.JSONDecodeError, ValueError):
+                            pass  # Result is not JSON, continue normally
+
                         # Yield tool_result event immediately
                         yield {
                             "type": "tool_result",
@@ -608,7 +698,8 @@ class AnthropicStreamingAgent:
                                 "tool_name": tool_name,
                                 "status": "completed",
                                 "tool_args": tool_args,
-                                "result": str(result)
+                                "result": str(result),
+                                "requires_user_input": requires_user_input  # Pass to frontend
                             }
                         }
 
@@ -784,6 +875,35 @@ class AnthropicStreamingAgent:
                 "role": "user",
                 "content": tool_results
             })
+
+            # Check if any tool requires user input - if so, pause the agent loop
+            requires_pause = False
+            for tr in tool_results:
+                content = tr.get("content", "")
+                try:
+                    import json
+                    result_data = json.loads(str(content))
+                    if isinstance(result_data, dict) and result_data.get("requires_user_input"):
+                        requires_pause = True
+                        logger.info(f"[Agent Loop] Pausing - user input required")
+                        # Yield a special event to notify frontend
+                        yield {
+                            "type": "waiting_for_user",
+                            "content": "等待用户填写问卷...",
+                            "metadata": {
+                                "reason": "User input required for uncertainty questions",
+                                "next_tool": result_data.get("next_tool"),
+                                "next_action": result_data.get("next_action")
+                            }
+                        }
+                        break
+                except (json.JSONDecodeError, ValueError, AttributeError):
+                    pass
+
+            # If paused, exit the loop and wait for user to submit answers
+            if requires_pause:
+                logger.info("[Agent Loop] Exiting loop - waiting for user input")
+                return
 
             # Trim messages after each iteration to prevent token overflow
             messages = self._trim_messages_for_context(messages)

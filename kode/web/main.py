@@ -119,7 +119,7 @@ async def get_config():
 
 
 # Import routers
-from kode.web.api import chat, project, sse, database, auth, billing
+from kode.web.api import chat, project, sse, database, auth, billing, uncertainty
 from kode.database.session import init_db, async_session_maker
 from kode.models import User, Project, Plan
 from sqlalchemy import select
@@ -131,6 +131,7 @@ app.include_router(project.router, prefix="/api", tags=["projects"])
 app.include_router(sse.router, prefix="/api/sse", tags=["sse"])
 app.include_router(database.router, prefix="/api/database", tags=["database"])
 app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
+app.include_router(uncertainty.router, prefix="/api/uncertainty", tags=["uncertainty"])
 
 
 async def create_default_data():

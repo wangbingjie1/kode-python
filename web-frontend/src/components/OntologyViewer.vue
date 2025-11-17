@@ -19,13 +19,13 @@
         <h3>已保存的本体</h3>
         <div
           v-for="ontology in ontologies"
-          :key="ontology.name"
-          :class="['ontology-item', { active: selectedOntology?.name === ontology.name }]"
-          @click="selectOntology(ontology.name)"
+          :key="ontology.connection_name"
+          :class="['ontology-item', { active: selectedOntology?.connection_name === ontology.connection_name }]"
+          @click="selectOntology(ontology.connection_name)"
         >
-          <div class="ontology-name">{{ ontology.name }}</div>
+          <div class="ontology-name">{{ ontology.connection_name }}</div>
           <div class="ontology-meta">
-            {{ ontology.entity_count }} 个实体 · {{ ontology.relationship_count }} 个关系
+            个实体: {{ ontology.concept_count }} · {{ ontology.relationship_count }} 个关系
           </div>
           <div class="ontology-date">{{ formatDate(ontology.created_at) }}</div>
         </div>
@@ -42,9 +42,12 @@
 
         <div v-else>
           <div class="ontology-info">
-            <h3>{{ selectedOntology.name }}</h3>
+            <h3>{{ selectedOntology.connection_name }}</h3>
             <p>版本: {{ selectedOntology.version }}</p>
             <p>创建时间: {{ formatDate(selectedOntology.created_at) }}</p>
+            <p>概念: {{ selectedOntology.ontology?.concepts ? Object.keys(selectedOntology.ontology.concepts).length : 0 }} |
+               属性: {{ selectedOntology.ontology?.properties ? Object.keys(selectedOntology.ontology.properties).length : 0 }} |
+               关系: {{ selectedOntology.ontology?.relationships?.length || 0 }}</p>
           </div>
 
           <!-- Search results -->
@@ -81,13 +84,13 @@
                 :class="['tab', { active: currentTab === 'entities' }]"
                 @click="currentTab = 'entities'"
               >
-                实体 ({{ selectedOntology.entities?.length || 0 }})
+                概念 ({{ selectedOntology.ontology?.concepts ? Object.keys(selectedOntology.ontology.concepts).length : 0 }})
               </button>
               <button
                 :class="['tab', { active: currentTab === 'relationships' }]"
                 @click="currentTab = 'relationships'"
               >
-                关系 ({{ selectedOntology.relationships?.length || 0 }})
+                关系 ({{ selectedOntology.ontology?.relationships?.length || 0 }})
               </button>
               <button
                 :class="['tab', { active: currentTab === 'graph' }]"
@@ -122,20 +125,20 @@
               <!-- Relationships tab -->
               <div v-if="currentTab === 'relationships'" class="relationships-list">
                 <div
-                  v-for="(rel, idx) in selectedOntology.relationships"
+                  v-for="(rel, idx) in selectedOntology.ontology?.relationships || []"
                   :key="idx"
                   class="relationship-card"
                 >
                   <div class="relationship-flow">
-                    <span class="entity-node">{{ rel.from_entity }}</span>
+                    <span class="entity-node">{{ rel.source_concept }}</span>
                     <span class="relationship-arrow">
                       <span class="relationship-type">{{ rel.relationship_type }}</span>
                       →
                     </span>
-                    <span class="entity-node">{{ rel.to_entity }}</span>
+                    <span class="entity-node">{{ rel.target_concept }}</span>
                   </div>
-                  <div v-if="rel.cardinality" class="relationship-meta">
-                    基数: {{ rel.cardinality }}
+                  <div v-if="rel.strength" class="relationship-meta">
+                    强度: {{ rel.strength }}
                   </div>
                   <p v-if="rel.description" class="relationship-description">
                     {{ rel.description }}
@@ -145,12 +148,36 @@
 
               <!-- Graph tab -->
               <div v-if="currentTab === 'graph'" class="graph-view">
-                <div class="graph-placeholder">
-                  <p>本体关系图可视化</p>
-                  <p class="graph-hint">
-                    (可以集成 D3.js 或 ECharts 来展示实体关系图)
-                  </p>
+                <div class="graph-controls">
+                  <div class="control-group">
+                    <label>布局算法:</label>
+                    <select v-model="graphLayout" @change="updateGraph">
+                      <option value="force">力导向布局</option>
+                      <option value="circular">环形布局</option>
+                    </select>
+                  </div>
+                  <div class="control-group">
+                    <label>节点大小:</label>
+                    <input
+                      v-model.number="nodeSize"
+                      type="range"
+                      min="20"
+                      max="80"
+                      @input="updateGraph"
+                    />
+                    <span>{{ nodeSize }}</span>
+                  </div>
+                  <div class="control-group">
+                    <label>显示标签</label>
+                    <input v-model="showLabels" type="checkbox" @change="updateGraph" />
+                  </div>
                 </div>
+                <v-chart
+                  ref="graphChart"
+                  :option="graphOption"
+                  :autoresize="true"
+                  class="graph-chart"
+                />
               </div>
             </div>
           </div>
@@ -201,7 +228,7 @@ async function search() {
   }
 
   try {
-    const results = await searchOntology(selectedOntology.value.name, {
+    const results = await searchOntology(selectedOntology.value.connection_name, {
       query: searchQuery.value,
       limit: 20
     })
@@ -218,8 +245,16 @@ function onSearchInput() {
 }
 
 const filteredEntities = computed(() => {
-  if (!selectedOntology.value?.entities) return []
-  return selectedOntology.value.entities
+  if (!selectedOntology.value?.ontology?.concepts) return []
+  // 将 concepts 对象转换为数组
+  return Object.entries(selectedOntology.value.ontology.concepts).map(([key, concept]: [string, any]) => ({
+    id: key,
+    name: concept.business_name_cn || concept.technical_name || key,
+    type: concept.domain || 'concept',
+    description: concept.description,
+    source_table: concept.data_source,
+    source_column: concept.technical_name
+  }))
 })
 
 function formatDate(dateStr: string): string {

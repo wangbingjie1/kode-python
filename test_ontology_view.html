@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本体查看测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .ontology-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .ontology-card:hover {
+            background-color: #f5f5f5;
+        }
+        .ontology-detail {
+            margin-top: 20px;
+            padding: 20px;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .error {
+            color: red;
+            padding: 10px;
+            background-color: #fee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>本体管理 - 测试页面</h1>
+
+    <div id="ontologyList">
+        <h2>已保存的本体</h2>
+        <div id="list"></div>
+    </div>
+
+    <div id="ontologyDetail" style="display:none;">
+        <h2>本体详情</h2>
+        <div id="detail"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8001/api/database';
+
+        // 加载本体列表
+        async function loadOntologies() {
+            try {
+                const response = await fetch(`${API_BASE}/ontologies`);
+                const ontologies = await response.json();
+
+                const listDiv = document.getElementById('list');
+                listDiv.innerHTML = '';
+
+                if (ontologies.length === 0) {
+                    listDiv.innerHTML = '<p>暂无本体</p>';
+                    return;
+                }
+
+                ontologies.forEach(ont => {
+                    const card = document.createElement('div');
+                    card.className = 'ontology-card';
+                    card.innerHTML = `
+                        <h3>${ont.connection_name}</h3>
+                        <p>版本: ${ont.version}</p>
+                        <p>创建时间: ${new Date(ont.created_at).toLocaleString('zh-CN')}</p>
+                        <p>
+                            概念: ${ont.concept_count} |
+                            属性: ${ont.property_count} |
+                            关系: ${ont.relationship_count} |
+                            不确定性: ${ont.uncertainty_count}
+                        </p>
+                    `;
+                    card.onclick = () => loadOntologyDetail(ont.connection_name);
+                    listDiv.appendChild(card);
+                });
+            } catch (error) {
+                document.getElementById('list').innerHTML =
+                    `<div class="error">加载失败: ${error.message}</div>`;
+            }
+        }
+
+        // 加载本体详情
+        async function loadOntologyDetail(connectionName) {
+            try {
+                console.log('Loading ontology for connection:', connectionName);
+
+                const response = await fetch(`${API_BASE}/ontologies/${connectionName}`);
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || response.statusText);
+                }
+
+                const data = await response.json();
+
+                const detailDiv = document.getElementById('ontologyDetail');
+                detailDiv.style.display = 'block';
+
+                const ontology = data.ontology || {};
+                const concepts = ontology.concepts || {};
+                const relationships = ontology.relationships || [];
+
+                document.getElementById('detail').innerHTML = `
+                    <h3>连接: ${data.connection_name}</h3>
+                    <p>版本: ${data.version}</p>
+                    <p>创建时间: ${new Date(data.created_at).toLocaleString('zh-CN')}</p>
+
+                    <h4>概念统计 (${Object.keys(concepts).length} 个)</h4>
+                    <pre>${JSON.stringify(Object.keys(concepts).slice(0, 10), null, 2)}</pre>
+
+                    <h4>关系统计 (${relationships.length} 个)</h4>
+                    <pre>${JSON.stringify(relationships.slice(0, 5), null, 2)}</pre>
+
+                    <h4>完整数据</h4>
+                    <details>
+                        <summary>点击展开</summary>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </details>
+                `;
+
+                // 滚动到详情
+                detailDiv.scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                document.getElementById('detail').innerHTML =
+                    `<div class="error">加载详情失败: ${error.message}</div>`;
+                document.getElementById('ontologyDetail').style.display = 'block';
+            }
+        }
+
+        // 页面加载时获取列表
+        loadOntologies();
+    </script>
+</body>
+</html>
