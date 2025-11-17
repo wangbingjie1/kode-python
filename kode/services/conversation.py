@@ -126,19 +126,42 @@ class AsyncConversationService:
         self.agent_config = self._create_data_analyst_agent()
 
 
-    def _create_data_analyst_agent(self) -> AgentConfig:
-        """创建唯一的数据分析 agent 配置。"""
+    def _get_dynamic_context(self) -> str:
+        """获取动态上下文信息（缓存、数据库连接）。
 
-        # 获取宿主机系统信息
-        system_info = format_system_info_for_prompt()
+        注意：不包含系统信息和时间，这些已经分别处理：
+        - 静态系统信息（OS、Python）→ system_prompt（可缓存）
+        - 动态时间信息 → 每次迭代尾部（anthropic_streaming.py）
 
+        这些信息会变化，不应该放在 system_prompt 中（会破坏缓存）。
+        应该作为第一条 user message 注入。
+
+        Returns:
+            格式化的动态上下文字符串
+        """
         # 获取缓存资源信息
         cached_resources = self._get_cached_resources_context()
-        cache_section = f"\n\n## 可用的文件资源\n\n{cached_resources}\n\n**重要**: 优先使用缓存!如果有缓存的schema或ontology\n" if cached_resources else ""
+        cache_section = f"## 可用的文件资源\n\n{cached_resources}\n\n**重要**: 优先使用缓存!如果有缓存的schema或ontology\n" if cached_resources else ""
 
         # 获取数据库连接信息
         db_connections = self._get_database_context()
         db_section = db_connections if db_connections else ""
+
+        parts = [p for p in [cache_section, db_section] if p]
+        return "\n\n".join(parts) if parts else ""
+
+    def _create_data_analyst_agent(self) -> AgentConfig:
+        """创建唯一的数据分析 agent 配置。
+
+        注意：为了启用 Prompt Caching，system_prompt 必须保持静态。
+        动态内容（缓存、数据库连接、时间）通过以下方式注入：
+        - 对话头部：缓存资源、数据库连接（_get_dynamic_context）
+        - 每次迭代尾部：当前时间、token 预算（anthropic_streaming.py）
+        """
+        from kode.utils.system_info import format_system_info_static
+
+        # 静态系统信息（只在初始化时获取一次，可以被缓存）
+        static_system_info = format_system_info_static()
 
         return AgentConfig(
             name="data-analyst",
@@ -146,9 +169,8 @@ class AsyncConversationService:
             description="专业数据分析 Agent，专注于 ERP 数据库分析和业务洞察",
             system_prompt=f"""你是一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
 
-{system_info}
-{cache_section}
-{db_section}
+{static_system_info}
+
 ## 核心能力
 
 ### 1. 数据库连接和理解
@@ -733,11 +755,24 @@ OntologyUncertaintyResolver({{{{
             # Stream chunks from agent
             async def stream_with_progress():
                 """Merge agent streaming with progress updates."""
+                # 注入动态上下文到 chat_history 头部（仅在首次消息时）
+                enhanced_history = chat_history.copy() if chat_history else []
+
+                # 如果是新对话（没有历史），注入动态上下文
+                if not enhanced_history:
+                    dynamic_context = self._get_dynamic_context()
+                    if dynamic_context.strip():
+                        enhanced_history.insert(0, {
+                            "role": "user",
+                            "content": f"<context>\n{dynamic_context}\n</context>"
+                        })
+                        logger.info("[Cache Optimization] 动态上下文已注入到对话头部")
+
                 # Start streaming from agent
                 logger.info(f"[DEBUG] Starting stream_response...")
                 agent_stream = streaming_agent.stream_response(
                     task=enhanced_task,
-                    chat_history=chat_history,
+                    chat_history=enhanced_history,
                     max_iterations=agent_config.max_iterations
                 )
 

@@ -111,6 +111,7 @@ class AnthropicStreamingAgent:
         Build context budget information for the agent.
 
         This provides the agent with awareness of its token usage and remaining capacity.
+        Also includes current time (dynamic info that should not be cached).
 
         Args:
             input_tokens: Total input tokens used so far
@@ -120,8 +121,13 @@ class AnthropicStreamingAgent:
             iteration: Current iteration number
 
         Returns:
-            Formatted budget information string
+            Formatted budget information string (including time)
         """
+        from kode.utils.system_info import format_system_info_dynamic
+
+        # Get current time (dynamic info)
+        time_info = format_system_info_dynamic()
+
         # Calculate totals
         total_tokens_used = input_tokens + output_tokens
         context_limit = 2000000  # Anthropic's context window for Claude Sonnet 4.5
@@ -131,7 +137,11 @@ class AnthropicStreamingAgent:
         usage_percentage = (total_tokens_used / context_limit) * 100 if context_limit > 0 else 0
 
         # Build budget info message
-        budget_lines = [f"## 🔋你的剩余注意力百分比：{100 - usage_percentage:.1f}%"]
+        budget_lines = [
+            time_info,
+            "",
+            f"## 🔋你的剩余注意力百分比：{100 - usage_percentage:.1f}%"
+        ]
 
         # Add warnings based on usage
         if usage_percentage >= 70:
@@ -383,24 +393,30 @@ class AnthropicStreamingAgent:
                     self.on_iteration(iteration)
 
             # Calculate and inject context budget information
+            # ⚠️ IMPORTANT: 不要修改 system prompt，否则会破坏缓存
+            # 将 budget info 作为独立的 user message 注入
             context_budget_info = self._build_context_budget_info(
                 total_input_tokens, total_output_tokens,
                 total_cache_creation_tokens, total_cache_read_tokens,
                 iteration
             )
 
-            # Prepend budget info to system prompt for this iteration
-            enhanced_system_prompt = f"{context_budget_info}\n\n{self.system_prompt}"
+            # 在对话历史的最后插入 budget info（作为 user message）
+            if context_budget_info.strip():
+                messages.append({
+                    "role": "user",
+                    "content": f"<system_info>\n{context_budget_info}\n</system_info>"
+                })
 
             # ===== Prompt Caching Support =====
             # 使用 Anthropic 的 Prompt Caching 功能来缓存系统提示词和工具定义
             # 参考: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
 
-            # 将 system prompt 转换为支持缓存的格式
+            # 将 system prompt 转换为支持缓存的格式（保持静态）
             system_with_cache = [
                 {
                     "type": "text",
-                    "text": enhanced_system_prompt,
+                    "text": self.system_prompt,  # ← 保持静态，不注入动态内容
                     "cache_control": {"type": "ephemeral"}  # 标记为可缓存
                 }
             ]
@@ -437,7 +453,7 @@ class AnthropicStreamingAgent:
                             logger.info(f"{user_content}")
 
                 # Token 组成估算
-                system_tokens = len(enhanced_system_prompt) // 4
+                system_tokens = len(self.system_prompt) // 4
                 tools_tokens = sum(len(str(t)) for t in self.anthropic_tools) // 4
                 history_tokens = sum(len(str(m.get('content', ''))) for m in messages) // 4
 
@@ -551,7 +567,7 @@ class AnthropicStreamingAgent:
 
                         # 🔍 准备完整的请求和响应内容（用于追踪）
                         request_data = {
-                            "system": enhanced_system_prompt,
+                            "system": self.system_prompt,
                             "messages": messages,
                             "tools": self.anthropic_tools,
                             "model": self.model,

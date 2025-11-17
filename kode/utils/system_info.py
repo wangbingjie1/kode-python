@@ -49,12 +49,14 @@ def get_system_info() -> Dict[str, str]:
     return info
 
 
-def format_system_info_for_prompt() -> str:
+def format_system_info_static() -> str:
     """
-    格式化系统信息为适合添加到 AI 提示词的文本
+    格式化静态系统信息（不包含时间等动态信息）
+
+    用于 system prompt，可以被缓存。
 
     Returns:
-        格式化的系统信息文本
+        格式化的静态系统信息文本
     """
     info = get_system_info()
 
@@ -75,7 +77,6 @@ def format_system_info_for_prompt() -> str:
         f"**用户主目录**: `{info['home']}`",
         f"**Shell/终端**: {info['shell']}",
         f"**路径分隔符**: `{info['path_sep']}`",
-        f"**当前时间**: {info['current_time']}",
         "",
         "**重要提示**:",
     ]
@@ -99,6 +100,34 @@ def format_system_info_for_prompt() -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+def format_system_info_dynamic() -> str:
+    """
+    格式化动态系统信息（当前时间等）
+
+    这部分会每次变化，应该注入到 user message 而非 system prompt。
+
+    Returns:
+        格式化的动态系统信息文本
+    """
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return f"**当前时间**: {current_time}"
+
+
+def format_system_info_for_prompt() -> str:
+    """
+    格式化系统信息为适合添加到 AI 提示词的文本
+
+    DEPRECATED: 建议使用 format_system_info_static() 和 format_system_info_dynamic()
+    分别处理静态和动态信息，以优化 Prompt Caching。
+
+    Returns:
+        格式化的系统信息文本
+    """
+    static_info = format_system_info_static()
+    dynamic_info = format_system_info_dynamic()
+    return f"{static_info}\n{dynamic_info}\n"
 
 
 if __name__ == "__main__":
