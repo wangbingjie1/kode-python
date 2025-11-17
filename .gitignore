@@ -68,6 +68,7 @@ logs/
 
 # Ontology storage
 ontology_store/
+schema_store/
 
 # Distribution
 *.whl
