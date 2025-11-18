@@ -2194,7 +2194,10 @@
         "建立明确的表关系文档"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user, platform_user_account, user_27"
+      "id": "user_management_platform_user, platform_user_account, user_27",
+      "status": "resolved",
+      "answer": " 请求: userId (platform_user 的 ID)\n     ↓\n  查询 platform_user_account:\n     WHERE user_id = userId AND type = 'glbgpt'\n     ↓\n  获取 account.mainPartnerId (这个值是 user 表的 ID)\n     ↓\n  查询 user 表:\n     SELECT * FROM user WHERE id = account.mainPartnerId\n     ↓\n  返回: user 表中的用户信息（余额、订阅状态等）",
+      "answered_at": "2025-11-17T19:59:40.325950"
     },
     {
       "type": "naming_confusion",
@@ -2209,7 +2212,10 @@
         "如果需要强调业务含义，应在表级别说明"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user.id, platform_user_account.id, platform_user_device.id_28"
+      "id": "user_management_platform_user.id, platform_user_account.id, platform_user_device.id_28",
+      "status": "resolved",
+      "answer": "的确有这个问题",
+      "answered_at": "2025-11-17T19:59:40.325950"
     },
     {
       "type": "schema_ambiguity",
@@ -2225,7 +2231,10 @@
         "考虑重命名以反映单一职责"
       ],
       "domain": "user_management",
-      "id": "user_management_backup_disabled_blacklist_accounts_29"
+      "id": "user_management_backup_disabled_blacklist_accounts_29",
+      "status": "resolved",
+      "answer": "只有这个有用blacklist，其他都没有在用了",
+      "answered_at": "2025-11-17T19:59:40.325950"
     },
     {
       "type": "business_logic_unclear",
@@ -2241,7 +2250,10 @@
         "补充第三方认证的业务流程文档"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_account.type, platform_user_account.main_partner_id, platform_user_account.second_partner_id_30"
+      "id": "user_management_platform_user_account.type, platform_user_account.main_partner_id, platform_user_account.second_partner_id_30",
+      "status": "resolved",
+      "answer": "请求: userId (platform_user 的 ID)\n     ↓\n  查询 platform_user_account:\n     WHERE user_id = userId AND type = 'glbgpt'\n     ↓\n  获取 account.mainPartnerId (这个值是 user 表的 ID)\n     ↓\n  查询 user 表:\n     SELECT * FROM user WHERE id = account.mainPartnerId\n     ↓\n  返回: user 表中的用户信息（余额、订阅状态等）",
+      "answered_at": "2025-11-17T19:59:40.325950"
     },
     {
       "type": "naming_confusion",
@@ -2339,5 +2351,35 @@
     }
   ],
   "uncertainty_count": 10,
-  "uncertainty_analyzed_at": "2025-11-17T17:04:08.663014"
+  "uncertainty_analyzed_at": "2025-11-17T17:04:08.663014",
+  "business_rules": [
+    {
+      "entity": "platform_user, platform_user_account, user",
+      "category": "表关系",
+      "question": "存在三个用户相关的核心表（platform_user、platform_user_account、user），它们之间的关系和使用场景不明确。是否是不同系统的用户表？是否存在数据同步关系？",
+      "answer": " 请求: userId (platform_user 的 ID)\n     ↓\n  查询 platform_user_account:\n     WHERE user_id = userId AND type = 'glbgpt'\n     ↓\n  获取 account.mainPartnerId (这个值是 user 表的 ID)\n     ↓\n  查询 user 表:\n     SELECT * FROM user WHERE id = account.mainPartnerId\n     ↓\n  返回: user 表中的用户信息（余额、订阅状态等）",
+      "added_at": "2025-11-17T19:59:40.325950"
+    },
+    {
+      "entity": "platform_user.id, platform_user_account.id, platform_user_device.id",
+      "category": "字段命名",
+      "question": "多个表的 id 字段注释不一致：platform_user.id 注释为 'user_id'，platform_user_account.id 和 platform_user_device.id 注释为 '账号ID'，但它们都是主键",
+      "answer": "的确有这个问题",
+      "added_at": "2025-11-17T19:59:40.325950"
+    },
+    {
+      "entity": "backup_disabled_blacklist_accounts",
+      "category": "表用途",
+      "question": "表名包含 'backup'、'disabled'、'blacklist' 三个概念，无法确定该表的真实用途：是备份表？是禁用账号表？还是黑名单表？",
+      "answer": "只有这个有用blacklist，其他都没有在用了",
+      "added_at": "2025-11-17T19:59:40.325950"
+    },
+    {
+      "entity": "platform_user_account.type, platform_user_account.main_partner_id, platform_user_account.second_partner_id",
+      "category": "业务流程",
+      "question": "第三方账号存在 'main_partner_id' 和 'second_partner_id' 两个字段，不清楚为什么需要主次两个第三方 ID，以及它们的使用场景",
+      "answer": "请求: userId (platform_user 的 ID)\n     ↓\n  查询 platform_user_account:\n     WHERE user_id = userId AND type = 'glbgpt'\n     ↓\n  获取 account.mainPartnerId (这个值是 user 表的 ID)\n     ↓\n  查询 user 表:\n     SELECT * FROM user WHERE id = account.mainPartnerId\n     ↓\n  返回: user 表中的用户信息（余额、订阅状态等）",
+      "added_at": "2025-11-17T19:59:40.325950"
+    }
+  ]
 }

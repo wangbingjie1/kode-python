@@ -127,31 +127,40 @@ class OntologyBuilderTool(KodeTool):
                     ensure_ascii=False,
                 )
 
-            # 【智能门禁检查】检查不确定性分析状态
-            uncertainty_file = Path(schema_path) / connection_name / "uncertainties.json"
+            # 【智能门禁检查】检查不确定性分析状态（从各领域文件中读取）
+            # ✨ 新架构：不确定性数据已分散存储在各 domain JSON 文件中
+            domains_dir = Path(schema_path) / connection_name / "domains"
 
-            if not uncertainty_file.exists():
-                # 🔍 情况1: 没有不确定性文件 → 提示需要先分析
-                logger.warning(f"⚠️ 未找到 uncertainties.json")
+            if not domains_dir.exists() or not list(domains_dir.glob("*.json")):
+                # 🔍 情况1: 没有领域文件 → Schema 未提取
+                logger.warning(f"⚠️ 未找到 domains 目录或领域文件")
                 return json.dumps(
                     {
                         "status": "error",
                         "gate_check_failed": True,
-                        "reason": "missing_uncertainty_analysis",
-                        "message": "未找到不确定性分析结果文件。",
-                        "suggestion": "请先运行 DomainUncertaintyAnalyzer 进行不确定性分析。",
-                        "action_required": f"运行 DomainUncertaintyAnalyzer(connection_name='{connection_name}')",
-                        "note": "该工具会并行分析所有业务域，识别schema模糊性、缺失约束等问题。"
+                        "reason": "missing_schema_extraction",
+                        "message": "未找到领域schema文件。",
+                        "suggestion": "请先运行 DatabaseSchemaExtractor 提取数据库schema。",
                     },
                     indent=2,
                     ensure_ascii=False,
                 )
 
-            # 🔍 情况2: 有不确定性文件 → 检查 high 优先级问题
-            with open(uncertainty_file, "r", encoding="utf-8") as f:
-                uncertainty_data = json.load(f)
+            # 🔍 情况2: 读取所有领域文件，检查 high 优先级不确定性
+            high_uncertainties = []
+            for domain_file in domains_dir.glob("*.json"):
+                try:
+                    with open(domain_file, "r", encoding="utf-8") as f:
+                        domain_data = json.load(f)
 
-            high_uncertainties = uncertainty_data.get("uncertainties_by_priority", {}).get("high", [])
+                    # 从领域文件中读取 uncertainties
+                    uncertainties = domain_data.get("uncertainties", [])
+                    high_uncertainties.extend([
+                        u for u in uncertainties
+                        if u.get("priority") == "high"
+                    ])
+                except Exception as e:
+                    logger.warning(f"读取领域文件 {domain_file.name} 失败: {e}")
             unresolved_high = [
                 u for u in high_uncertainties
                 if u.get("status") not in ["resolved", "skipped"]
@@ -262,190 +271,6 @@ class OntologyBuilderTool(KodeTool):
                 },
                 indent=2,
             )
-
-    def _build_ontology_with_ai_sync(
-        self, schema_metadata: Dict[str, Any], connection_name: str, database: str, db_schema: Optional[str]
-    ) -> Dict[str, Any]:
-        """同步版本：使用串行方式构建本体（在事件循环中调用）。"""
-        try:
-            # 初始化 model manager
-            config_manager = ConfigManager()
-            config = config_manager.get_all()
-            model_manager = ModelManager(config)
-            model = model_manager.get_model("main")
-            model.temperature = 0.0
-            model.max_tokens = 64000
-
-            from langchain_core.messages import HumanMessage
-            import time
-
-            # ========== 阶段 1: 全局架构扫描 ==========
-            logger.info("阶段1开始：全局架构扫描")
-            t1_start = time.time()
-            schema_skeleton = self._extract_schema_skeleton(schema_metadata)
-            global_context = self._ai_analyze_global_architecture(
-                schema_skeleton, connection_name, database, db_schema, model
-            )
-            t1_elapsed = time.time() - t1_start
-            logger.info(f"阶段1完成：识别到 {len(global_context.get('business_domains', {}))} 个业务域（耗时 {t1_elapsed:.2f}s）")
-
-            # ========== 阶段 2: 分域详细构建（串行模式，避免嵌套事件循环） ==========
-            logger.info("阶段2开始：分域详细构建（串行模式）")
-            t2_start = time.time()
-            domain_ontologies = {}
-            tables = schema_metadata.get("tables", {})
-
-            for domain_name, table_names in global_context.get("business_domains", {}).items():
-                domain_schema = {t: tables[t] for t in table_names if t in tables}
-
-                t_domain_start = time.time()
-                domain_ont = self._ai_build_domain_ontology(
-                    domain_name=domain_name,
-                    domain_schema=domain_schema,
-                    global_context=global_context,
-                    connection_name=connection_name,
-                    database=database,
-                    db_schema=db_schema,
-                    model=model
-                )
-                t_domain_elapsed = time.time() - t_domain_start
-                domain_ontologies[domain_name] = domain_ont
-                logger.info(f"阶段2：{domain_name} 完成（{len(table_names)} 个表，耗时 {t_domain_elapsed:.2f}s）")
-
-            t2_elapsed = time.time() - t2_start
-            logger.info(f"阶段2总计：{len(domain_ontologies)} 个域，总耗时 {t2_elapsed:.2f}s（串行）")
-
-            # ========== 阶段 3: 跨域关系融合 ==========
-            logger.info("阶段3开始：跨域关系融合")
-            t3_start = time.time()
-            cross_domain_insights = self._ai_refine_cross_domain_relationships(
-                domain_ontologies=domain_ontologies,
-                global_context=global_context,
-                connection_name=connection_name,
-                model=model
-            )
-            t3_elapsed = time.time() - t3_start
-            logger.info(f"阶段3完成：补充了 {len(cross_domain_insights.get('relationships', []))} 个跨域关系（耗时 {t3_elapsed:.2f}s）")
-
-            # 合并所有结果
-            final_ontology = self._merge_ontologies(
-                domain_ontologies=domain_ontologies,
-                cross_domain_insights=cross_domain_insights,
-                global_context=global_context,
-                schema_metadata=schema_metadata,
-                connection_name=connection_name,
-                model_manager=model_manager
-            )
-
-            logger.info(f"本体构建完成：{final_ontology['statistics']['concept_count']} 个概念")
-            return final_ontology
-
-        except Exception as e:
-            logger.error(f"本体构建失败: {str(e)}")
-            return {
-                "metadata": {
-                    "created_at": datetime.now().isoformat(),
-                    "created_by": "error_fallback",
-                    "error": str(e),
-                },
-                "concepts": {},
-                "properties": {},
-                "relationships": [],
-                "hierarchies": [],
-            }
-
-    async def _build_ontology_with_ai_async(
-        self, schema_metadata: Dict[str, Any], connection_name: str, database: str, db_schema: Optional[str]
-    ) -> Dict[str, Any]:
-        """
-        使用三阶段 AI 分批构建完整业务本体，确保上下文完整性。
-
-        阶段1：全局架构扫描 - 识别业务域和顶层关系
-        阶段2：分域详细构建 - 在全局上下文下生成各域本体
-        阶段3：跨域关系融合 - 补充和精炼跨域关系
-
-        这种方法解决了单次生成因 token 限制导致的表缺失问题，
-        同时保持了全局业务理解的完整性。
-        """
-        try:
-            # 初始化 model manager
-            config_manager = ConfigManager()
-            config = config_manager.get_all()
-            model_manager = ModelManager(config)
-            model = model_manager.get_model("main")
-            model.temperature = 0.0
-            model.max_tokens = 64000  # 使用最大可用值
-
-            from langchain_core.messages import HumanMessage
-            import time
-
-            # ========== 阶段 1: 全局架构扫描 ==========
-            logger.info("阶段1开始：全局架构扫描")
-            t1_start = time.time()
-            schema_skeleton = self._extract_schema_skeleton(schema_metadata)
-            global_context = self._ai_analyze_global_architecture(
-                schema_skeleton, connection_name, database, db_schema, model
-            )
-            t1_elapsed = time.time() - t1_start
-            logger.info(f"阶段1完成：识别到 {len(global_context.get('business_domains', {}))} 个业务域（耗时 {t1_elapsed:.2f}s）")
-
-            # ========== 阶段 2: 分域详细构建（并行优化） ==========
-            logger.info("阶段2开始：分域详细构建（并行模式）")
-            t2_start = time.time()
-            tables = schema_metadata.get("tables", {})
-
-            # 并行构建所有域（直接 await，不用 asyncio.run）
-            domain_ontologies = await self._build_domains_parallel(
-                global_context=global_context,
-                tables=tables,
-                connection_name=connection_name,
-                database=database,
-                db_schema=db_schema,
-                model=model
-            )
-
-            t2_elapsed = time.time() - t2_start
-            logger.info(f"阶段2总计：{len(domain_ontologies)} 个域，总耗时 {t2_elapsed:.2f}s（并行加速）")
-
-            # ========== 阶段 3: 跨域关系融合 ==========
-            logger.info("阶段3开始：跨域关系融合")
-            t3_start = time.time()
-            cross_domain_insights = self._ai_refine_cross_domain_relationships(
-                domain_ontologies=domain_ontologies,
-                global_context=global_context,
-                connection_name=connection_name,
-                model=model
-            )
-            t3_elapsed = time.time() - t3_start
-            logger.info(f"阶段3完成：补充了 {len(cross_domain_insights.get('relationships', []))} 个跨域关系（耗时 {t3_elapsed:.2f}s）")
-
-            # 合并所有结果
-            final_ontology = self._merge_ontologies(
-                domain_ontologies=domain_ontologies,
-                cross_domain_insights=cross_domain_insights,
-                global_context=global_context,
-                schema_metadata=schema_metadata,
-                connection_name=connection_name,
-                model_manager=model_manager
-            )
-
-            logger.info(f"本体构建完成：{final_ontology['statistics']['concept_count']} 个概念")
-            return final_ontology
-
-        except Exception as e:
-            logger.error(f"本体构建失败: {str(e)}")
-            # Fallback: 返回基本结构
-            return {
-                "metadata": {
-                    "created_at": datetime.now().isoformat(),
-                    "created_by": "error_fallback",
-                    "error": str(e),
-                },
-                "concepts": {},
-                "properties": {},
-                "relationships": [],
-                "hierarchies": [],
-            }
 
     def _prepare_schema_for_ai(self, schema_metadata: Dict[str, Any]) -> str:
         """
@@ -656,11 +481,6 @@ Schema: {db_schema or "默认"}
     "business_scenario": "B2C电商平台，支持用户注册、商品浏览、下单购买",
     "architecture_pattern": "单体应用"
   }},
-  "business_rules": [
-    "用户邮箱必须唯一",
-    "订单必须关联有效用户",
-    "商品价格不能为负"
-  ],
   "uncertainties": [
     {{
       "type": "missing_constraint",
@@ -796,7 +616,6 @@ Schema: {db_schema or "默认"}
                 "error": str(e),
             }
 
-    def _extract_schema_skeleton(self, schema_metadata: Dict[str, Any]) -> str:
         """提取 schema 骨架（轻量级）用于阶段1。"""
         tables = schema_metadata.get("tables", {})
         lines = [f"数据库: {schema_metadata.get('database', '未知')}", f"总表数: {len(tables)}\n"]
@@ -813,7 +632,6 @@ Schema: {db_schema or "默认"}
                 lines.append(f"  关键字段: {', '.join(key_fields)}")
         return "\n".join(lines)
 
-    def _ai_analyze_global_architecture(self, schema_skeleton: str, connection_name: str,
                                        database: str, db_schema: Optional[str], model) -> Dict[str, Any]:
         """阶段1：AI 分析全局架构。"""
         from langchain_core.messages import HumanMessage
@@ -868,7 +686,6 @@ Schema: {db_schema or "默认"}
             }
         return result
 
-    async def _build_domains_parallel(
         self,
         global_context: Dict[str, Any],
         tables: Dict[str, Any],
@@ -926,131 +743,6 @@ Schema: {db_schema or "默认"}
         # 转换为字典
         return {domain_name: ontology for domain_name, ontology in results}
 
-    async def _ai_build_domain_ontology_async(
-        self,
-        domain_name: str,
-        domain_schema: Dict[str, Any],
-        global_context: Dict[str, Any],
-        connection_name: str,
-        database: str,
-        db_schema: Optional[str],
-        model
-    ) -> Dict[str, Any]:
-        """阶段2：为业务域构建详细本体（异步版本）。"""
-        from langchain_core.messages import HumanMessage
-
-        domain_schema_text = self._prepare_domain_schema(domain_schema)
-        prompt = f"""你是ERP架构师。为业务域 "{domain_name}" 构建详细本体。
-
-# 全局上下文
-架构: {global_context.get('architecture_pattern')}
-所有域: {list(global_context.get('business_domains', {}).keys())}
-全局关系: {json.dumps(global_context.get('inferred_relationships', [])[:5], ensure_ascii=False)}
-
-# 当前域: {domain_name}
-{domain_schema_text}
-
-# 任务
-为 "{domain_name}" 构建本体：
-1. **Concepts**: 每个表（technical_name, business_name_cn, business_name_en, description, domain, importance, primary_key, data_source）
-2. **Properties**: 每个字段（technical_name, business_name_cn, business_name_en, description, data_type, nullable, concept, data_source）
-3. **Relationships**: 域内+跨域关系
-4. **Hierarchies**: 层次结构
-5. **Uncertainties**: 不确定性
-
-# 输出格式
-```json
-{{
-  "concepts": {{}},
-  "properties": {{}},
-  "relationships": [],
-  "hierarchies": [],
-  "domain_insights": {{}},
-  "uncertainties": []
-}}
-```
-**重要**：必须为该域的每个表生成concept，包含跨域关系。只返回JSON。不要其他任何文字解释"""
-
-        # 使用异步 API 调用
-        response = await model.ainvoke([HumanMessage(content=prompt)])
-        ontology_data = self._extract_json_from_text(response.content)
-
-        if not ontology_data or "concepts" not in ontology_data:
-            logger.error(f"域 {domain_name} 生成失败，AI输出前500字符: {response.content[:500]}")
-            return {
-                "concepts": {},
-                "properties": {},
-                "relationships": [],
-                "hierarchies": [],
-                "domain_insights": {},
-                "uncertainties": []
-            }
-
-        # 补充缺失的字段
-        return {
-            "concepts": ontology_data.get("concepts", {}),
-            "properties": ontology_data.get("properties", {}),
-            "relationships": ontology_data.get("relationships", []),
-            "hierarchies": ontology_data.get("hierarchies", []),
-            "domain_insights": ontology_data.get("domain_insights", {}),
-            "uncertainties": ontology_data.get("uncertainties", [])
-        }
-
-    def _ai_build_domain_ontology(self, domain_name: str, domain_schema: Dict[str, Any],
-                                  global_context: Dict[str, Any], connection_name: str,
-                                  database: str, db_schema: Optional[str], model) -> Dict[str, Any]:
-        """阶段2：为业务域构建详细本体（携带全局上下文）。"""
-        from langchain_core.messages import HumanMessage
-
-        domain_schema_text = self._prepare_domain_schema(domain_schema)
-        prompt = f"""你是ERP架构师。为业务域 "{domain_name}" 构建详细本体。
-
-# 全局上下文
-架构: {global_context.get('architecture_pattern')}
-所有域: {list(global_context.get('business_domains', {}).keys())}
-全局关系: {json.dumps(global_context.get('inferred_relationships', [])[:5], ensure_ascii=False)}
-
-# 当前域: {domain_name}
-{domain_schema_text}
-
-# 任务
-为 "{domain_name}" 构建本体：
-1. **Concepts**: 每个表（technical_name, business_name_cn, business_name_en, description, domain, importance, primary_key, data_source）
-2. **Properties**: 每个字段（technical_name, business_name_cn, business_name_en, description, data_type, nullable, concept, data_source）
-3. **Relationships**: 域内+跨域关系
-4. **Hierarchies**: 层次结构
-5. **Uncertainties**: 不确定性
-
-# 输出格式
-```json
-{{
-  "concepts": {{}},
-  "properties": {{}},
-  "relationships": [],
-  "hierarchies": [],
-  "domain_insights": {{}},
-  "uncertainties": []
-}}
-```
-**重要**：必须为该域的每个表生成concept，包含跨域关系。只返回JSON。不要其他任何文字解释"""
-
-        response = model.invoke([HumanMessage(content=prompt)])
-        ontology_data = self._extract_json_from_text(response.content)
-        if not ontology_data or "concepts" not in ontology_data:
-            logger.error(f"域 {domain_name} 生成失败，AI输出前500字符: {response.content[:500]}")
-            return {"concepts": {}, "properties": {}, "relationships": [], "hierarchies": [],
-                   "domain_insights": {}, "uncertainties": []}
-
-        # 补充缺失的字段
-        result = {
-            "concepts": ontology_data.get("concepts", {}),
-            "properties": ontology_data.get("properties", {}),  # 保留AI生成的properties
-            "relationships": ontology_data.get("relationships", []),
-            "hierarchies": ontology_data.get("hierarchies", []),
-            "domain_insights": ontology_data.get("domain_insights", {}),
-            "uncertainties": ontology_data.get("uncertainties", [])
-        }
-        return result
 
     def _prepare_domain_schema(self, domain_schema: Dict[str, Any]) -> str:
         """为域准备详细schema文本（含样例数据智能摘要）。"""
@@ -1088,7 +780,6 @@ Schema: {db_schema or "默认"}
             lines.append("")
         return "\n".join(lines)
 
-    def _ai_refine_cross_domain_relationships(self, domain_ontologies: Dict[str, Dict[str, Any]],
                                              global_context: Dict[str, Any], connection_name: str,
                                              model) -> Dict[str, Any]:
         """阶段3：精炼跨域关系。"""
@@ -1099,7 +790,7 @@ Schema: {db_schema or "默认"}
                                 "relationships": ont.get("relationships", [])}
                          for name, ont in domain_ontologies.items()}
 
-        prompt = f"""你是业务架构师。审查并完善跨域关系和全局业务规则。
+        prompt = f"""你是业务架构师。审查并完善跨域关系和全局层次结构。
 
 # 全局上下文
 {json.dumps(global_context, indent=2, ensure_ascii=False)}
@@ -1109,9 +800,8 @@ Schema: {db_schema or "默认"}
 
 # 任务
 1. **补充跨域关系**: 检查遗漏的跨域关系（如 order.user_id -> user.id）
-2. **全局业务规则**: 跨域约束
-3. **全局层次结构**: 跨域层级（如：公司 -> 部门 -> 员工）
-4. **业务洞察**: 整体模式
+2. **全局层次结构**: 跨域层级（如：公司 -> 部门 -> 员工）
+3. **业务洞察**: 整体模式
 
 # 输出格式
 ```json
@@ -1119,7 +809,6 @@ Schema: {db_schema or "默认"}
   "relationships": [{{"from_concept": "order", "to_concept": "user", "relationship_type": "foreign_key",
                      "cardinality": "N:1", "business_meaning": "订单属于用户", "from_properties": ["user_id"],
                      "to_properties": ["id"], "cross_domain": true}}],
-  "global_business_rules": [],
   "global_hierarchies": [],
   "global_insights": {{"primary_domain": "", "business_scenario": "", "architecture_pattern": ""}}
 }}
@@ -1130,7 +819,7 @@ Schema: {db_schema or "默认"}
         result = self._extract_json_from_text(response.content)
         if not result:
             logger.warning("阶段3失败")
-            return {"relationships": [], "global_business_rules": [], "global_hierarchies": [], "global_insights": {}}
+            return {"relationships": [], "global_hierarchies": [], "global_insights": {}}
         return result
 
     def _merge_ontologies(self, domain_ontologies: Dict[str, Dict[str, Any]], cross_domain_insights: Dict[str, Any],
@@ -1148,7 +837,6 @@ Schema: {db_schema or "默认"}
 
         all_relationships.extend(cross_domain_insights.get("relationships", []))
         all_hierarchies.extend(cross_domain_insights.get("global_hierarchies", []))
-        global_business_rules = cross_domain_insights.get("global_business_rules", [])
 
         domain_insights = cross_domain_insights.get("global_insights", {})
         if not domain_insights:
@@ -1177,7 +865,6 @@ Schema: {db_schema or "默认"}
             "relationships": all_relationships,
             "hierarchies": all_hierarchies,
             "domain_insights": domain_insights,
-            "business_rules": global_business_rules,
             "uncertainties": all_uncertainties,
             "recommendations": [],
             "statistics": {
@@ -1292,7 +979,7 @@ Schema: {db_schema or "默认"}
 
             # 异步调用 AI 构建本体
             t_ai_start = time.time()
-            domain_ont = await self._ai_build_domain_ontology_simple_async(
+            domain_ont = await self._ai_build_domain_ontology(
                 domain_name=domain_name,
                 domain_schema=domain_data.get("tables", {}),
                 connection_name=connection_name,
@@ -1320,7 +1007,7 @@ Schema: {db_schema or "默认"}
         # 转换为字典
         return {domain_name: ontology for domain_name, ontology in results}
 
-    async def _ai_build_domain_ontology_simple_async(
+    async def _ai_build_domain_ontology(
         self,
         domain_name: str,
         domain_schema: Dict[str, Any],
@@ -1330,7 +1017,7 @@ Schema: {db_schema or "默认"}
         model
     ) -> Dict[str, Any]:
         """
-        为单个业务域构建本体（简化版 - 异步）。
+        为单个业务域构建本体（异步并行化版本）。
 
         关键简化：不再需要全局上下文，直接基于领域 schema 生成。
         """
@@ -1408,11 +1095,11 @@ Schema: {db_schema or "默认"}
                 "relationships": [],
                 "hierarchies": [],
                 "domain_insights": {},
-                "business_rules": []
+                "uncertainties": []
             }
 
-        # 加载业务规则（结构化数据）
-        business_rules = self._load_high_priority_rules_data(connection_name, domain_name)
+        # 加载不确定性数据（结构化数据）
+        uncertainties = self._load_high_priority_rules_data(connection_name, domain_name)
 
         return {
             "concepts": ontology_data.get("concepts", {}),
@@ -1420,205 +1107,117 @@ Schema: {db_schema or "默认"}
             "relationships": ontology_data.get("relationships", []),
             "hierarchies": ontology_data.get("hierarchies", []),
             "domain_insights": ontology_data.get("domain_insights", {}),
-            "business_rules": business_rules
+            "uncertainties": uncertainties
         }
 
-    def _ai_build_domain_ontology_simple(
-        self,
-        domain_name: str,
-        domain_schema: Dict[str, Any],
-        connection_name: str,
-        database: str,
-        db_schema: Optional[str],
-        model
-    ) -> Dict[str, Any]:
-        """为单个业务域构建本体（简化版 - 同步）。"""
-        from langchain_core.messages import HumanMessage
-
-        domain_schema_text = self._prepare_domain_schema(domain_schema)
-
-        # 🔥 注入High优先级规则
-        uncertainty_rules = self._load_high_priority_rules(connection_name, domain_name)
-        uncertainty_section = ""
-        if uncertainty_rules:
-            uncertainty_section = "\n\n# 🔒 用户已确认的业务规则（必须遵守）\n\n"
-            uncertainty_section += uncertainty_rules
-            uncertainty_section += "\n**重要**: 构建本体时必须严格遵循上述规则！\n"
-
-        prompt = f"""你是 ERP 架构师。为业务域 "{domain_name}" 构建详细本体。
-
-# 当前域: {domain_name}
-数据库: {database}
-Schema: {db_schema or "默认"}
-{uncertainty_section}
-{domain_schema_text}
-
-# 任务
-构建本体（JSON格式）：
-1. **Concepts**: 每个表 → 业务概念
-2. **Properties**: 每个字段 → 业务属性
-3. **Relationships**: 表关系
-4. **Hierarchies**: 层次结构
-
-# 输出格式
-```json
-{{{{
-  "concepts": {{}},
-  "properties": {{}},
-  "relationships": [],
-  "hierarchies": [],
-  "domain_insights": {{{{
-    "primary_domain": "{domain_name}",
-    "business_scenario": "..."
-  }}}}
-}}}}
-```
-
-只返回 JSON，不要解释文字。
-"""
-
-        response = model.invoke([HumanMessage(content=prompt)])
-        ontology_data = self._extract_json_from_text(response.content)
-
-        if not ontology_data or "concepts" not in ontology_data:
-            logger.error(f"❌ 域 {domain_name} 生成失败")
-            return {
-                "concepts": {},
-                "properties": {},
-                "relationships": [],
-                "hierarchies": [],
-                "domain_insights": {},
-                "business_rules": []
-            }
-
-        # 加载业务规则（结构化数据）
-        business_rules = self._load_high_priority_rules_data(connection_name, domain_name)
-
-        return {
-            "concepts": ontology_data.get("concepts", {}),
-            "properties": ontology_data.get("properties", {}),
-            "relationships": ontology_data.get("relationships", []),
-            "hierarchies": ontology_data.get("hierarchies", []),
-            "domain_insights": ontology_data.get("domain_insights", {}),
-            "business_rules": business_rules
-        }
 
     def _load_high_priority_rules_data(self, connection_name: str, domain_name: str) -> List[Dict[str, Any]]:
         """
-        加载High优先级不确定性的结构化数据（用于保存到本体文件）。
+        加载领域的所有不确定性数据（原样返回，用于保存到本体文件）。
+
+        ✨ 新架构：从领域JSON文件的 uncertainties 字段读取所有不确定性（不仅仅是已解决的）。
 
         Returns:
-            List of rule dictionaries with entity, category, question, answer, priority, resolved_at
+            List of uncertainty dictionaries (原始格式，包含所有字段)
         """
         try:
             config = ConfigManager()
             schema_path = config.get("storage.schema_path", "./schema_store")
-            uncertainty_file = Path(schema_path) / connection_name / "uncertainties.json"
 
-            if not uncertainty_file.exists():
+            # ✨ 从领域JSON文件读取
+            domain_file = Path(schema_path) / connection_name / "domains" / f"{domain_name}.json"
+            if not domain_file.exists():
+                logger.warning(f"领域文件 {domain_file} 不存在")
                 return []
 
-            with open(uncertainty_file, "r", encoding="utf-8") as f:
-                uncertainty_data = json.load(f)
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
 
-            high_uncertainties = uncertainty_data.get("uncertainties_by_priority", {}).get("high", [])
-            domain_resolved = [
-                {
-                    "entity": u.get("entity", ""),
-                    "category": u.get("category", ""),
-                    "question": u.get("question", ""),
-                    "answer": u.get("answer", ""),
-                    "priority": "high",
-                    "resolved_at": u.get("answered_at", "")
-                }
-                for u in high_uncertainties
-                if u.get("domain") == domain_name and u.get("status") == "resolved" and u.get("answer")
-            ]
-
-            return domain_resolved
+            # 返回所有不确定性（原样）
+            uncertainties = domain_data.get("uncertainties", [])
+            return uncertainties
 
         except Exception as e:
-            logger.warning(f"Failed to load uncertainty rules data for {domain_name}: {e}")
+            logger.warning(f"Failed to load uncertainty data for {domain_name}: {e}")
             return []
 
     def _load_high_priority_rules(self, connection_name: str, domain_name: str) -> str:
         """
-        加载High优先级不确定性的用户答案（领域级缓存，用于Prompt注入）。
+        加载领域的所有不确定性数据（原样格式化为文本，用于Prompt注入）。
 
-        优化策略：
-        1. 优先读取预处理的领域规则文件（domains/{domain}_rules.txt）
-        2. 如果不存在，实时从 uncertainties.json 提取并缓存
-        3. 保留完整问题和答案，按领域分割后数量已经很少
+        ✨ 新需求：将所有不确定性（包括所有优先级和状态）原样发送给模型，帮助AI：
+        - 理解完整的业务上下文
+        - 严格遵循已解决问题的用户答案
+        - 参考未解决问题进行合理推断
 
         Args:
             connection_name: 数据库连接名
             domain_name: 业务域名称
 
         Returns:
-            结构化的规则文本（包含完整问题和用户答案）
+            格式化的不确定性文本（按优先级分组，包含问题、状态、答案）
         """
         try:
             config = ConfigManager()
             schema_path = config.get("storage.schema_path", "./schema_store")
 
-            # 🚀 优先读取预处理的领域规则文件
-            domain_rules_file = Path(schema_path) / connection_name / "domains" / f"{domain_name}_rules.txt"
-            if domain_rules_file.exists():
-                with open(domain_rules_file, "r", encoding="utf-8") as f:
-                    return f.read().strip()
-
-            # 降级：实时从 uncertainties.json 提取
-            uncertainty_file = Path(schema_path) / connection_name / "uncertainties.json"
-            if not uncertainty_file.exists():
+            # ✨ 新逻辑：从领域JSON文件中读取 uncertainties
+            domain_file = Path(schema_path) / connection_name / "domains" / f"{domain_name}.json"
+            if not domain_file.exists():
+                logger.warning(f"领域文件 {domain_file} 不存在")
                 return ""
 
-            with open(uncertainty_file, "r", encoding="utf-8") as f:
-                uncertainty_data = json.load(f)
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
 
-            # 筛选当前域的已解决High问题
-            high_uncertainties = uncertainty_data.get("uncertainties_by_priority", {}).get("high", [])
-            domain_resolved = [
-                u for u in high_uncertainties
-                if u.get("domain") == domain_name and u.get("status") == "resolved"
-            ]
+            # ✨ 读取所有不确定性（不筛选，原样展示）
+            uncertainties = domain_data.get("uncertainties", [])
 
-            if not domain_resolved:
+            if not uncertainties:
                 return ""
 
-            # 格式化为结构化文本（保留完整问题和答案）
+            # 格式化为结构化文本（原样展示所有不确定性）
             lines = []
-            lines.append("# 用户已确认的业务规则（构建本体时必须遵守）")
+            lines.append("# 该业务域的不确定性分析结果（构建本体时重要参考）")
+            lines.append("")
+            lines.append("以下是该领域的不确定性问题及用户确认的答案。")
+            lines.append("构建本体时必须严格遵循已解决问题的答案！")
             lines.append("")
 
-            for idx, unc in enumerate(domain_resolved, 1):
-                entity = unc.get("entity", "")
-                question = unc.get("question", "").strip()
-                answer = unc.get("answer", "").strip()
-                category = unc.get("category", "")
+            # 按优先级分组
+            by_priority = {"high": [], "medium": [], "low": []}
+            for u in uncertainties:
+                priority = u.get("priority", "low")
+                by_priority[priority].append(u)
 
-                if not answer:
+            # 先输出 high 优先级
+            for priority in ["high", "medium", "low"]:
+                items = by_priority[priority]
+                if not items:
                     continue
 
-                # 每条规则保留：实体名、问题类型、问题、用户答案
-                lines.append(f"## 规则 {idx}: {entity}")
-                if category:
-                    lines.append(f"**类型**: {category}")
-                lines.append(f"**问题**: {question}")
-                lines.append(f"**用户确认**: {answer}")
+                lines.append(f"## {priority.upper()} 优先级（{len(items)}个）")
                 lines.append("")
 
-            result_text = "\n".join(lines) if len(lines) > 2 else ""
+                for idx, unc in enumerate(items, 1):
+                    entity = unc.get("entity", "未知实体")
+                    question = unc.get("question", "").strip()
+                    answer = unc.get("answer", "").strip()
+                    status = unc.get("status", "pending")
+                    category = unc.get("category", "")
 
-            # 🔥 缓存到领域规则文件（加速下次构建）
-            if result_text:
-                try:
-                    domain_rules_file.parent.mkdir(parents=True, exist_ok=True)
-                    with open(domain_rules_file, "w", encoding="utf-8") as f:
-                        f.write(result_text)
-                    logger.info(f"✅ 缓存领域规则到 {domain_rules_file.name}")
-                except Exception as cache_err:
-                    logger.warning(f"缓存领域规则失败: {cache_err}")
+                    lines.append(f"### {idx}. [{entity}] {category or '未分类'}")
+                    lines.append(f"**问题**: {question}")
+                    lines.append(f"**状态**: {status}")
 
+                    if answer:
+                        lines.append(f"**✅ 用户确认**: {answer}")
+                    else:
+                        lines.append(f"**⚠️ 待确认**: 构建时可根据最佳实践推断")
+
+                    lines.append("")
+
+            result_text = "\n".join(lines)
             return result_text
 
         except Exception as e:
@@ -1642,7 +1241,7 @@ Schema: {db_schema or "默认"}
         all_relationships = []
         all_hierarchies = []
         all_domain_insights = []
-        all_business_rules = {}  # 按域分组
+        all_uncertainties = []
 
         for domain_name, ont in domain_ontologies.items():
             all_concepts.update(ont.get("concepts", {}))
@@ -1652,17 +1251,12 @@ Schema: {db_schema or "默认"}
             if ont.get("domain_insights"):
                 all_domain_insights.append(ont["domain_insights"])
 
-            # 收集业务规则（按域分组）
-            domain_rules = ont.get("business_rules", [])
-            if domain_rules:
-                all_business_rules[domain_name] = domain_rules
+            # 收集不确定性数据
+            all_uncertainties.extend(ont.get("uncertainties", []))
 
         # 合并 domain insights
         primary_domains = [d.get("primary_domain") for d in all_domain_insights if d.get("primary_domain")]
         business_scenarios = [d.get("business_scenario") for d in all_domain_insights if d.get("business_scenario")]
-
-        # 统计总的不确定性数量
-        total_uncertainty_count = sum(len(rules) for rules in all_business_rules.values())
 
         return {
             "metadata": {
@@ -1684,16 +1278,13 @@ Schema: {db_schema or "默认"}
                 "business_scenario": " | ".join(business_scenarios[:3]),  # 前3个
                 "architecture_pattern": "Multi-Domain ERP"
             },
-            "business_rules": {
-                "total_count": total_uncertainty_count,
-                "by_domain": all_business_rules
-            },
+            "uncertainties": all_uncertainties,
             "statistics": {
                 "concept_count": len(all_concepts),
                 "property_count": len(all_properties),
                 "relationship_count": len(all_relationships),
                 "hierarchy_count": len(all_hierarchies),
-                "uncertainty_count": total_uncertainty_count
+                "uncertainty_count": len(all_uncertainties)
             }
         }
 

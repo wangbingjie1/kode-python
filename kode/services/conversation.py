@@ -212,30 +212,29 @@ class AsyncConversationService:
 用户: "帮我构建本体"
 ↓
 OntologyBuilder 自动检测：
-  1. 检查 uncertainties.json 是否存在
-     ├─ 不存在 → 返回错误，提示先运行 DomainUncertaintyAnalyzer
+  1. 检查 domains/*.json 领域文件是否存在
+     ├─ 不存在 → 返回错误，提示先运行 DatabaseSchemaExtractor
      └─ 存在 → 继续检查 high 问题
-  2. 检查 high 优先级问题状态
+  2. 读取各领域文件中的 uncertainties 字段，检查 high 优先级问题状态
      ├─ 有未解决 → 返回错误，提示使用 UncertaintyQAManager
-     └─ 全部已解决 → 开始构建本体
+     └─ 全部已解决 → 开始构建本体（自动注入用户确认的业务规则）
 ```
+
+**✨ 新架构说明**：
+- 不确定性数据已分散存储在各领域文件（`domains/{domain_name}.json`）的 `uncertainties` 字段中
+- 不再需要单独的 `uncertainties.json` 文件
+- OntologyBuilder 会自动从领域文件中读取已解决的 high 问题答案，注入到构建 Prompt 中
 
 **你不需要手动判断，OntologyBuilder 会自动提示正确的操作步骤！**
 
 ---
 
-### 第1步：不确定性分析（仅首次需要）
+### 第1步：检查不确定性状态（自动完成）
 
-**触发条件**：OntologyBuilder 提示 "missing_uncertainty_analysis"
+- OntologyBuilder 会自动读取所有领域文件中的 `uncertainties` 字段
+- 如果有未解决的 high 优先级问题，会提示使用 UncertaintyQAManager
 
-- 运行 **DomainUncertaintyAnalyzer**（仅运行一次）
-- 这个工具会：
-  * 读取 domain_index.json（13个业务域）
-  * 并行调用 AI 分析每个域的不确定性
-  * 生成 uncertainties.json（按 high/medium/low 分组）
-- **重要**：如果 uncertainties.json 已存在，不要重复运行此工具
-
-### 第2步：回答高优先级问题（强制门禁）⭐ 关键卡点
+### 第2步：回答高优先级问题（如果有未解决问题）⭐ 关键卡点
 
 **使用 UncertaintyQAManager 工具管理问答流程**：
 

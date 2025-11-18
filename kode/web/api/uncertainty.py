@@ -25,11 +25,22 @@ logger = setup_logger(__name__)
 router = APIRouter()
 
 
-def _get_uncertainty_file(connection_name: str) -> Path:
-    """获取 uncertainty 数据文件路径"""
+def _get_domains_dir(connection_name: str) -> Path:
+    """获取领域文件所在目录"""
     config = ConfigManager()
     schema_path = config.get("storage.schema_path", "./schema_store")
-    return Path(schema_path) / connection_name / "uncertainties.json"
+    return Path(schema_path) / connection_name / "domains"
+
+
+def _load_all_domain_files(domains_dir: Path) -> list[Dict[str, Any]]:
+    """加载所有领域文件"""
+    domain_data_list = []
+    for domain_file in domains_dir.glob("*.json"):
+        with open(domain_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            data["_file_path"] = str(domain_file)  # 记录文件路径
+            domain_data_list.append(data)
+    return domain_data_list
 
 
 @router.post("/load", response_model=LoadUncertaintiesResponse)
@@ -44,22 +55,25 @@ async def load_uncertainties(request: LoadUncertaintiesRequest):
         LoadUncertaintiesResponse: 分组后的问题列表
     """
     try:
-        uncertainty_file = _get_uncertainty_file(request.connection_name)
+        domains_dir = _get_domains_dir(request.connection_name)
 
-        if not uncertainty_file.exists():
+        if not domains_dir.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Uncertainties file not found. Run DomainUncertaintyAnalyzer first."
+                detail="Domains directory not found. Run DomainUncertaintyAnalyzer first."
             )
 
-        with open(uncertainty_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        # 🔥 从各个领域文件加载不确定性
+        domain_data_list = _load_all_domain_files(domains_dir)
 
         # 收集所有未解决的高优先级问题
-        high_uncertainties = [
-            u for u in data.get("uncertainties_by_priority", {}).get("high", [])
-            if u.get("status") not in ["resolved", "skipped"]
-        ]
+        high_uncertainties = []
+        for domain_data in domain_data_list:
+            domain_name = domain_data.get("domain_name", Path(domain_data["_file_path"]).stem)
+            for u in domain_data.get("uncertainties", []):
+                if u.get("priority", "medium").lower() == "high" and u.get("status") not in ["resolved", "skipped"]:
+                    u["domain"] = domain_name
+                    high_uncertainties.append(u)
 
         # 为每个问题生成唯一 ID
         for idx, u in enumerate(high_uncertainties):
@@ -100,7 +114,7 @@ async def load_uncertainties(request: LoadUncertaintiesRequest):
 
         return LoadUncertaintiesResponse(
             status="success",
-            connection_name=data.get("connection_name", request.connection_name),
+            connection_name=request.connection_name,
             total_loaded=len(high_uncertainties),
             group_by=request.group_by,
             groups=groups,
@@ -129,64 +143,88 @@ async def batch_answer_uncertainties(request: BatchAnswerRequest):
         BatchAnswerResponse: 批量回答结果
     """
     try:
-        uncertainty_file = _get_uncertainty_file(request.connection_name)
+        domains_dir = _get_domains_dir(request.connection_name)
 
-        if not uncertainty_file.exists():
+        if not domains_dir.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Uncertainties file not found"
+                detail="Domains directory not found"
             )
-
-        with open(uncertainty_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
 
         from datetime import datetime
 
         resolved_count = 0
         not_found = []
 
-        # 批量更新
-        for uncertainty_id, answer in request.answers.items():
-            found = False
-            for priority in ["high", "medium", "low"]:
-                uncertainties = data.get("uncertainties_by_priority", {}).get(priority, [])
-                for u in uncertainties:
-                    # 生成 ID（如果没有）
-                    if "id" not in u:
-                        u["id"] = f"{u.get('domain')}_{u.get('entity')}_{uncertainties.index(u)}"
+        # 🔥 批量更新：遍历所有领域文件
+        for domain_file in domains_dir.glob("*.json"):
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
 
-                    if u["id"] == uncertainty_id:
-                        u["status"] = "resolved"
-                        u["answer"] = answer
-                        u["answered_at"] = datetime.now().isoformat()
-                        resolved_count += 1
-                        found = True
-                        break
-                if found:
-                    break
+            modified = False
+            uncertainties = domain_data.get("uncertainties", [])
 
-            if not found:
-                not_found.append(uncertainty_id)
+            for u in uncertainties:
+                # 生成 ID（如果没有）
+                if "id" not in u:
+                    u["id"] = f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
 
-        # 保存更新后的数据
-        with open(uncertainty_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+                # 检查是否需要更新
+                if u["id"] in request.answers:
+                    answer = request.answers[u["id"]]
+                    u["status"] = "resolved"
+                    u["answer"] = answer
+                    u["answered_at"] = datetime.now().isoformat()
+
+                    # 🔥 添加到 business_rules
+                    if "business_rules" not in domain_data:
+                        domain_data["business_rules"] = []
+
+                    domain_data["business_rules"].append({
+                        "entity": u.get("entity", ""),
+                        "category": u.get("category", ""),
+                        "question": u.get("question", ""),
+                        "answer": answer,
+                        "added_at": datetime.now().isoformat()
+                    })
+
+                    resolved_count += 1
+                    modified = True
+
+            # 保存修改后的领域文件
+            if modified:
+                with open(domain_file, "w", encoding="utf-8") as f:
+                    json.dump(domain_data, f, indent=2, ensure_ascii=False)
+
+        # 检查未找到的 ID
+        resolved_ids = set()
+        for domain_file in domains_dir.glob("*.json"):
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
+            for u in domain_data.get("uncertainties", []):
+                if "id" in u:
+                    resolved_ids.add(u["id"])
+
+        not_found = [uid for uid in request.answers.keys() if uid not in resolved_ids]
 
         # 统计剩余未解决的高优先级问题
-        remaining_high = [
-            u for u in data.get("uncertainties_by_priority", {}).get("high", [])
-            if u.get("status") not in ["resolved", "skipped"]
-        ]
+        remaining_high = 0
+        for domain_file in domains_dir.glob("*.json"):
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
+            for u in domain_data.get("uncertainties", []):
+                if u.get("priority", "medium").lower() == "high" and u.get("status") not in ["resolved", "skipped"]:
+                    remaining_high += 1
 
         return BatchAnswerResponse(
             status="success",
             resolved_count=resolved_count,
             not_found=not_found,
-            remaining_high_priority=len(remaining_high),
-            can_build_ontology=len(remaining_high) == 0,
+            remaining_high_priority=remaining_high,
+            can_build_ontology=remaining_high == 0,
             message=(
-                f"已批量记录 {resolved_count} 个回答。剩余 {len(remaining_high)} 个高优先级问题。"
-                if len(remaining_high) > 0
+                f"已批量记录 {resolved_count} 个回答。剩余 {remaining_high} 个高优先级问题。"
+                if remaining_high > 0
                 else f"已批量记录 {resolved_count} 个回答。所有高优先级问题已解决！可以开始构建本体。"
             )
         )
@@ -213,21 +251,25 @@ async def get_uncertainty_status(connection_name: str):
         UncertaintyStatusResponse: 问答状态统计
     """
     try:
-        uncertainty_file = _get_uncertainty_file(connection_name)
+        domains_dir = _get_domains_dir(connection_name)
 
-        if not uncertainty_file.exists():
+        if not domains_dir.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Uncertainties file not found. Run DomainUncertaintyAnalyzer first."
+                detail="Domains directory not found. Run DomainUncertaintyAnalyzer first."
             )
 
-        with open(uncertainty_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        # 🔥 从所有领域文件收集不确定性
+        all_uncertainties = []
+        for domain_file in domains_dir.glob("*.json"):
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
+            all_uncertainties.extend(domain_data.get("uncertainties", []))
 
         # 统计各优先级的解决情况
         summary = {}
         for priority in ["high", "medium", "low"]:
-            uncertainties = data.get("uncertainties_by_priority", {}).get(priority, [])
+            uncertainties = [u for u in all_uncertainties if u.get("priority", "medium").lower() == priority]
             total = len(uncertainties)
             resolved = len([u for u in uncertainties if u.get("status") == "resolved"])
             skipped = len([u for u in uncertainties if u.get("status") == "skipped"])
@@ -242,7 +284,7 @@ async def get_uncertainty_status(connection_name: str):
 
         return UncertaintyStatusResponse(
             status="success",
-            connection_name=data.get("connection_name", connection_name),
+            connection_name=connection_name,
             summary=summary,
             can_build_ontology=can_build,
             message=(

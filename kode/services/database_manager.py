@@ -9,6 +9,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import Session
 
+from kode.core.security import encrypt_db_password, decrypt_db_password
+
 
 class DatabaseConnection:
     """Represents a database connection configuration."""
@@ -374,6 +376,12 @@ class DatabaseConnectionManager:
                     continue
 
                 # Create DatabaseConnection object from model
+                try:
+                    decrypted_password = decrypt_db_password(model.password)
+                except Exception as e:
+                    # 如果解密失败，可能是旧数据（明文），直接使用
+                    decrypted_password = model.password
+
                 connection = DatabaseConnection(
                     name=model.name,
                     db_type=model.db_type,
@@ -381,7 +389,7 @@ class DatabaseConnectionManager:
                     port=model.port,
                     database=model.database,
                     username=model.username,
-                    password=model.password,  # Note: Should decrypt in production
+                    password=decrypted_password,
                     db_schema=model.db_schema,
                     ssl=model.ssl,
                 )
@@ -425,7 +433,7 @@ class DatabaseConnectionManager:
                 existing.port = connection.port
                 existing.database = connection.database
                 existing.username = connection.username
-                existing.password = connection.password  # Note: Should encrypt in production
+                existing.password = encrypt_db_password(connection.password)
                 existing.db_schema = connection.db_schema
                 existing.ssl = connection.ssl
             else:
@@ -437,7 +445,7 @@ class DatabaseConnectionManager:
                     port=connection.port,
                     database=connection.database,
                     username=connection.username,
-                    password=connection.password,  # Note: Should encrypt in production
+                    password=encrypt_db_password(connection.password),
                     db_schema=connection.db_schema,
                     ssl=connection.ssl,
                 )

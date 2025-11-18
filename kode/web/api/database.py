@@ -5,12 +5,14 @@ REST endpoints for database connection management, schema extraction,
 and ontology operations.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List, Dict, Any
 from pathlib import Path
 import json
 import asyncio
 from functools import partial
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from kode.schemas.database import (
     DatabaseConnectionCreate,
@@ -27,8 +29,11 @@ from kode.services.database_manager import (
     DatabaseConnectionManager,
     db_manager,
 )
-from kode.database.session import SessionLocal
+from kode.database.session import get_db
+from kode.models import User, DatabaseConnectionModel
+from kode.web.dependencies import get_current_user
 from kode.utils.logger import setup_logger
+from kode.core.security import encrypt_db_password, decrypt_db_password
 
 router = APIRouter()
 logger = setup_logger(__name__)
@@ -39,13 +44,48 @@ logger = setup_logger(__name__)
     response_model=DatabaseConnectionResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_connection(connection_data: DatabaseConnectionCreate):
+async def create_connection(
+    connection_data: DatabaseConnectionCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Create a new database connection"""
-    db_session = SessionLocal()
     try:
-        # Create connection object
-        connection = DatabaseConnection(
+        # 检查该用户是否已有同名连接
+        result = await db.execute(
+            select(DatabaseConnectionModel).where(
+                DatabaseConnectionModel.user_id == current_user.id,
+                DatabaseConnectionModel.name == connection_data.name
+            )
+        )
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"连接名称 '{connection_data.name}' 已存在"
+            )
+
+        # Create ORM model instance
+        db_connection = DatabaseConnectionModel(
+            user_id=current_user.id,
             name=connection_data.name,
+            db_type=connection_data.db_type,
+            host=connection_data.host,
+            port=connection_data.port,
+            database=connection_data.database,
+            username=connection_data.username,
+            password=encrypt_db_password(connection_data.password),
+            db_schema=connection_data.db_schema,
+            ssl=connection_data.ssl,
+        )
+
+        db.add(db_connection)
+        await db.commit()
+        await db.refresh(db_connection)
+
+        # 添加到内存管理器（使用 user_id:name 作为唯一标识）
+        connection_key = f"{current_user.id}:{connection_data.name}"
+        connection = DatabaseConnection(
+            name=connection_key,  # 内存中使用带用户前缀的名称
             db_type=connection_data.db_type,
             host=connection_data.host,
             port=connection_data.port,
@@ -55,44 +95,37 @@ async def create_connection(connection_data: DatabaseConnectionCreate):
             db_schema=connection_data.db_schema,
             ssl=connection_data.ssl,
         )
-
-        # Add to manager
         db_manager.add_connection(connection)
 
-        # Persist to database
-        db_manager.save_connection_to_db(db_session, connection)
+        logger.info(f"User {current_user.username} created connection: {connection_data.name}")
+        return DatabaseConnectionResponse(**db_connection.to_dict())
 
-        logger.info(f"Created and persisted database connection: {connection_data.name}")
-        return DatabaseConnectionResponse(**connection.to_dict())
-
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
+    except HTTPException:
+        raise
     except Exception as e:
+        await db.rollback()
         logger.error(f"Error creating connection: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create connection: {str(e)}",
         )
-    finally:
-        db_session.close()
 
 
 @router.get("/connections", response_model=List[DatabaseConnectionResponse])
-async def list_connections():
-    """List all database connections"""
+async def list_connections(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all database connections for current user"""
     try:
-        connection_names = db_manager.list_connections()
-        connections = []
+        result = await db.execute(
+            select(DatabaseConnectionModel).where(
+                DatabaseConnectionModel.user_id == current_user.id
+            )
+        )
+        connections = result.scalars().all()
 
-        for name in connection_names:
-            conn = db_manager.get_connection(name)
-            if conn:
-                connections.append(DatabaseConnectionResponse(**conn.to_dict()))
-
-        return connections
+        return [DatabaseConnectionResponse(**conn.to_dict()) for conn in connections]
 
     except Exception as e:
         logger.error(f"Error listing connections: {e}")
@@ -103,10 +136,20 @@ async def list_connections():
 
 
 @router.get("/connections/{name}", response_model=DatabaseConnectionResponse)
-async def get_connection(name: str):
+async def get_connection(
+    name: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get a specific database connection"""
     try:
-        connection = db_manager.get_connection(name)
+        result = await db.execute(
+            select(DatabaseConnectionModel).where(
+                DatabaseConnectionModel.user_id == current_user.id,
+                DatabaseConnectionModel.name == name
+            )
+        )
+        connection = result.scalar_one_or_none()
 
         if not connection:
             raise HTTPException(
@@ -127,52 +170,98 @@ async def get_connection(name: str):
 
 
 @router.put("/connections/{name}", response_model=DatabaseConnectionResponse)
-async def update_connection(name: str, update_data: DatabaseConnectionUpdate):
+async def update_connection(
+    name: str,
+    update_data: DatabaseConnectionUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Update a database connection"""
-    db_session = SessionLocal()
     try:
         # Get existing connection
-        existing = db_manager.get_connection(name)
+        result = await db.execute(
+            select(DatabaseConnectionModel).where(
+                DatabaseConnectionModel.user_id == current_user.id,
+                DatabaseConnectionModel.name == name
+            )
+        )
+        existing = result.scalar_one_or_none()
+
         if not existing:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Connection '{name}' not found",
             )
 
-        # Close existing engines (async version)
-        await db_manager.close_connection_async(name)
+        # Close existing engines (从内存管理器中删除)
+        connection_key = f"{current_user.id}:{name}"
+        await db_manager.close_connection_async(connection_key)
+        db_manager.remove_connection(connection_key)
 
         # Update fields
         update_dict = update_data.dict(exclude_unset=True)
         for key, value in update_dict.items():
-            if hasattr(existing, key):
-                setattr(existing, key, value)
+            if hasattr(existing, key) and key != 'user_id':  # 不允许修改 user_id
+                # 密码字段需要加密
+                if key == 'password' and value:
+                    setattr(existing, key, encrypt_db_password(value))
+                else:
+                    setattr(existing, key, value)
 
-        # Persist changes to database
-        db_manager.save_connection_to_db(db_session, existing)
+        await db.commit()
+        await db.refresh(existing)
 
-        logger.info(f"Updated database connection: {name}")
+        # 重新添加到内存管理器（需要解密密码）
+        try:
+            decrypted_password = decrypt_db_password(existing.password)
+        except Exception:
+            # 如果解密失败，可能是旧数据
+            decrypted_password = existing.password
+
+        connection = DatabaseConnection(
+            name=connection_key,
+            db_type=existing.db_type,
+            host=existing.host,
+            port=existing.port,
+            database=existing.database,
+            username=existing.username,
+            password=decrypted_password,
+            db_schema=existing.db_schema,
+            ssl=existing.ssl,
+        )
+        db_manager.add_connection(connection)
+
+        logger.info(f"User {current_user.username} updated connection: {name}")
         return DatabaseConnectionResponse(**existing.to_dict())
 
     except HTTPException:
         raise
     except Exception as e:
+        await db.rollback()
         logger.error(f"Error updating connection: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update connection: {str(e)}",
         )
-    finally:
-        db_session.close()
 
 
 @router.delete("/connections/{name}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_connection(name: str):
+async def delete_connection(
+    name: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Delete a database connection"""
-    db_session = SessionLocal()
     try:
         # Check if connection exists
-        connection = db_manager.get_connection(name)
+        result = await db.execute(
+            select(DatabaseConnectionModel).where(
+                DatabaseConnectionModel.user_id == current_user.id,
+                DatabaseConnectionModel.name == name
+            )
+        )
+        connection = result.scalar_one_or_none()
+
         if not connection:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -180,48 +269,69 @@ async def delete_connection(name: str):
             )
 
         # Close engines first (async version)
-        await db_manager.close_connection_async(name)
+        connection_key = f"{current_user.id}:{name}"
+        await db_manager.close_connection_async(connection_key)
 
         # Remove from in-memory manager
-        db_manager.remove_connection(name)
+        db_manager.remove_connection(connection_key)
 
-        # Remove from database persistence
-        db_manager.delete_connection_from_db(db_session, name)
+        # Remove from database
+        await db.delete(connection)
+        await db.commit()
 
-        logger.info(f"Deleted database connection: {name}")
+        logger.info(f"User {current_user.username} deleted connection: {name}")
 
     except HTTPException:
         raise
     except Exception as e:
+        await db.rollback()
         logger.error(f"Error deleting connection: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete connection: {str(e)}",
         )
-    finally:
-        db_session.close()
 
 
 @router.post("/connections/{name}/test", response_model=DatabaseTestResult)
-async def test_connection(name: str):
+async def test_connection(
+    name: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Test a database connection"""
     try:
-        # Test connection
-        result = await db_manager.test_connection_async(name)
+        # 验证用户是否拥有该连接
+        result = await db.execute(
+            select(DatabaseConnectionModel).where(
+                DatabaseConnectionModel.user_id == current_user.id,
+                DatabaseConnectionModel.name == name
+            )
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Connection '{name}' not found"
+            )
 
-        if result["status"] == "error":
+        # Test connection
+        connection_key = f"{current_user.id}:{name}"
+        test_result = await db_manager.test_connection_async(connection_key)
+
+        if test_result["status"] == "error":
             return DatabaseTestResult(
                 status="error",
-                message=result["message"],
-                error=result.get("error"),
+                message=test_result["message"],
+                error=test_result.get("error"),
             )
 
         return DatabaseTestResult(
             status="success",
-            message=result["message"],
-            connection=DatabaseConnectionResponse(**result["connection"]),
+            message=test_result["message"],
+            connection=DatabaseConnectionResponse(**test_result["connection"]),
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error testing connection: {e}")
         return DatabaseTestResult(
@@ -340,22 +450,32 @@ def _extract_schema_sync(name: str) -> Dict[str, Any]:
 
 
 @router.get("/connections/{name}/schema", response_model=Dict[str, Any])
-async def get_database_schema(name: str):
+async def get_database_schema(
+    name: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Extract database schema"""
     try:
-        # Get connection
-        connection = db_manager.get_connection(name)
-        if not connection:
+        # 验证用户是否拥有该连接
+        result = await db.execute(
+            select(DatabaseConnectionModel).where(
+                DatabaseConnectionModel.user_id == current_user.id,
+                DatabaseConnectionModel.name == name
+            )
+        )
+        if not result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Connection '{name}' not found",
+                detail=f"Connection '{name}' not found"
             )
 
         # Run schema extraction in thread pool to avoid blocking
+        connection_key = f"{current_user.id}:{name}"
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, _extract_schema_sync, name)
+        schema_result = await loop.run_in_executor(None, _extract_schema_sync, connection_key)
 
-        return result
+        return schema_result
 
     except HTTPException:
         raise
@@ -530,15 +650,25 @@ async def search_ontology(name: str, search_query: OntologySearchQuery):
 
 
 @router.post("/connections/{name}/query", response_model=Dict[str, Any])
-async def execute_query(name: str, request_data: Dict[str, Any]):
+async def execute_query(
+    name: str,
+    request_data: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Execute SQL query on a database connection"""
     try:
-        # Get connection
-        connection = db_manager.get_connection(name)
-        if not connection:
+        # 验证用户是否拥有该连接
+        result = await db.execute(
+            select(DatabaseConnectionModel).where(
+                DatabaseConnectionModel.user_id == current_user.id,
+                DatabaseConnectionModel.name == name
+            )
+        )
+        if not result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Connection '{name}' not found",
+                detail=f"Connection '{name}' not found"
             )
 
         sql = request_data.get("sql", "")
@@ -552,13 +682,14 @@ async def execute_query(name: str, request_data: Dict[str, Any]):
             )
 
         # Run query in thread pool to avoid blocking
+        connection_key = f"{current_user.id}:{name}"
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
+        query_result = await loop.run_in_executor(
             None,
-            partial(_execute_query_sync, name, sql, params, fetch_limit)
+            partial(_execute_query_sync, connection_key, sql, params, fetch_limit)
         )
 
-        return result
+        return query_result
 
     except HTTPException:
         raise

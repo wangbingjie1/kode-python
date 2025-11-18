@@ -3086,7 +3086,10 @@
         "使用数据库视图提供正确拼写的别名"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_platform_ai_agent_categray_17"
+      "id": "ai_agent_system_platform_ai_agent_categray_17",
+      "status": "resolved",
+      "answer": "的确是命名错误",
+      "answered_at": "2025-11-17T19:59:38.555961"
     },
     {
       "type": "schema_ambiguity",
@@ -3102,7 +3105,10 @@
         "添加表级别的注释说明各自的用途"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_platform_ai_agent vs robot_18"
+      "id": "ai_agent_system_platform_ai_agent vs robot_18",
+      "status": "resolved",
+      "answer": "platform_ai_agent  是模型配置表，robot  是模型定价表",
+      "answered_at": "2025-11-17T19:59:38.555961"
     },
     {
       "type": "business_logic_unclear",
@@ -3118,7 +3124,10 @@
         "考虑是否可以简化表结构"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_platform_ai_role 相关表_19"
+      "id": "ai_agent_system_platform_ai_role 相关表_19",
+      "status": "resolved",
+      "answer": "角色没有启用",
+      "answered_at": "2025-11-17T19:59:38.555961"
     },
     {
       "type": "schema_ambiguity",
@@ -3234,5 +3243,28 @@
     }
   ],
   "uncertainty_count": 10,
-  "uncertainty_analyzed_at": "2025-11-17T17:04:08.417765"
+  "uncertainty_analyzed_at": "2025-11-17T17:04:08.417765",
+  "business_rules": [
+    {
+      "entity": "platform_ai_agent_categray",
+      "category": "命名一致性",
+      "question": "表名拼写错误：categray 应为 category",
+      "answer": "的确是命名错误",
+      "added_at": "2025-11-17T19:59:38.555961"
+    },
+    {
+      "entity": "platform_ai_agent vs robot",
+      "category": "表关系",
+      "question": "platform_ai_agent 和 robot 表的关系不明确，两者都表示 AI 模型/代理，但字段设计差异较大",
+      "answer": "platform_ai_agent  是模型配置表，robot  是模型定价表",
+      "added_at": "2025-11-17T19:59:38.555961"
+    },
+    {
+      "entity": "platform_ai_role 相关表",
+      "category": "业务流程",
+      "question": "role 的三种类型（system/recommend/user）与多个映射表的关系逻辑不清晰",
+      "answer": "角色没有启用",
+      "added_at": "2025-11-17T19:59:38.555961"
+    }
+  ]
 }

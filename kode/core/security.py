@@ -9,12 +9,78 @@ from typing import Optional
 from jose import JWTError, jwt
 import hashlib
 import os
+import base64
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.backends import default_backend
 
 # JWT配置
 SECRET_KEY = os.getenv("SECRET_KEY", "kode-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+# 数据库密码加密配置
+DB_ENCRYPTION_KEY = os.getenv("DB_ENCRYPTION_KEY", SECRET_KEY)
+
+
+def _get_fernet_key() -> bytes:
+    """
+    从SECRET_KEY派生Fernet密钥（32字节）
+    使用PBKDF2确保密钥强度
+    """
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"kode-db-encryption-salt",  # 固定盐值，生产环境应从环境变量读取
+        iterations=100000,
+        backend=default_backend()
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(DB_ENCRYPTION_KEY.encode()))
+    return key
+
+
+def encrypt_db_password(plain_password: str) -> str:
+    """
+    加密数据库密码（使用Fernet对称加密）
+
+    Args:
+        plain_password: 明文密码
+
+    Returns:
+        加密后的密码（Base64编码字符串）
+    """
+    if not plain_password:
+        return ""
+
+    fernet = Fernet(_get_fernet_key())
+    encrypted_bytes = fernet.encrypt(plain_password.encode('utf-8'))
+    return encrypted_bytes.decode('utf-8')
+
+
+def decrypt_db_password(encrypted_password: str) -> str:
+    """
+    解密数据库密码
+
+    Args:
+        encrypted_password: 加密后的密码
+
+    Returns:
+        明文密码
+
+    Raises:
+        Exception: 解密失败（密钥错误或数据损坏）
+    """
+    if not encrypted_password:
+        return ""
+
+    try:
+        fernet = Fernet(_get_fernet_key())
+        decrypted_bytes = fernet.decrypt(encrypted_password.encode('utf-8'))
+        return decrypted_bytes.decode('utf-8')
+    except Exception as e:
+        raise ValueError(f"密码解密失败: {str(e)}")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

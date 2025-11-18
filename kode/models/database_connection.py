@@ -4,7 +4,8 @@ Database Connection Model
 SQLAlchemy model for persisting database connection configurations.
 """
 
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 
@@ -17,7 +18,8 @@ class DatabaseConnectionModel(Base):
     __tablename__ = "database_connections"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String(100), unique=True, nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False, index=True)  # 移除 unique=True，改为按用户唯一
     db_type = Column(String(50), nullable=False)
     host = Column(String(255), nullable=False)
     port = Column(Integer, nullable=False)
@@ -29,6 +31,9 @@ class DatabaseConnectionModel(Base):
     ssl = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship
+    user = relationship("User", back_populates="database_connections")
 
     def __repr__(self):
         return f"<DatabaseConnection(id={self.id}, name={self.name}, db_type={self.db_type})>"
