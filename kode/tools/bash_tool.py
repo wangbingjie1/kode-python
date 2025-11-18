@@ -53,6 +53,8 @@ class BashTool(KodeTool):
                 shell=True,
                 capture_output=True,
                 text=True,
+                encoding='utf-8',  # 强制UTF-8编码,避免Windows GBK编码错误
+                errors='replace',   # 遇到无法解码的字符用�替换,而不是崩溃
                 timeout=timeout,
                 cwd=cwd,
             )

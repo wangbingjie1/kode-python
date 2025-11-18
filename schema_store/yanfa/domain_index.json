@@ -1,141 +1,164 @@
 {
   "connection_name": "yanfa",
-  "total_tables": 107,
-  "total_domains": 10,
-  "created_at": "2025-11-17T17:02:07.020213",
+  "total_tables": 110,
+  "total_domains": 11,
+  "created_at": "2025-11-18T13:53:19.654790",
   "domains": [
     {
       "name": "user_management",
       "display_name": "User Management",
-      "description": "Core user information, authentication, accounts, devices, and user profiles across the platform.",
-      "table_count": 11,
+      "description": "Core user account management including registration, authentication, profiles, devices, and wallet information.",
+      "table_count": 10,
       "tables": [
         "platform_user",
         "platform_user_account",
         "platform_user_device",
         "platform_user_wallet",
         "platform_user_blacklist",
+        "platform_email_domain_blacklist",
         "user",
         "user_option",
-        "pre_signup",
         "backup_disabled_blacklist_accounts",
-        "platform_email_domain_blacklist",
-        "personal_access_tokens"
+        "pre_signup"
       ],
       "file_path": "domains/user_management.json"
     },
     {
+      "name": "order_payment_system",
+      "display_name": "Order & Payment System",
+      "description": "Handles orders, payments, subscriptions, invoices and transaction records across multiple payment platforms.",
+      "table_count": 10,
+      "tables": [
+        "order",
+        "platform_trade_order",
+        "platform_trade_order_sub",
+        "platform_trade_product",
+        "platform_trade_product_sku",
+        "invoices",
+        "unified_payments",
+        "stripesubscriptions",
+        "license_coupon",
+        "top_up_record"
+      ],
+      "file_path": "domains/order_payment_system.json"
+    },
+    {
+      "name": "subscription_management",
+      "display_name": "Subscription Management",
+      "description": "Manages user subscriptions, subscription plans, renewal logs, and retention offers.",
+      "table_count": 7,
+      "tables": [
+        "subscription",
+        "subscription_log",
+        "subscription_plan",
+        "platform_trade_subscription",
+        "platform_trade_subscription_log",
+        "platform_trade_subscription_plan",
+        "retention_free_credit_offers"
+      ],
+      "file_path": "domains/subscription_management.json"
+    },
+    {
       "name": "ai_agent_system",
-      "display_name": "AI Agent & Model System",
-      "description": "AI agents, models, templates, roles, and their configurations for various AI-powered features.",
-      "table_count": 14,
+      "display_name": "AI Agent System",
+      "description": "Core AI agent configuration, categorization, templates, and role-based agent management for various AI capabilities.",
+      "table_count": 10,
       "tables": [
         "platform_ai_agent",
         "platform_ai_agent_20250625bak",
         "platform_ai_agent_categray",
         "platform_ai_agent_categray_mapping",
         "platform_ai_agent_tag",
-        "platform_ai_model",
-        "platform_ai_role",
-        "platform_ai_role_agent_mapping",
-        "platform_ai_role_user",
-        "platform_ai_role_user_agent_mapping",
-        "platform_ai_role_user_default_agent",
-        "platform_ai_role_guide",
+        "platform_ai_animation_template",
+        "platform_ai_voice_template",
+        "platform_ai_template_effect",
         "robot",
         "chatpal_agent_ad"
       ],
       "file_path": "domains/ai_agent_system.json"
     },
     {
-      "name": "ai_conversation_system",
-      "display_name": "AI Conversation System",
-      "description": "Conversation management, messages, tasks, and chat interactions between users and AI agents.",
-      "table_count": 9,
+      "name": "ai_role_management",
+      "display_name": "AI Role Management",
+      "description": "Manages AI roles, role-agent mappings, user role preferences, and role-based guides for personalized AI experiences.",
+      "table_count": 6,
+      "tables": [
+        "platform_ai_role",
+        "platform_ai_role_agent_mapping",
+        "platform_ai_role_user",
+        "platform_ai_role_user_agent_mapping",
+        "platform_ai_role_user_default_agent",
+        "platform_ai_role_guide"
+      ],
+      "file_path": "domains/ai_role_management.json"
+    },
+    {
+      "name": "conversation_messaging",
+      "display_name": "Conversation & Messaging",
+      "description": "Handles AI conversations, chat messages, task-based interactions, and conversation history management.",
+      "table_count": 8,
       "tables": [
         "platform_ai_conversation",
         "platform_ai_conversation_msg",
         "task",
         "message",
-        "platform_ai_prompt",
         "note_chat_conversation",
         "candy_chat_girl_friend",
         "crush_chat_boy_friend",
         "fantasy_image_session"
       ],
-      "file_path": "domains/ai_conversation_system.json"
+      "file_path": "domains/conversation_messaging.json"
     },
     {
-      "name": "ai_task_processing",
-      "display_name": "AI Task Processing",
-      "description": "AI task execution, batch processing, templates for animations, voice, and various AI operations.",
-      "table_count": 9,
+      "name": "task_generation_system",
+      "display_name": "Task & Generation System",
+      "description": "Manages AI task execution, batch processing, task metadata, tags, and SEO-related content generation tasks.",
+      "table_count": 7,
       "tables": [
         "platform_ai_task",
         "platform_ai_task_batch",
         "platform_ai_task_ext",
         "platform_ai_tasktags",
         "platform_ai_tag",
-        "platform_ai_animation_template",
-        "platform_ai_voice_template",
-        "platform_ai_template_effect",
+        "platform_ai_prompt",
         "seo_task"
       ],
-      "file_path": "domains/ai_task_processing.json"
+      "file_path": "domains/task_generation_system.json"
     },
     {
-      "name": "billing_system",
-      "display_name": "Billing & Credits",
-      "description": "Usage billing, token consumption, cost tracking, and credit management for AI services.",
+      "name": "billing_credits_system",
+      "display_name": "Billing & Credits System",
+      "description": "Tracks AI usage billing, token consumption, cost calculations, and model pricing across different services.",
       "table_count": 6,
       "tables": [
-        "platform_ai_bill",
         "bill",
+        "platform_ai_bill",
+        "platform_ai_model",
+        "commission",
         "basi_bill",
-        "features_token_usage",
-        "top_up_record",
-        "commission"
+        "features_token_usage"
       ],
-      "file_path": "domains/billing_system.json"
+      "file_path": "domains/billing_credits_system.json"
     },
     {
-      "name": "order_management",
-      "display_name": "Order Management",
-      "description": "Order processing, products, SKUs, and transaction records for platform purchases.",
+      "name": "gamification_rewards",
+      "display_name": "Gamification & Rewards",
+      "description": "Manages user engagement through sign-ins, rewards, game mechanics, and special event campaigns like Halloween.",
       "table_count": 6,
       "tables": [
-        "platform_trade_order",
-        "platform_trade_order_sub",
-        "platform_trade_product",
-        "platform_trade_product_sku",
-        "order",
-        "license_coupon"
+        "platform_user_sign_detail",
+        "platform_user_sign_status",
+        "halloween_pumpkin_rewards",
+        "ao_bencat_user",
+        "ao_bencat_acquired",
+        "ao_bencat_send"
       ],
-      "file_path": "domains/order_management.json"
+      "file_path": "domains/gamification_rewards.json"
     },
     {
-      "name": "subscription_system",
-      "display_name": "Subscription System",
-      "description": "Subscription plans, lifecycle management, renewal logs, and subscription-related operations.",
-      "table_count": 10,
-      "tables": [
-        "platform_trade_subscription",
-        "platform_trade_subscription_log",
-        "platform_trade_subscription_plan",
-        "subscription",
-        "subscription_log",
-        "subscription_plan",
-        "retention_free_credit_offers",
-        "invoices",
-        "stripesubscriptions",
-        "unified_payments"
-      ],
-      "file_path": "domains/subscription_system.json"
-    },
-    {
-      "name": "game_permble",
-      "display_name": "Permble Game System",
-      "description": "Game management, rounds, fights, rewards, and user feeds for the Permble game feature.",
+      "name": "ao_game_system",
+      "display_name": "AO Game System",
+      "description": "Dedicated game system including battles, rounds, rewards, user feeds, and NPC interactions for AO platform games.",
       "table_count": 12,
       "tables": [
         "ao_permble_game",
@@ -145,37 +168,19 @@
         "ao_permble_round_fight_2024_12_13",
         "ao_permble_round_rwd",
         "ao_permble_round_rwd_2024_12_13",
-        "ao_permble_user",
         "ao_permble_game_user_feeds",
         "ao_permble_game_user_feeds_2024_11_28",
         "ao_permble_game_user_feeds_2024_12_13",
+        "ao_permble_user",
         "ao_permble_clean_old_records_log"
       ],
-      "file_path": "domains/game_permble.json"
+      "file_path": "domains/ao_game_system.json"
     },
     {
-      "name": "ao_blockchain_features",
-      "display_name": "AO Blockchain Features",
-      "description": "Blockchain-related features including bencat tokens, NPC system, awareness, friends, and fission activities.",
-      "table_count": 9,
-      "tables": [
-        "ao_awareness",
-        "ao_bencat_acquired",
-        "ao_bencat_send",
-        "ao_bencat_user",
-        "ao_npc",
-        "ao_friends",
-        "ao_fission_pk",
-        "ao_fission_pk_friends",
-        "ao_fission_role_evaluation"
-      ],
-      "file_path": "domains/ao_blockchain_features.json"
-    },
-    {
-      "name": "content_analytics",
-      "display_name": "Content & Analytics",
-      "description": "User events, analytics tracking, articles, notes, feedback, sign-in rewards, and enterprise inquiries.",
-      "table_count": 21,
+      "name": "social_analytics_content",
+      "display_name": "Social Analytics & Content",
+      "description": "Tracks user events, analytics, social features, content management, and experiment tracking for platform optimization.",
+      "table_count": 28,
       "tables": [
         "event",
         "eventbak",
@@ -183,23 +188,30 @@
         "daily_new_uuid",
         "daily_uuid",
         "experiment",
-        "platform_article",
+        "ao_awareness",
+        "ao_npc",
+        "ao_friends",
+        "ao_fission_pk",
+        "ao_fission_pk_friends",
+        "ao_fission_role_evaluation",
         "note_categroy",
         "note_categroy_records",
         "note_feedback",
         "note_free_trial_whitelist",
-        "platform_user_sign_detail",
-        "platform_user_sign_status",
+        "platform_article",
         "platform_enterprise_inquiry",
-        "halloween_pumpkin_rewards",
         "chatpal_app_version",
         "migrations",
+        "personal_access_tokens",
+        "opennext",
         "chat",
         "gpt-5-chat",
         "video_all",
-        "opennext"
+        "basi_10.15-11.15_bill",
+        "draw_10.15-11.15_bill",
+        "opennext_chat_10.15-11.15_bill"
       ],
-      "file_path": "domains/content_analytics.json"
+      "file_path": "domains/social_analytics_content.json"
     }
   ]
 }

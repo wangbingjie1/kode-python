@@ -892,34 +892,9 @@ class AnthropicStreamingAgent:
                 "content": tool_results
             })
 
-            # Check if any tool requires user input - if so, pause the agent loop
-            requires_pause = False
-            for tr in tool_results:
-                content = tr.get("content", "")
-                try:
-                    import json
-                    result_data = json.loads(str(content))
-                    if isinstance(result_data, dict) and result_data.get("requires_user_input"):
-                        requires_pause = True
-                        logger.info(f"[Agent Loop] Pausing - user input required")
-                        # Yield a special event to notify frontend
-                        yield {
-                            "type": "waiting_for_user",
-                            "content": "等待用户填写问卷...",
-                            "metadata": {
-                                "reason": "User input required for uncertainty questions",
-                                "next_tool": result_data.get("next_tool"),
-                                "next_action": result_data.get("next_action")
-                            }
-                        }
-                        break
-                except (json.JSONDecodeError, ValueError, AttributeError):
-                    pass
-
-            # If paused, exit the loop and wait for user to submit answers
-            if requires_pause:
-                logger.info("[Agent Loop] Exiting loop - waiting for user input")
-                return
+            # 🔥 不需要检查 requires_user_input，让工具循环继续
+            # Agent 会自动等待用户提交答案（前端会发送新消息）
+            # 这样避免了暂停循环导致的复杂性
 
             # Trim messages after each iteration to prevent token overflow
             messages = self._trim_messages_for_context(messages)

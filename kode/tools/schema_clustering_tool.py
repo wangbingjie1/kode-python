@@ -421,6 +421,20 @@ IMPORTANT: Ensure ALL {len(table_features)} tables are assigned to exactly one d
                 domain_tables = domain["tables"]
 
                 # Extract only relevant tables for this domain
+                # Build tables dict with schema_ref
+                tables_with_ref = {}
+                for table_name in domain_tables:
+                    if table_name in all_tables:
+                        table_data = all_tables[table_name].copy()
+                        # Add schema reference for precise lookup
+                        table_data["schema_ref"] = {
+                            "connection": connection_name,
+                            "table": table_name,
+                            "schema_file": str(raw_file),
+                            "json_path": f"schema.tables.{table_name}"
+                        }
+                        tables_with_ref[table_name] = table_data
+
                 domain_schema = {
                     "domain_name": domain_name,
                     "display_name": domain.get("display_name", domain_name),
@@ -428,11 +442,7 @@ IMPORTANT: Ensure ALL {len(table_features)} tables are assigned to exactly one d
                     "table_count": len(domain_tables),
                     "created_at": datetime.now().isoformat(),
                     "connection": schema_data["schema"]["connection"],
-                    "tables": {
-                        table_name: all_tables[table_name]
-                        for table_name in domain_tables
-                        if table_name in all_tables
-                    },
+                    "tables": tables_with_ref,
                 }
 
                 # Extract relationships within this domain

@@ -1,6 +1,6 @@
 {
-  "version": "v20251117_170127",
-  "created_at": "2025-11-17T17:01:27.337239",
+  "version": "v20251118_135241",
+  "created_at": "2025-11-18T13:52:41.502933",
   "connection_name": "yanfa",
   "schema": {
     "status": "success",
@@ -16,7 +16,7 @@
     },
     "database": "yanfa",
     "schema": "",
-    "table_count": 107,
+    "table_count": 110,
     "tables": {
       "ao_awareness": {
         "name": "ao_awareness",
@@ -4730,6 +4730,33 @@
           "note": "前 5 行样例数据（快速采样，无排序）"
         }
       },
+      "basi_10.15-11.15_bill": {
+        "name": "basi_10.15-11.15_bill",
+        "columns": [
+          {
+            "name": "token_name",
+            "type": "varchar",
+            "nullable": true,
+            "default": null,
+            "comment": ""
+          },
+          {
+            "name": "model_name",
+            "type": "varchar",
+            "nullable": true,
+            "default": null,
+            "comment": ""
+          }
+        ],
+        "foreign_keys": [],
+        "column_count": 2,
+        "sample_data": {
+          "row_count": 0,
+          "rows": [],
+          "error": "(pymysql.err.ProgrammingError) (1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-11.15_bill LIMIT 5' at line 1\")\n[SQL: SELECT * FROM basi_10.15-11.15_bill LIMIT 5]\n(Background on this error at: https://sqlalche.me/e/20/f405)",
+          "note": "无法获取样例数据"
+        }
+      },
       "basi_bill": {
         "name": "basi_bill",
         "columns": [
@@ -6337,6 +6364,26 @@
           "note": "前 5 行样例数据（快速采样，无排序）"
         }
       },
+      "draw_10.15-11.15_bill": {
+        "name": "draw_10.15-11.15_bill",
+        "columns": [
+          {
+            "name": "model",
+            "type": "varchar",
+            "nullable": true,
+            "default": null,
+            "comment": ""
+          }
+        ],
+        "foreign_keys": [],
+        "column_count": 1,
+        "sample_data": {
+          "row_count": 0,
+          "rows": [],
+          "error": "(pymysql.err.ProgrammingError) (1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-11.15_bill LIMIT 5' at line 1\")\n[SQL: SELECT * FROM draw_10.15-11.15_bill LIMIT 5]\n(Background on this error at: https://sqlalche.me/e/20/f405)",
+          "note": "无法获取样例数据"
+        }
+      },
       "event": {
         "name": "event",
         "columns": [
@@ -6416,58 +6463,58 @@
           "row_count": 5,
           "rows": [
             {
-              "id": 4522297,
-              "uuid": "e9ed659e-5c9c-401c-a163-0b9636bb4b5b",
-              "user_id": 1059623,
-              "page_name": "pc_subscribe_4009",
-              "event_name": "pageview",
-              "dom_name": "",
-              "created_at": "2025-10-17T11:15:38",
-              "updated_at": "2025-10-17T11:15:38",
-              "channel": "glbgpt"
-            },
-            {
-              "id": 4522298,
-              "uuid": "cc51637f-bc8d-41b5-a347-4e00d01e3801",
-              "user_id": 1059457,
-              "page_name": "pc_visit_subscription",
-              "event_name": "pageview",
-              "dom_name": "",
-              "created_at": "2025-10-17T11:15:55",
-              "updated_at": "2025-10-17T11:15:55",
-              "channel": "glbgpt"
-            },
-            {
-              "id": 4522299,
-              "uuid": "4c894968-6f53-40db-a0f5-63f6c1e8248d",
-              "user_id": 1059625,
+              "id": 4530535,
+              "uuid": "2f0d6adc-5c47-4266-af16-d3db032c48ea",
+              "user_id": 1061833,
               "page_name": "mobile_subscribe_4008",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-17T11:16:00",
-              "updated_at": "2025-10-17T11:16:00",
+              "created_at": "2025-10-18T11:15:26",
+              "updated_at": "2025-10-18T11:15:26",
               "channel": "glbgpt"
             },
             {
-              "id": 4522300,
-              "uuid": "7a3aaad7-9820-4bd0-9943-3235c0c9309c",
-              "user_id": 1059624,
-              "page_name": "mobile_subscribe_4008",
+              "id": 4530536,
+              "uuid": "f41f1852-7a77-464e-a5ee-97ccfa8062d0",
+              "user_id": 1061828,
+              "page_name": "mobile_subscribe_4002",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-17T11:16:00",
-              "updated_at": "2025-10-17T11:16:00",
+              "created_at": "2025-10-18T11:15:36",
+              "updated_at": "2025-10-18T11:15:36",
               "channel": "glbgpt"
             },
             {
-              "id": 4522301,
-              "uuid": "0f8adcdd-d235-4d4a-818f-e896c315ca4a",
-              "user_id": 1059493,
-              "page_name": "pc_subscribe_4010",
+              "id": 4530537,
+              "uuid": "f41f1852-7a77-464e-a5ee-97ccfa8062d0",
+              "user_id": 1061828,
+              "page_name": "mobile_subscribe_4002",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-17T11:16:13",
-              "updated_at": "2025-10-17T11:16:13",
+              "created_at": "2025-10-18T11:16:09",
+              "updated_at": "2025-10-18T11:16:09",
+              "channel": "glbgpt"
+            },
+            {
+              "id": 4530538,
+              "uuid": "f41f1852-7a77-464e-a5ee-97ccfa8062d0",
+              "user_id": 1061828,
+              "page_name": "mobile_subscribe_4002",
+              "event_name": "pageview",
+              "dom_name": "",
+              "created_at": "2025-10-18T11:16:10",
+              "updated_at": "2025-10-18T11:16:10",
+              "channel": "glbgpt"
+            },
+            {
+              "id": 4530539,
+              "uuid": "f41f1852-7a77-464e-a5ee-97ccfa8062d0",
+              "user_id": 1061828,
+              "page_name": "mobile_subscribe_4002",
+              "event_name": "pageview",
+              "dom_name": "",
+              "created_at": "2025-10-18T11:16:11",
+              "updated_at": "2025-10-18T11:16:11",
               "channel": "glbgpt"
             }
           ],
@@ -8775,6 +8822,26 @@
           "note": "前 5 行样例数据（快速采样，无排序）"
         }
       },
+      "opennext_chat_10.15-11.15_bill": {
+        "name": "opennext_chat_10.15-11.15_bill",
+        "columns": [
+          {
+            "name": "model",
+            "type": "varchar",
+            "nullable": true,
+            "default": null,
+            "comment": ""
+          }
+        ],
+        "foreign_keys": [],
+        "column_count": 1,
+        "sample_data": {
+          "row_count": 0,
+          "rows": [],
+          "error": "(pymysql.err.ProgrammingError) (1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-11.15_bill LIMIT 5' at line 1\")\n[SQL: SELECT * FROM opennext_chat_10.15-11.15_bill LIMIT 5]\n(Background on this error at: https://sqlalche.me/e/20/f405)",
+          "note": "无法获取样例数据"
+        }
+      },
       "order": {
         "name": "order",
         "columns": [
@@ -8846,7 +8913,7 @@
             "type": "int",
             "nullable": false,
             "default": "1",
-            "comment": "message_id"
+            "comment": "数量"
           },
           {
             "name": "original_price",
@@ -9191,7 +9258,11 @@
             "type": "text",
             "nullable": true,
             "default": null,
-            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }"
+            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }",
+            "enum_mapping": {
+              "en_US": "{ \"key\" : \"value\" }",
+              "zh_CN": "{ \"key\" : \"value\" } }"
+            }
           },
           {
             "name": "model",
@@ -9578,7 +9649,11 @@
             "type": "text",
             "nullable": true,
             "default": null,
-            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }"
+            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }",
+            "enum_mapping": {
+              "en_US": "{ \"key\" : \"value\" }",
+              "zh_CN": "{ \"key\" : \"value\" } }"
+            }
           },
           {
             "name": "model",
@@ -9906,7 +9981,11 @@
             "type": "text",
             "nullable": true,
             "default": null,
-            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }"
+            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }",
+            "enum_mapping": {
+              "en_US": "{ \"key\" : \"value\" }",
+              "zh_CN": "{ \"key\" : \"value\" } }"
+            }
           },
           {
             "name": "is_del",
@@ -10276,7 +10355,11 @@
             "type": "text",
             "nullable": true,
             "default": null,
-            "comment": "多语言JSON  配置 ： { \"en\" : { \"key\" : \"value\" }, \"zh\" : { \"key\" : \"value\" } }"
+            "comment": "多语言JSON  配置 ： { \"en\" : { \"key\" : \"value\" }, \"zh\" : { \"key\" : \"value\" } }",
+            "enum_mapping": {
+              "en": "{ \"key\" : \"value\" }",
+              "zh": "{ \"key\" : \"value\" } }"
+            }
           },
           {
             "name": "is_del",
@@ -11092,7 +11175,7 @@
               "product_no": "glbgpt",
               "name": "I am now w",
               "create_at": 1752053795646,
-              "is_del": 0,
+              "is_del": 1,
               "create_name": null,
               "update_at": null,
               "update_by": null,
@@ -11901,7 +11984,11 @@
             "type": "text",
             "nullable": true,
             "default": null,
-            "comment": "多语言 JSON 配置 ： { \"en\" : { \"key\" : \"value\" }, \"zh\" : { \"key\" : \"value\" } }"
+            "comment": "多语言 JSON 配置 ： { \"en\" : { \"key\" : \"value\" }, \"zh\" : { \"key\" : \"value\" } }",
+            "enum_mapping": {
+              "en": "{ \"key\" : \"value\" }",
+              "zh": "{ \"key\" : \"value\" } }"
+            }
           },
           {
             "name": "is_del",
@@ -18448,7 +18535,11 @@
             "type": "text",
             "nullable": true,
             "default": null,
-            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }"
+            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }",
+            "enum_mapping": {
+              "en_US": "{ \"key\" : \"value\" }",
+              "zh_CN": "{ \"key\" : \"value\" } }"
+            }
           },
           {
             "name": "scores",
@@ -20528,7 +20619,7 @@
               "name": null,
               "email": "richardlegalnow@gmail.com",
               "password": "8186f37f028ba5967babfb8fb03e8ce2",
-              "balance": "87.471833",
+              "balance": "87.358845",
               "block_amount": "0.000000",
               "chain_account": null,
               "source": "Email",
@@ -20575,7 +20666,11 @@
             "type": "tinyint",
             "nullable": false,
             "default": "1",
-            "comment": "是否联网开关，0：关闭;1：打开"
+            "comment": "是否联网开关，0：关闭;1：打开",
+            "enum_mapping": {
+              "0": "关闭",
+              "1": "打开"
+            }
           },
           {
             "name": "created_at",
@@ -20715,6 +20810,6 @@
       }
     },
     "relationships": [],
-    "extraction_time": "2025-11-17T17:01:27.336114"
+    "extraction_time": "2025-11-18T13:52:41.501773"
   }
 }

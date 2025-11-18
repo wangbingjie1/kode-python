@@ -59,6 +59,8 @@ class BatchAnswerRequest(BaseModel):
 
     connection_name: str = Field(..., description="数据库连接名称")
     answers: Dict[str, str] = Field(..., description="答案字典 {uncertainty_id: answer}")
+    conversation_id: str = Field(..., description="对话 ID（用于自动恢复 Agent）")
+    user_id: str = Field(..., description="用户 ID")
 
 
 class BatchAnswerResponse(BaseModel):

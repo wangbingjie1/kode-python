@@ -38,12 +38,19 @@ class OntologyBuilderInput(BaseModel):
     )
     auto_save: bool = Field(default=True, description="Automatically save ontology to file")
     version: str = Field(default="auto", description="Version identifier (auto = timestamp)")
+    force_rebuild: bool = Field(
+        default=False,
+        description="Force rebuild even if ontology exists. Set to True only after user explicitly confirms to rebuild."
+    )
 
 
 class OntologySearchInput(BaseModel):
     """Input schema for OntologySearchTool."""
 
-    ontology_path: str = Field(description="Path to ontology storage")
+    ontology_path: str = Field(
+        description="Path to ontology storage DIRECTORY (e.g., 'ontology_store/yanfa' or 'ontology_store/{connection_name}'). "
+        "Do NOT pass a file path - the tool will automatically look for 'ontology_latest.json' in this directory."
+    )
     query: str = Field(description="Search query (natural language)")
     search_type: str = Field(
         default="semantic", description="Search type: semantic, exact, fuzzy"
@@ -93,6 +100,7 @@ class OntologyBuilderTool(KodeTool):
         extract_hierarchies: bool = True,
         auto_save: bool = True,
         version: str = "auto",
+        force_rebuild: bool = False,
     ) -> str:
         """
         Build ontology from database schema using AI.
@@ -105,6 +113,7 @@ class OntologyBuilderTool(KodeTool):
             extract_hierarchies: Extract hierarchies (DEPRECATED - LLM handles this)
             auto_save: Automatically save ontology to file
             version: Version identifier
+            force_rebuild: Force rebuild even if ontology exists (requires user confirmation)
 
         Returns:
             Ontology as JSON
@@ -126,6 +135,50 @@ class OntologyBuilderTool(KodeTool):
                     indent=2,
                     ensure_ascii=False,
                 )
+
+            # 🔍 检查本体是否已存在（仅当未强制重建时）
+            if not force_rebuild:
+                ontology_path = config.get("storage.ontology_path", "./ontology_store")
+                existing_ontology_file = Path(ontology_path) / connection_name / "ontology_latest.json"
+
+                if existing_ontology_file.exists():
+                    # 读取现有本体的元数据
+                    try:
+                        with open(existing_ontology_file, "r", encoding="utf-8") as f:
+                            existing_data = json.load(f)
+
+                        existing_version = existing_data.get("version", "未知")
+                        created_at = existing_data.get("created_at", "未知")
+                        ontology_stats = existing_data.get("ontology", {}).get("statistics", {})
+
+                        return json.dumps(
+                            {
+                                "status": "warning",
+                                "already_exists": True,
+                                "message": f"⚠️ 本体已存在！连接 '{connection_name}' 的本体文件已经存在。",
+                                "existing_ontology": {
+                                    "file_path": str(existing_ontology_file),
+                                    "version": existing_version,
+                                    "created_at": created_at,
+                                    "statistics": {
+                                        "concept_count": ontology_stats.get("concept_count", 0),
+                                        "property_count": ontology_stats.get("property_count", 0),
+                                        "relationship_count": ontology_stats.get("relationship_count", 0),
+                                        "uncertainty_count": ontology_stats.get("uncertainty_count", 0)
+                                    }
+                                },
+                                "question": "是否要重新构建本体？这将覆盖现有的本体文件。",
+                                "suggestion": "如果要重新构建，请明确告诉我'重新构建本体'或'覆盖现有本体'。如果不需要重新构建，可以直接使用 OntologySearch 工具搜索现有本体。",
+                                "note": "重新构建会保留历史版本（ontology_v{timestamp}.json），但 ontology_latest.json 会被更新。"
+                            },
+                            indent=2,
+                            ensure_ascii=False,
+                        )
+                    except Exception as e:
+                        logger.warning(f"读取现有本体文件失败: {e}，将继续构建新本体")
+                        # 如果读取失败，继续构建流程
+            else:
+                logger.info(f"🔄 强制重建模式：跳过本体存在性检查，直接构建")
 
             # 【智能门禁检查】检查不确定性分析状态（从各领域文件中读取）
             # ✨ 新架构：不确定性数据已分散存储在各 domain JSON 文件中
@@ -1129,6 +1182,15 @@ class OntologySearchTool(KodeTool):
 
     name: str = "OntologySearch"
     description: str = """Search stored ontology for concepts, properties, and relationships.
+
+    **IMPORTANT**: The 'ontology_path' parameter must be the DIRECTORY containing the ontology,
+    NOT a file path. For example:
+    - Correct: 'ontology_store/yanfa'
+    - Wrong: 'ontology_store/yanfa/ontology_latest.json'
+    - Wrong: 'schema_store/yanfa/domains/order_management.json'
+
+    The tool will automatically look for 'ontology_latest.json' inside the provided directory.
+
     Supports semantic search (with embeddings), exact matching, and fuzzy search."""
 
     args_schema: Type[BaseModel] = OntologySearchInput
@@ -1145,7 +1207,7 @@ class OntologySearchTool(KodeTool):
         Search ontology.
 
         Args:
-            ontology_path: Path to ontology storage
+            ontology_path: Path to ontology storage DIRECTORY
             query: Search query
             search_type: Type of search
             top_k: Number of results
@@ -1154,16 +1216,62 @@ class OntologySearchTool(KodeTool):
             Search results as JSON
         """
         try:
+            # 🔍 智能路径检测和纠正
+            ontology_path_obj = Path(ontology_path)
+
+            # 检测常见错误：传入了文件路径而非目录
+            if ontology_path_obj.suffix == ".json":
+                # 用户传入了文件路径，尝试自动纠正
+                logger.warning(f"⚠️ OntologySearch: 检测到文件路径 {ontology_path}，自动纠正为目录")
+
+                # 情况1：传入的是 schema_store/.../xxx.json → 应该是 ontology_store/connection_name
+                if "schema_store" in str(ontology_path):
+                    # 提取 connection_name (schema_store/{connection_name}/...)
+                    parts = ontology_path_obj.parts
+                    if len(parts) >= 2 and "schema_store" in parts:
+                        schema_idx = parts.index("schema_store")
+                        if schema_idx + 1 < len(parts):
+                            connection_name = parts[schema_idx + 1]
+                            # 纠正路径
+                            config = ConfigManager()
+                            ontology_base = config.get("storage.ontology_path", "./ontology_store")
+                            corrected_path = Path(ontology_base) / connection_name
+                            logger.info(f"✅ 自动纠正: schema 路径 → ontology 路径 {corrected_path}")
+                            ontology_path_obj = corrected_path
+
+                # 情况2：传入的是 ontology_store/.../ontology_latest.json → 提取目录
+                elif "ontology_store" in str(ontology_path):
+                    ontology_path_obj = ontology_path_obj.parent
+                    logger.info(f"✅ 自动纠正: 文件路径 → 目录路径 {ontology_path_obj}")
+
             # Load latest ontology
-            latest_path = Path(ontology_path) / "ontology_latest.json"
+            latest_path = ontology_path_obj / "ontology_latest.json"
 
             if not latest_path.exists():
+                # 生成友好的错误消息
+                error_msg = f"本体文件未找到: {latest_path}"
+
+                # 检查是否是路径错误
+                if "schema_store" in str(ontology_path):
+                    error_msg += "\n\n❌ 错误原因: 你传入的是 schema 文件路径，而不是 ontology 目录！"
+                    error_msg += "\n\n✅ 正确用法: ontology_path 应该是 'ontology_store/{connection_name}'，例如："
+                    error_msg += "\n  - 正确: 'ontology_store/yanfa'"
+                    error_msg += "\n  - 错误: 'schema_store/yanfa/domains/order_management.json'"
+                else:
+                    error_msg += f"\n\n💡 提示: 请确保已运行 OntologyBuilder 工具生成本体。"
+                    error_msg += f"\n  期望目录: {ontology_path_obj}"
+                    error_msg += f"\n  期望文件: {latest_path}"
+
                 return json.dumps(
                     {
                         "status": "error",
-                        "message": f"No ontology found at {ontology_path}",
+                        "message": error_msg,
+                        "provided_path": str(ontology_path),
+                        "expected_directory": str(ontology_path_obj),
+                        "expected_file": str(latest_path),
                     },
                     indent=2,
+                    ensure_ascii=False,
                 )
 
             with open(latest_path, "r", encoding="utf-8") as f:

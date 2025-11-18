@@ -31,6 +31,7 @@ try:
         DatabaseConnectTool,
         DatabaseSchemaExtractorTool,
         DatabaseExecuteQueryTool,
+        SchemaQueryTool,
     )
     from kode.tools.ontology_tools import (
         OntologyBuilderTool,
@@ -107,12 +108,13 @@ class AsyncConversationService:
                 DatabaseConnectTool(),
                 DatabaseSchemaExtractorTool(),
                 DatabaseExecuteQueryTool(),
+                SchemaQueryTool(),  # 精确查询单表 schema (节省 token)
                 DomainUncertaintyAnalyzer(),  # 并行域分析工具
                 UncertaintyQAManager(),  # 不确定性问答管理
                 OntologyBuilderTool(),
                 OntologySearchTool(),
             ])
-            logger.info("Database and ontology tools loaded (with uncertainty Q&A system)")
+            logger.info("Database and ontology tools loaded (with SchemaQuery & uncertainty Q&A)")
 
             # Load existing database connections from persistence FIRST
             self._load_database_connections()
@@ -163,13 +165,12 @@ class AsyncConversationService:
         # 静态系统信息（只在初始化时获取一次，可以被缓存）
         static_system_info = format_system_info_static()
 
-        return AgentConfig(
-            name="data-analyst",
-            # betas=["context-1m-2025-08-07"],
-            description="专业数据分析 Agent，专注于 ERP 数据库分析和业务洞察",
-            system_prompt=f"""你是一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
+        # 构建 system_prompt（使用字符串格式化避免 f-string 嵌套过深）
+        system_prompt = """你是一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
 
-{static_system_info}
+{static_system_info}""".format(static_system_info=static_system_info)
+
+        system_prompt += """
 
 ## 核心能力
 
@@ -183,7 +184,36 @@ class AsyncConversationService:
 - 构建业务实体映射
 
 ### 3. SQL 查询和数据分析
-- 使用 DatabaseExecuteQuery 执行 SQL 查询（复杂 JOIN、聚合、分组）
+
+**⭐ 查询准确 Schema 的步骤（避免枚举值错误）**
+
+生成 SQL 前，**必须**使用 SchemaQuery 查询表的完整结构：
+
+```
+步骤 1: 使用 SchemaQuery 获取表结构
+SchemaQuery(connection_name="yanfa", table_name="order")
+
+步骤 2: 查看返回的 columns 中的 enum_mapping 字段
+{
+  "status": {
+    "type": "tinyint",
+    "enum_mapping": {"0": "待支付", "1": "支付成功", "2": "支付失败"},
+    "comment": "订单状态"
+  }
+}
+
+步骤 3: 根据 enum_mapping 生成正确的 SQL
+✅ 正确: WHERE status IN (0, 1, 2)  -- 使用 code
+❌ 错误: WHERE status IN ('待支付', '支付成功')  -- 使用 label
+```
+
+**关键规则**:
+- 字段有 `enum_mapping` 时，SQL 必须使用 **code**（数字），不是 label（文字）
+- 字段有 `enum_values` 时（真正的 ENUM 类型），SQL 使用字符串值
+- 不确定时，优先查询 SchemaQuery
+
+**执行查询**:
+- 使用 DatabaseExecuteQuery 执行 SQL（复杂 JOIN、聚合、分组）
 - 计算关键业务指标（KPI）：销售额、库存周转率、客户留存率等
 - 识别数据质量问题
 
@@ -211,7 +241,12 @@ class AsyncConversationService:
 ```
 用户: "帮我构建本体"
 ↓
-OntologyBuilder 自动检测：
+OntologyBuilder 自动检测（按优先级）：
+  0. 检查本体是否已存在（ontology_latest.json）
+     ├─ 已存在 → 返回warning，询问用户是否重新构建
+     │           （向用户展示现有本体信息：版本、概念数量、创建时间等）
+     │           ⚠️ 你必须等待用户明确确认后再继续！
+     └─ 不存在 → 继续下面的流程
   1. 检查 domains/*.json 领域文件是否存在
      ├─ 不存在 → 返回错误，提示先运行 DatabaseSchemaExtractor
      └─ 存在 → 继续检查 high 问题
@@ -224,8 +259,24 @@ OntologyBuilder 自动检测：
 - 不确定性数据已分散存储在各领域文件（`domains/{{domain_name}}.json`）的 `uncertainties` 字段中
 - 不再需要单独的 `uncertainties.json` 文件
 - OntologyBuilder 会自动从领域文件中读取已解决的 high 问题答案，注入到构建 Prompt 中
+- **本体防覆盖保护**：如果本体已存在，工具会返回 `status: "warning", already_exists: true`
 
 **你不需要手动判断，OntologyBuilder 会自动提示正确的操作步骤！**
+
+### ⚠️ 关键规则：本体已存在时的处理
+
+当 OntologyBuilder 返回 `already_exists: true` 时：
+
+1. **向用户展示现有本体信息**：
+   - 版本、创建时间、概念数量、属性数量等
+   - 说明重新构建会创建新版本文件，但会覆盖 ontology_latest.json
+
+2. **等待用户明确确认**：
+   - 用户说"重新构建"、"覆盖"、"强制构建" → 调用 `OntologyBuilder(connection_name="xxx", force_rebuild=True)`
+   - 用户说"不需要"、"使用现有" → 停止，告知可用 OntologySearch 搜索
+   - 其他回答 → 继续询问
+
+3. **重要**：只有在用户明确确认后，才能设置 `force_rebuild=True`，否则不要设置这个参数
 
 ---
 
@@ -250,7 +301,7 @@ OntologyBuilder 自动检测：
    **模式A：批量问答（推荐，用户友好）⭐**
    - 当问题数量 >= 5 时，使用批量模式
    - 步骤：
-     a) 批量加载问题（支持分组和限制数量）：
+     a) 批量加载问题：
         ```
         UncertaintyQAManager(
           connection_name="yanfa",
@@ -259,10 +310,15 @@ OntologyBuilder 自动检测：
           limit=10  # 可选，限制问题数量
         )
         ```
-     b) **直接告诉用户**："我已经为你准备了批量问答表单，请在界面上填写并提交。提交后我会继续处理。"
+     b) **告诉用户**："我已经为你准备了批量问答表单，请在界面上填写并提交。"
         - ⚠️ **不要使用 AskUser 工具**，因为前端会自动渲染表单
-        - 等待用户在前端填写表单并提交
-     c) 用户提交后，前端会调用 batch_answer API，工具会自动记录所有答案
+        - ⚠️ **不要继续执行其他操作**，直接结束本次回复
+        - 前端会自动渲染表单，用户填写后会提交
+     c) **用户提交答案后**，会发送新消息告知你（如"已填写完成"）
+     d) **收到用户消息后**，执行以下步骤：
+          1. 调用 `UncertaintyQAManager(action="status")` 检查所有问题是否已解决
+          2. 如果 `can_build_ontology=true`，继续执行本体构建
+          3. 如果还有未解决问题，告知用户并等待
 
    **模式B：逐个问答（问题数量 < 5 时使用）**
    - 使用 **AskUser** 工具逐个提问
@@ -422,7 +478,12 @@ OntologyUncertaintyResolver({{{{
 - **人机协同**：对于干扰你的表或者数据，请和用户沟通确认清楚再执行
 - **上下文意识**：主动管理你的注意力预算，使用glob， Grep先探索，然后使用FileRead读取关键内容
 
-和业务不相干的问题，请直接拒绝。""",
+和业务不相干的问题，请直接拒绝。"""
+
+        return AgentConfig(
+            name="data-analyst",
+            description="专业数据分析 Agent，专注于 ERP 数据库分析和业务洞察",
+            system_prompt=system_prompt,
             tools=["*"],  # 所有工具都可用
         )
 

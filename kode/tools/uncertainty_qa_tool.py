@@ -428,10 +428,7 @@ class UncertaintyQAManager(KodeTool):
             "total_loaded": len(high_uncertainties),
             "group_by": group_by,
             "groups": grouped_result,
-            "message": f"已加载 {len(high_uncertainties)} 个高优先级问题，按 {group_by} 分组展示。",
-            "requires_user_input": True,
-            "next_tool": "UncertaintyQAManager",
-            "next_action": "batch_answer"
+            "message": f"已加载 {len(high_uncertainties)} 个高优先级问题，按 {group_by} 分组展示。前端会渲染批量问答表单，请等待用户填写并提交。"
         }, indent=2, ensure_ascii=False)
 
     def _batch_record_answers(

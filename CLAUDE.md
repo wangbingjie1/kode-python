@@ -3,6 +3,7 @@
 doc目录 存放你生成的说明文档
 test目录 存放你生成的测试代码
 永远不要写降级方案
+要用批判性思维思考用户的问题和自己的解决方案
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview

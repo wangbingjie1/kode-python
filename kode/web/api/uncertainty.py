@@ -136,8 +136,10 @@ async def batch_answer_uncertainties(request: BatchAnswerRequest):
     """
     批量回答不确定性问题
 
+    ⭐ 核心功能：保存答案后，自动触发 Agent 继续执行（检查状态 → 构建本体）
+
     Args:
-        request: 批量回答请求（包含连接名和答案字典）
+        request: 批量回答请求（包含连接名、答案字典、对话ID、用户ID）
 
     Returns:
         BatchAnswerResponse: 批量回答结果
@@ -216,7 +218,7 @@ async def batch_answer_uncertainties(request: BatchAnswerRequest):
                 if u.get("priority", "medium").lower() == "high" and u.get("status") not in ["resolved", "skipped"]:
                     remaining_high += 1
 
-        return BatchAnswerResponse(
+        response = BatchAnswerResponse(
             status="success",
             resolved_count=resolved_count,
             not_found=not_found,
@@ -228,6 +230,44 @@ async def batch_answer_uncertainties(request: BatchAnswerRequest):
                 else f"已批量记录 {resolved_count} 个回答。所有高优先级问题已解决！可以开始构建本体。"
             )
         )
+
+        # 🔥 自动触发 Agent 继续执行：保存一条系统消息到数据库
+        try:
+            from kode.database.session import SessionLocal
+            from kode.models.message import Message
+            from datetime import datetime
+
+            db = SessionLocal()
+            try:
+                # 创建系统消息（告知 Agent 用户已提交答案）
+                system_message = Message(
+                    conversation_id=request.conversation_id,
+                    role="user",
+                    content=f"[系统] 用户已提交批量问卷答案（共 {resolved_count} 个）。请调用 UncertaintyQAManager(action='status') 检查进度，然后继续执行。",
+                    metadata={
+                        "auto_generated": True,
+                        "trigger": "batch_answer_completion",
+                        "resolved_count": resolved_count,
+                        "remaining_high": remaining_high,
+                        "can_build_ontology": remaining_high == 0,
+                        "connection_name": request.connection_name
+                    },
+                    created_at=datetime.utcnow()
+                )
+                db.add(system_message)
+                db.commit()
+                logger.info(f"[Auto-Resume] System message saved for conversation {request.conversation_id}")
+            except Exception as db_error:
+                logger.error(f"[Auto-Resume] Failed to save system message: {db_error}")
+                db.rollback()
+            finally:
+                db.close()
+
+        except Exception as e:
+            logger.error(f"[Auto-Resume] Error during auto-resume: {e}")
+            # 不影响主流程，继续返回
+
+        return response
 
     except HTTPException:
         raise

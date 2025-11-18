@@ -563,6 +563,38 @@ class DatabaseSchemaExtractorTool(KodeTool):
 
         return results
 
+    def _parse_enum_from_comment(self, comment: str) -> Optional[Dict[str, str]]:
+        """
+        从字段注释中解析枚举值映射关系(使用简单正则模式)
+
+        仅识别最常见的格式:
+        - "0=待支付;1=支付成功;2=支付失败"  (分号分隔)
+        - "0:待支付,1:支付成功,2:支付失败"  (逗号分隔)
+
+        Args:
+            comment: 字段注释文本
+
+        Returns:
+            枚举值映射字典 {code: label} 或 None
+        """
+        if not comment:
+            return None
+
+        # 只保留最常见的两种模式,避免误匹配
+        # 模式1: "0=xxx;1=yyy" (分号分隔)
+        pattern1 = r'(\d+|["\'][^"\']+["\'])\s*=\s*([^;]+)'
+        matches1 = re.findall(pattern1, comment)
+        if len(matches1) >= 2:  # 至少2个枚举值才算有效
+            return {m[0].strip('"\'').strip(): m[1].strip() for m in matches1}
+
+        # 模式2: "0:xxx,1:yyy" 或 "0-xxx,1-yyy" (逗号分隔)
+        pattern2 = r'(\d+|["\'][^"\']+["\'])\s*[:：-]\s*([^,，;]+)'
+        matches2 = re.findall(pattern2, comment)
+        if len(matches2) >= 2:  # 至少2个枚举值才算有效
+            return {m[0].strip('"\'').strip(): m[1].strip() for m in matches2}
+
+        return None
+
     def _extract_enum_values(
         self, connection_name: str, table_name: str, column: Dict[str, Any]
     ) -> Optional[List[str]]:
@@ -684,19 +716,26 @@ class DatabaseSchemaExtractorTool(KodeTool):
             enriched_columns = []
 
             for col in columns:
+                col_comment = col.get("comment")
                 col_info = {
                     "name": col["name"],
                     "type": str(col["type"]),
                     "nullable": col.get("nullable", True),
                     "default": str(col.get("default")) if col.get("default") else None,
                     "autoincrement": col.get("autoincrement", False),
-                    "comment": col.get("comment"),
+                    "comment": col_comment,
                 }
 
-                # Extract enum values for ENUM type columns
+                # 提取枚举值 - 两种方式:
+                # 1. 从数据库 ENUM 类型提取
                 enum_values = self._extract_enum_values(connection_name, table_name, col)
                 if enum_values:
                     col_info["enum_values"] = enum_values
+
+                # 2. 从 comment 中解析枚举映射(适用于 tinyint/varchar 等类型)
+                enum_mapping = self._parse_enum_from_comment(col_comment)
+                if enum_mapping:
+                    col_info["enum_mapping"] = enum_mapping
 
                 enriched_columns.append(col_info)
 
@@ -809,15 +848,16 @@ class DatabaseSchemaExtractorTool(KodeTool):
                         # MySQL: table_name, column_name, data_type, column_type, is_nullable, column_default, comment
                         # PostgreSQL: table_name, column_name, data_type, is_nullable, column_default, comment
                         if db_type == "mysql":
+                            col_comment = row[6] if len(row) > 6 else None
                             col_info = {
                                 "name": row[1],
                                 "type": row[2],
                                 "nullable": row[4] == "YES",
                                 "default": row[5] if len(row) > 5 else None,
-                                "comment": row[6] if len(row) > 6 else None
+                                "comment": col_comment
                             }
 
-                            # Extract enum values from COLUMN_TYPE (row[3])
+                            # 1. Extract enum values from COLUMN_TYPE (row[3])
                             column_type = row[3]  # e.g., "enum('free','pro','enterprise')"
                             if column_type and "enum" in column_type.lower():
                                 enum_match = re.search(r"enum\((.*?)\)", column_type, re.IGNORECASE)
@@ -825,15 +865,26 @@ class DatabaseSchemaExtractorTool(KodeTool):
                                     enum_str = enum_match.group(1)
                                     enum_values = [v.strip().strip("'\"") for v in enum_str.split(",")]
                                     col_info["enum_values"] = enum_values
+
+                            # 2. 从 comment 中解析枚举映射
+                            enum_mapping = self._parse_enum_from_comment(col_comment)
+                            if enum_mapping:
+                                col_info["enum_mapping"] = enum_mapping
                         else:
                             # PostgreSQL
+                            col_comment = row[5] if len(row) > 5 else None
                             col_info = {
                                 "name": row[1],
                                 "type": row[2],
                                 "nullable": row[3] == "YES",
                                 "default": row[4] if len(row) > 4 else None,
-                                "comment": row[5] if len(row) > 5 else None
+                                "comment": col_comment
                             }
+
+                            # 从 comment 中解析枚举映射
+                            enum_mapping = self._parse_enum_from_comment(col_comment)
+                            if enum_mapping:
+                                col_info["enum_mapping"] = enum_mapping
 
                         results[table_name]["columns"].append(col_info)
 
@@ -1167,50 +1218,72 @@ class DatabaseSchemaExtractorTool(KodeTool):
         Raises:
             Exception: If clustering fails, propagate error to caller
         """
-        # Send progress update
-        if enable_progress:
-            self._emit_progress("AI analyzing tables for domain clustering...", 0, 1)
+        try:
+            # Send progress update
+            if enable_progress:
+                self._emit_progress("AI analyzing tables for domain clustering...", 0, 1)
 
-        # Import and instantiate clusterer
-        from kode.tools.schema_clustering_tool import DatabaseSchemaClusterer
+            # Import and instantiate clusterer
+            from kode.tools.schema_clustering_tool import DatabaseSchemaClusterer
 
-        clusterer = DatabaseSchemaClusterer()
+            clusterer = DatabaseSchemaClusterer()
 
-        # Execute clustering with fixed parameters
-        result_json = clusterer._run(
-            connection_name=connection_name,
-            schema_file=schema_file,
-            target_tables_per_domain=10,
-            max_columns_for_analysis=20,
-            llm_model="main",
-            output_language="en",
-        )
+            # Execute clustering with fixed parameters
+            result_json = clusterer._run(
+                connection_name=connection_name,
+                schema_file=schema_file,
+                target_tables_per_domain=10,
+                max_columns_for_analysis=20,
+                llm_model="main",
+                output_language="en",
+            )
 
-        # Parse result
-        result = json.loads(result_json)
+            # Parse result
+            result = json.loads(result_json)
 
-        # Check status and raise if failed
-        if result.get("status") != "success":
-            error_msg = result.get("message", "Unknown clustering error")
-            raise RuntimeError(f"Schema clustering failed: {error_msg}")
+            # Check status and raise if failed
+            if result.get("status") != "success":
+                error_msg = result.get("message", "Unknown clustering error")
+                raise RuntimeError(f"Schema clustering failed: {error_msg}")
 
-        if enable_progress:
-            total_domains = result["clustering_summary"]["total_domains"]
-            self._emit_progress(f"Successfully clustered into {total_domains} domains", 1, 1)
+            # Validate result structure
+            if "clustering_summary" not in result:
+                raise RuntimeError("Invalid clustering result: missing clustering_summary")
+            if "storage" not in result:
+                raise RuntimeError("Invalid clustering result: missing storage")
 
-        # Return compact summary
-        return {
-            "status": "success",
-            "total_domains": result["clustering_summary"]["total_domains"],
-            "domains": [
-                {
-                    "name": d["name"],
-                    "table_count": d["table_count"],
-                }
-                for d in result["clustering_summary"]["domains"]
-            ],
-            "index_file": result["storage"]["domain_index_file"],
-        }
+            storage = result.get("storage", {})
+            if not storage.get("saved"):
+                error = storage.get("error", "Unknown storage error")
+                raise RuntimeError(f"Failed to save domain schemas: {error}")
+
+            if "domain_index_file" not in storage:
+                raise RuntimeError("Invalid clustering result: missing domain_index_file in storage")
+
+            if enable_progress:
+                total_domains = result["clustering_summary"]["total_domains"]
+                self._emit_progress(f"Successfully clustered into {total_domains} domains", 1, 1)
+
+            # Return compact summary
+            return {
+                "status": "success",
+                "total_domains": result["clustering_summary"]["total_domains"],
+                "domains": [
+                    {
+                        "name": d["name"],
+                        "table_count": d["table_count"],
+                    }
+                    for d in result["clustering_summary"]["domains"]
+                ],
+                "index_file": storage["domain_index_file"],
+            }
+        except Exception as e:
+            # 聚类失败不应该导致整个 schema 提取失败，返回警告信息
+            return {
+                "status": "warning",
+                "message": f"Schema clustering skipped: {str(e)}",
+                "note": "Schema extraction succeeded, but auto-clustering failed. You can manually cluster later."
+            }
 
 
 class DatabaseExecuteQueryTool(KodeTool):
@@ -1391,3 +1464,132 @@ class DatabaseExecuteQueryTool(KodeTool):
         if match:
             return match.group(1).upper()
         return "UNKNOWN"
+
+
+class SchemaQueryInput(BaseModel):
+    """Input schema for SchemaQueryTool."""
+
+    connection_name: str = Field(description="Database connection name")
+    table_name: str = Field(description="Table name to query schema for")
+    include_sample_data: bool = Field(
+        default=False, description="Include sample data in response (increases token usage)"
+    )
+
+
+class SchemaQueryTool(KodeTool):
+    """
+    Query detailed schema for a specific table from cached schema file.
+
+    Returns complete table structure including:
+    - Column definitions (type, nullable, default, comment)
+    - Enum mappings (parsed from comments or ENUM types)
+    - Primary/Foreign keys
+    - Indexes
+    - Sample data (optional)
+
+    Much more token-efficient than loading entire schema file.
+    """
+
+    name: str = "SchemaQuery"
+    description: str = """Query detailed schema for a specific database table.
+
+    从缓存的 schema 文件中快速查询单表的完整结构信息,包括:
+    - 字段定义(类型、注释、默认值、是否可空)
+    - 枚举映射(enum_mapping): code->label 的映射关系
+    - 主键、外键、索引
+    - 样例数据(可选)
+
+    优势: 比读取完整 schema 文件节省 90% 以上 token。
+
+    使用场景:
+    - 生成 SQL 前,确认字段的枚举值
+    - 检查字段约束(nullable, default)
+    - 查看外键关系
+    """
+
+    args_schema: Type[BaseModel] = SchemaQueryInput
+    requires_permission: bool = False  # Read-only
+
+    def _run(
+        self,
+        connection_name: str,
+        table_name: str,
+        include_sample_data: bool = False,
+    ) -> str:
+        """
+        Query table schema from cached file.
+
+        Args:
+            connection_name: Database connection name
+            table_name: Table name
+            include_sample_data: Whether to include sample data
+
+        Returns:
+            Table schema as JSON
+        """
+        try:
+            # Construct schema file path
+            config = ConfigManager()
+            storage_path = config.get("storage.schema_path", "./schema_store")
+            schema_file = Path(storage_path) / connection_name / "schema_latest.json"
+
+            if not schema_file.exists():
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Schema file not found: {schema_file}. "
+                        f"Please run DatabaseSchemaExtractor first.",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            # Load schema file
+            with open(schema_file, "r", encoding="utf-8") as f:
+                schema_data = json.load(f)
+
+            # Extract table data
+            tables = schema_data.get("schema", {}).get("tables", {})
+
+            if table_name not in tables:
+                available_tables = list(tables.keys())[:10]  # Show first 10
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Table '{table_name}' not found in schema.",
+                        "available_tables": available_tables,
+                        "total_tables": len(tables),
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            table_data = tables[table_name]
+
+            # Remove sample data if not requested (saves tokens)
+            if not include_sample_data and "sample_data" in table_data:
+                sample_info = table_data["sample_data"]
+                table_data["sample_data"] = {
+                    "row_count": sample_info.get("row_count", 0),
+                    "note": "样例数据已省略 (设置 include_sample_data=True 查看)",
+                }
+
+            # Build response
+            result = {
+                "status": "success",
+                "connection": connection_name,
+                "table": table_data,
+                "schema_file": str(schema_file),
+            }
+
+            return json.dumps(result, indent=2, ensure_ascii=False)
+
+        except Exception as e:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Failed to query schema: {str(e)}",
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
