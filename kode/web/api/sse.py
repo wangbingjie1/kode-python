@@ -511,6 +511,19 @@ async def stream_chat(
     db.add(user_message)
     await db.commit()
 
+    # Generate conversation title if this is the first message
+    is_first_message = len(chat_history) == 0
+    if is_first_message and conversation.title in ("New Conversation", "New chat", "新对话"):
+        try:
+            # Generate title asynchronously (don't block the stream)
+            new_title = await conversation_service.generate_conversation_title(task)
+            conversation.title = new_title
+            db.add(conversation)
+            await db.commit()
+            logger.info(f"Updated conversation {conversation_id} title to: {new_title}")
+        except Exception as e:
+            logger.warning(f"Failed to generate conversation title: {e}")
+
     # Return SSE stream (with history)
     return StreamingResponse(
         event_generator(

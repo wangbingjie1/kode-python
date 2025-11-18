@@ -55,12 +55,10 @@ class LoadUncertaintiesResponse(BaseModel):
 
 
 class BatchAnswerRequest(BaseModel):
-    """批量回答请求"""
+    """批量回答请求（已废弃，现在通过 UserInputRequired 机制处理）"""
 
     connection_name: str = Field(..., description="数据库连接名称")
     answers: Dict[str, str] = Field(..., description="答案字典 {uncertainty_id: answer}")
-    conversation_id: str = Field(..., description="对话 ID（用于自动恢复 Agent）")
-    user_id: str = Field(..., description="用户 ID")
 
 
 class BatchAnswerResponse(BaseModel):

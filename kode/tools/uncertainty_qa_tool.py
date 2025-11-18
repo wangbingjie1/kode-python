@@ -1,6 +1,7 @@
 """Uncertainty Q&A management tool for interactive ontology building."""
 
 import json
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
@@ -10,6 +11,7 @@ from pydantic import BaseModel, Field
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
 from kode.utils.logger import setup_logger
+from kode.exceptions import UserInputRequired
 
 logger = setup_logger(__name__)
 
@@ -49,12 +51,11 @@ class UncertaintyQAManager(KodeTool):
 
     这个工具用于：
     1. 加载并展示待解决的不确定性问题
-    2. 记录用户对每个问题的回答
+    2. 记录用户对每个问题的回答（通过 UserInputRequired 异常）
     3. 追踪问答进度，判断是否可以继续构建本体
 
     工作流程：
-    - action='load' → 返回所有待解决的高优先级问题
-    - action='answer' → 记录用户对某个问题的回答
+    - action='batch_load' → 抛出 UserInputRequired 异常，暂停 Agent，前端渲染表单
     - action='status' → 检查当前进度，判断是否所有 high 问题已解决
     """
 
@@ -62,22 +63,55 @@ class UncertaintyQAManager(KodeTool):
     description: str = """Manage uncertainty Q&A process for ontology building.
 
     Actions:
-    - 'load': Load all unresolved high-priority uncertainties
-    - 'batch_load': Load questions grouped by domain/priority (supports limit)
-    - 'answer': Record user's answer to a specific uncertainty
-    - 'batch_answer': Record multiple answers at once (batch_answers={id: answer, ...})
-    - 'skip': Mark a medium/low priority question as skipped
+    - 'batch_load': Load questions and request user input (will pause agent execution)
     - 'status': Check progress (how many high-priority questions remain)
 
     Use this tool to:
-    1. Present high-priority questions to user before ontology building
-    2. Record user answers and track progress (single or batch mode)
-    3. Allow skipping non-critical questions
-    4. Verify all critical questions are answered before proceeding
+    1. Present high-priority questions to user via frontend form
+    2. Automatically resume after user submits answers
+    3. Verify all critical questions are answered before proceeding
     """
 
     args_schema: Type[BaseModel] = UncertaintyQAManagerInput
     requires_permission: bool = False
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # 用于等待用户批量回答的事件
+        self._batch_response_event = None
+        self._batch_response_data = None
+        self._connection_name = None  # 保存 connection_name 供后续使用
+
+    async def _set_user_response(self, response_data: Dict[str, Any]):
+        """
+        接收用户提交的批量答案（由 SSE endpoint 调用）。
+
+        Args:
+            response_data: {"answers": {uncertainty_id: answer, ...}}
+        """
+        logger.info(f"[UncertaintyQAManager] Received batch answers: {len(response_data.get('answers', {}))} items")
+        self._batch_response_data = response_data
+        if self._batch_response_event:
+            self._batch_response_event.set()
+
+    async def _wait_for_response(self) -> str:
+        """
+        等待用户提交批量答案，然后自动保存到领域文件。
+
+        Returns:
+            处理结果的 JSON 字符串
+        """
+        logger.info("[UncertaintyQAManager] Waiting for user to submit batch answers...")
+        await self._batch_response_event.wait()
+
+        answers = self._batch_response_data.get("answers", {})
+        logger.info(f"[UncertaintyQAManager] User submitted {len(answers)} answers")
+
+        # 自动调用 batch_record_answers 保存答案
+        domains_dir = self._get_domains_dir(self._connection_name)
+        result = self._batch_record_answers(domains_dir, answers)
+
+        return result
 
     def _run(
         self,
@@ -105,6 +139,9 @@ class UncertaintyQAManager(KodeTool):
             Result as JSON
         """
         try:
+            # 保存 connection_name 供后续使用
+            self._connection_name = connection_name
+
             # 🔥 获取领域目录（而不是单一的 uncertainties.json 文件）
             domains_dir = self._get_domains_dir(connection_name)
 
@@ -366,7 +403,11 @@ class UncertaintyQAManager(KodeTool):
         group_by: str = "domain",
         limit: Optional[int] = None
     ) -> str:
-        """批量加载不确定性问题，支持分组和限制数量（新架构：从领域文件读取）"""
+        """
+        批量加载不确定性问题，抛出 UserInputRequired 异常暂停 Agent。
+
+        ⭐ 核心变化：不返回 JSON，而是抛出异常，让前端渲染表单
+        """
         if not domains_dir.exists():
             return json.dumps({
                 "status": "error",
@@ -423,13 +464,18 @@ class UncertaintyQAManager(KodeTool):
         else:
             grouped_result = high_uncertainties
 
-        return json.dumps({
-            "status": "success",
-            "total_loaded": len(high_uncertainties),
-            "group_by": group_by,
-            "groups": grouped_result,
-            "message": f"已加载 {len(high_uncertainties)} 个高优先级问题，按 {group_by} 分组展示。前端会渲染批量问答表单，请等待用户填写并提交。"
-        }, indent=2, ensure_ascii=False)
+        # 🔥 核心修改：抛出 UserInputRequired 异常，暂停 Agent
+        # 创建事件用于等待用户响应
+        self._batch_response_event = asyncio.Event()
+        self._batch_response_data = None
+
+        raise UserInputRequired(
+            question="请填写以下不确定性问题",
+            question_type="batch_form",  # 特殊类型，表示批量表单
+            options=grouped_result,  # 将分组后的问题列表传递给前端
+            context=f"共 {len(high_uncertainties)} 个高优先级问题需要回答",
+            tool_instance=self  # 传递工具实例引用
+        )
 
     def _batch_record_answers(
         self,

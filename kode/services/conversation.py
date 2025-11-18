@@ -937,3 +937,66 @@ OntologyUncertaintyResolver({{{{
         """
         # Placeholder
         pass
+
+    async def generate_conversation_title(self, first_message: str) -> str:
+        """
+        根据用户的第一条消息生成会话标题。
+
+        使用 quick 模型快速生成 4-6 个字的简洁标题。
+
+        Args:
+            first_message: 用户的第一条消息
+
+        Returns:
+            str: 生成的标题（4-6个字）
+        """
+        try:
+            from anthropic import Anthropic
+
+            # Get API key from config
+            api_key = self.config.get("apiKeys", {}).get("anthropic")
+            if not api_key:
+                logger.warning("ANTHROPIC_API_KEY not configured, using default title")
+                return "新对话"
+
+            # Use quick model for title generation (cost-effective)
+            client = Anthropic(api_key=api_key)
+
+            # Truncate message if too long (first 200 chars should be enough)
+            message_preview = first_message[:200] if len(first_message) > 200 else first_message
+
+            response = client.messages.create(
+                model="claude-3-5-haiku-20241022",  # Use Haiku for quick tasks
+                max_tokens=20,
+                temperature=0.7,
+                messages=[{
+                    "role": "user",
+                    "content": f"""根据以下用户消息，生成一个简洁的会话标题（4-6个中文字）。
+只输出标题文字，不要有任何解释或标点符号。
+
+用户消息：
+{message_preview}
+
+标题："""
+                }]
+            )
+
+            # Extract title from response
+            if response.content and len(response.content) > 0:
+                title = response.content[0].text.strip()
+                # Remove any quotes or punctuation
+                title = title.replace('"', '').replace('"', '').replace('"', '').strip(',.!?;:，。！？；：')
+
+                # Limit to 20 chars max
+                if len(title) > 20:
+                    title = title[:20]
+
+                logger.info(f"Generated conversation title: {title}")
+                return title
+            else:
+                logger.warning("Empty response from title generation API")
+                return "新对话"
+
+        except Exception as e:
+            logger.error(f"Failed to generate conversation title: {e}")
+            return "新对话"

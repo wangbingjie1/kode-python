@@ -134,149 +134,28 @@ async def load_uncertainties(request: LoadUncertaintiesRequest):
 @router.post("/batch-answer", response_model=BatchAnswerResponse)
 async def batch_answer_uncertainties(request: BatchAnswerRequest):
     """
-    批量回答不确定性问题
+    批量回答不确定性问题（已废弃，现在通过 SSE 的 UserInputRequired 机制处理）
 
-    ⭐ 核心功能：保存答案后，自动触发 Agent 继续执行（检查状态 → 构建本体）
+    ⚠️ 此端点保留是为了向后兼容，但新流程不再使用它。
+    新流程：batch_load → UserInputRequired → 前端提交 → SSE user-response 端点
 
     Args:
-        request: 批量回答请求（包含连接名、答案字典、对话ID、用户ID）
+        request: 批量回答请求
 
     Returns:
         BatchAnswerResponse: 批量回答结果
     """
-    try:
-        domains_dir = _get_domains_dir(request.connection_name)
+    logger.warning("[batch-answer] This endpoint is deprecated, use SSE user-response instead")
 
-        if not domains_dir.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Domains directory not found"
-            )
-
-        from datetime import datetime
-
-        resolved_count = 0
-        not_found = []
-
-        # 🔥 批量更新：遍历所有领域文件
-        for domain_file in domains_dir.glob("*.json"):
-            with open(domain_file, "r", encoding="utf-8") as f:
-                domain_data = json.load(f)
-
-            modified = False
-            uncertainties = domain_data.get("uncertainties", [])
-
-            for u in uncertainties:
-                # 生成 ID（如果没有）
-                if "id" not in u:
-                    u["id"] = f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
-
-                # 检查是否需要更新
-                if u["id"] in request.answers:
-                    answer = request.answers[u["id"]]
-                    u["status"] = "resolved"
-                    u["answer"] = answer
-                    u["answered_at"] = datetime.now().isoformat()
-
-                    # 🔥 添加到 business_rules
-                    if "business_rules" not in domain_data:
-                        domain_data["business_rules"] = []
-
-                    domain_data["business_rules"].append({
-                        "entity": u.get("entity", ""),
-                        "category": u.get("category", ""),
-                        "question": u.get("question", ""),
-                        "answer": answer,
-                        "added_at": datetime.now().isoformat()
-                    })
-
-                    resolved_count += 1
-                    modified = True
-
-            # 保存修改后的领域文件
-            if modified:
-                with open(domain_file, "w", encoding="utf-8") as f:
-                    json.dump(domain_data, f, indent=2, ensure_ascii=False)
-
-        # 检查未找到的 ID
-        resolved_ids = set()
-        for domain_file in domains_dir.glob("*.json"):
-            with open(domain_file, "r", encoding="utf-8") as f:
-                domain_data = json.load(f)
-            for u in domain_data.get("uncertainties", []):
-                if "id" in u:
-                    resolved_ids.add(u["id"])
-
-        not_found = [uid for uid in request.answers.keys() if uid not in resolved_ids]
-
-        # 统计剩余未解决的高优先级问题
-        remaining_high = 0
-        for domain_file in domains_dir.glob("*.json"):
-            with open(domain_file, "r", encoding="utf-8") as f:
-                domain_data = json.load(f)
-            for u in domain_data.get("uncertainties", []):
-                if u.get("priority", "medium").lower() == "high" and u.get("status") not in ["resolved", "skipped"]:
-                    remaining_high += 1
-
-        response = BatchAnswerResponse(
-            status="success",
-            resolved_count=resolved_count,
-            not_found=not_found,
-            remaining_high_priority=remaining_high,
-            can_build_ontology=remaining_high == 0,
-            message=(
-                f"已批量记录 {resolved_count} 个回答。剩余 {remaining_high} 个高优先级问题。"
-                if remaining_high > 0
-                else f"已批量记录 {resolved_count} 个回答。所有高优先级问题已解决！可以开始构建本体。"
-            )
-        )
-
-        # 🔥 自动触发 Agent 继续执行：保存一条系统消息到数据库
-        try:
-            from kode.database.session import SessionLocal
-            from kode.models.message import Message
-            from datetime import datetime
-
-            db = SessionLocal()
-            try:
-                # 创建系统消息（告知 Agent 用户已提交答案）
-                system_message = Message(
-                    conversation_id=request.conversation_id,
-                    role="user",
-                    content=f"[系统] 用户已提交批量问卷答案（共 {resolved_count} 个）。请调用 UncertaintyQAManager(action='status') 检查进度，然后继续执行。",
-                    metadata={
-                        "auto_generated": True,
-                        "trigger": "batch_answer_completion",
-                        "resolved_count": resolved_count,
-                        "remaining_high": remaining_high,
-                        "can_build_ontology": remaining_high == 0,
-                        "connection_name": request.connection_name
-                    },
-                    created_at=datetime.utcnow()
-                )
-                db.add(system_message)
-                db.commit()
-                logger.info(f"[Auto-Resume] System message saved for conversation {request.conversation_id}")
-            except Exception as db_error:
-                logger.error(f"[Auto-Resume] Failed to save system message: {db_error}")
-                db.rollback()
-            finally:
-                db.close()
-
-        except Exception as e:
-            logger.error(f"[Auto-Resume] Error during auto-resume: {e}")
-            # 不影响主流程，继续返回
-
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to batch answer uncertainties: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to batch answer uncertainties: {str(e)}"
-        )
+    # 简单返回成功，实际逻辑已迁移到 UncertaintyQAManager._wait_for_response
+    return BatchAnswerResponse(
+        status="deprecated",
+        resolved_count=0,
+        not_found=[],
+        remaining_high_priority=0,
+        can_build_ontology=False,
+        message="此端点已废弃，请使用 SSE 的 UserInputRequired 机制"
+    )
 
 
 @router.get("/status/{connection_name}", response_model=UncertaintyStatusResponse)
