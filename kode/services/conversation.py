@@ -221,7 +221,7 @@ OntologyBuilder 自动检测：
 ```
 
 **✨ 新架构说明**：
-- 不确定性数据已分散存储在各领域文件（`domains/{domain_name}.json`）的 `uncertainties` 字段中
+- 不确定性数据已分散存储在各领域文件（`domains/{{domain_name}}.json`）的 `uncertainties` 字段中
 - 不再需要单独的 `uncertainties.json` 文件
 - OntologyBuilder 会自动从领域文件中读取已解决的 high 问题答案，注入到构建 Prompt 中
 

@@ -252,11 +252,9 @@ class OntologyBuilderTool(KodeTool):
                 "message": "Ontology built successfully",
                 "file_path": ontology.get("storage", {}).get("latest_path", ""),
                 "statistics": {
-                    "concept_count": len(ontology.get("entities", {}).get("concepts", [])),
-                    "relationship_count": len(ontology.get("entities", {}).get("relationships", [])),
-                    "uncertainty_count": len(ontology.get("uncertainties", {}).get("high", [])) +
-                                       len(ontology.get("uncertainties", {}).get("medium", [])) +
-                                       len(ontology.get("uncertainties", {}).get("low", []))
+                    "concept_count": len(ontology.get("concepts", {})),
+                    "relationship_count": len(ontology.get("relationships", [])),
+                    "uncertainty_count": len(ontology.get("uncertainties", []))
                 },
                 "metadata": ontology.get("metadata", {})
             }
@@ -616,133 +614,6 @@ Schema: {db_schema or "默认"}
                 "error": str(e),
             }
 
-        """提取 schema 骨架（轻量级）用于阶段1。"""
-        tables = schema_metadata.get("tables", {})
-        lines = [f"数据库: {schema_metadata.get('database', '未知')}", f"总表数: {len(tables)}\n"]
-
-        for table_name, table_data in sorted(tables.items()):
-            comment = table_data.get("comment", "")
-            lines.append(f"{table_name} -- {comment}")
-            pk_cols = []
-            if "primary_key" in table_data:
-                pk_cols = table_data["primary_key"].get("columns", [])
-            key_fields = [col["name"] for col in table_data.get("columns", [])
-                         if col["name"] in pk_cols or col["name"].endswith("_id")]
-            if key_fields:
-                lines.append(f"  关键字段: {', '.join(key_fields)}")
-        return "\n".join(lines)
-
-                                       database: str, db_schema: Optional[str], model) -> Dict[str, Any]:
-        """阶段1：AI 分析全局架构。"""
-        from langchain_core.messages import HumanMessage
-
-        prompt = f"""你是数据库架构师。分析以下数据库，识别业务域和关系。
-
-# 数据库概览
-连接: {connection_name}
-数据库: {database}
-Schema: {db_schema or "默认"}
-
-{schema_skeleton}
-
-# 任务
-1. **业务域（Business Domains）**: 按功能将表分组
-2. **推断关系**: 基于字段名（xxx_id）推断表关系
-3. **架构模式**: 整体业务模式（SaaS/电商/ERP等）
-4. **核心流程**: 主要业务流程
-
-# 输出格式
-```json
-{{
-  "business_domains": {{
-    "域名1": ["table1", "table2"],
-    "域名2": ["table3", "table4"]
-  }},
-  "inferred_relationships": [
-    {{"from_table": "order", "from_field": "user_id", "to_table": "user", "to_field": "id",
-      "confidence": "high", "business_meaning": "订单属于用户"}}
-  ],
-  "architecture_pattern": "架构模式描述",
-  "core_processes": ["流程1", "流程2"],
-  "insights": "业务洞察"
-}}
-```
-只返回JSON。不要任何文字说明"""
-
-        response = model.invoke([HumanMessage(content=prompt)])
-        result = self._extract_json_from_text(response.content)
-        if not result:
-            logger.warning("阶段1失败，使用简单分批")
-            tables = [line.split("--")[0].strip() for line in schema_skeleton.split("\n")
-                     if line and not line.startswith("数据库") and not line.startswith("总表数") and not line.startswith("  ")]
-            batch_size = 25
-            result = {
-                "business_domains": {f"批次{i//batch_size+1}": tables[i:i+batch_size]
-                                    for i in range(0, len(tables), batch_size)},
-                "inferred_relationships": [],
-                "architecture_pattern": "未知",
-                "core_processes": [],
-                "insights": "自动分批"
-            }
-        return result
-
-        self,
-        global_context: Dict[str, Any],
-        tables: Dict[str, Any],
-        connection_name: str,
-        database: str,
-        db_schema: Optional[str],
-        model
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        并行构建所有业务域的本体（核心性能优化）。
-
-        使用 asyncio.gather() 同时调用多个域的 LLM API，
-        显著降低总耗时（从串行 N×6s 降低到 max(6s) × ceiling(N/并发数)）。
-        """
-        import asyncio
-        import time
-
-        async def build_single_domain(domain_name: str, table_names: List[str]) -> tuple:
-            """异步构建单个域。"""
-            t_start = time.time()
-            # 提取该域的详细 schema
-            domain_schema = {t: tables[t] for t in table_names if t in tables}
-
-            # 异步调用 AI 构建本体
-            domain_ont = await self._ai_build_domain_ontology_async(
-                domain_name=domain_name,
-                domain_schema=domain_schema,
-                global_context=global_context,
-                connection_name=connection_name,
-                database=database,
-                db_schema=db_schema,
-                model=model
-            )
-
-            t_elapsed = time.time() - t_start
-            logger.info(f"阶段2：{domain_name} 完成（{len(table_names)} 个表，耗时 {t_elapsed:.2f}s）")
-            return domain_name, domain_ont
-
-        # 创建所有域的任务
-        tasks = [
-            build_single_domain(domain_name, table_names)
-            for domain_name, table_names in global_context.get("business_domains", {}).items()
-        ]
-
-        # 并行执行（限制并发数为 5，避免 API 限流）
-        from asyncio import Semaphore
-        semaphore = Semaphore(5)  # 最多同时 5 个并发请求
-
-        async def bounded_task(task):
-            async with semaphore:
-                return await task
-
-        results = await asyncio.gather(*[bounded_task(task) for task in tasks])
-
-        # 转换为字典
-        return {domain_name: ontology for domain_name, ontology in results}
-
 
     def _prepare_domain_schema(self, domain_schema: Dict[str, Any]) -> str:
         """为域准备详细schema文本（含样例数据智能摘要）。"""
@@ -779,48 +650,6 @@ Schema: {db_schema or "默认"}
 
             lines.append("")
         return "\n".join(lines)
-
-                                             global_context: Dict[str, Any], connection_name: str,
-                                             model) -> Dict[str, Any]:
-        """阶段3：精炼跨域关系。"""
-        from langchain_core.messages import HumanMessage
-
-        domain_summary = {name: {"concepts": list(ont.get("concepts", {}).keys()),
-                                "concept_count": len(ont.get("concepts", {})),
-                                "relationships": ont.get("relationships", [])}
-                         for name, ont in domain_ontologies.items()}
-
-        prompt = f"""你是业务架构师。审查并完善跨域关系和全局层次结构。
-
-# 全局上下文
-{json.dumps(global_context, indent=2, ensure_ascii=False)}
-
-# 各域摘要
-{json.dumps(domain_summary, indent=2, ensure_ascii=False)}
-
-# 任务
-1. **补充跨域关系**: 检查遗漏的跨域关系（如 order.user_id -> user.id）
-2. **全局层次结构**: 跨域层级（如：公司 -> 部门 -> 员工）
-3. **业务洞察**: 整体模式
-
-# 输出格式
-```json
-{{
-  "relationships": [{{"from_concept": "order", "to_concept": "user", "relationship_type": "foreign_key",
-                     "cardinality": "N:1", "business_meaning": "订单属于用户", "from_properties": ["user_id"],
-                     "to_properties": ["id"], "cross_domain": true}}],
-  "global_hierarchies": [],
-  "global_insights": {{"primary_domain": "", "business_scenario": "", "architecture_pattern": ""}}
-}}
-```
-只返回JSON。"""
-
-        response = model.invoke([HumanMessage(content=prompt)])
-        result = self._extract_json_from_text(response.content)
-        if not result:
-            logger.warning("阶段3失败")
-            return {"relationships": [], "global_hierarchies": [], "global_insights": {}}
-        return result
 
     def _merge_ontologies(self, domain_ontologies: Dict[str, Dict[str, Any]], cross_domain_insights: Dict[str, Any],
                          global_context: Dict[str, Any], schema_metadata: Dict[str, Any],
@@ -995,7 +824,7 @@ Schema: {db_schema or "默认"}
 
         # 限流并发（最多5个同时）
         from asyncio import Semaphore
-        semaphore = Semaphore(5)
+        semaphore = Semaphore(10)
 
         async def bounded_task(domain_info):
             async with semaphore:
