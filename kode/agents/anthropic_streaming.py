@@ -8,6 +8,7 @@ import os
 import asyncio
 from typing import AsyncGenerator, Dict, List, Any, Optional
 import anthropic
+import httpx
 from anthropic.types import (
     Message,
     MessageStreamEvent,
@@ -42,6 +43,8 @@ class AnthropicStreamingAgent:
         on_tool_start: Optional[callable] = None,
         on_tool_end: Optional[callable] = None,
         on_iteration: Optional[callable] = None,
+        cancel_event: Optional[asyncio.Event] = None,
+        message_queue: Optional[asyncio.Queue] = None,
     ):
         """
         Initialize streaming agent.
@@ -57,6 +60,8 @@ class AnthropicStreamingAgent:
             on_tool_start: Callback when tool execution starts
             on_tool_end: Callback when tool execution ends
             on_iteration: Callback at iteration start
+            cancel_event: Optional asyncio.Event to signal cancellation
+            message_queue: Optional asyncio.Queue for appending messages
         """
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         if not self.api_key:
@@ -72,6 +77,8 @@ class AnthropicStreamingAgent:
         self.on_tool_start = on_tool_start
         self.on_tool_end = on_tool_end
         self.on_iteration = on_iteration
+        self.cancel_event = cancel_event
+        self.message_queue = message_queue
 
         # Build tool map
         self.tool_map = {tool.name: tool for tool in self.tools}
@@ -379,6 +386,30 @@ class AnthropicStreamingAgent:
         total_cache_read_tokens = 0
 
         while iteration < max_iterations:
+            # 检查是否被取消
+            if self.cancel_event and self.cancel_event.is_set():
+                logger.info(f"[Cancel] Stream cancelled by user at iteration {iteration}")
+                yield {
+                    "type": "cancelled",
+                    "content": "用户已终止响应",
+                    "metadata": {"iteration": iteration}
+                }
+                raise asyncio.CancelledError("User cancelled the stream")
+
+            # 检查是否有追加的消息
+            if self.message_queue and not self.message_queue.empty():
+                try:
+                    appended_msg = self.message_queue.get_nowait()
+                    messages.append(appended_msg)
+                    logger.info(f"[Append] Appended user message: {appended_msg.get('content', '')[:50]}...")
+                    yield {
+                        "type": "message_appended",
+                        "content": appended_msg.get("content", ""),
+                        "metadata": {"iteration": iteration}
+                    }
+                except asyncio.QueueEmpty:
+                    pass
+
             iteration += 1
 
             if self.verbose:
@@ -421,191 +452,199 @@ class AnthropicStreamingAgent:
                 }
             ]
 
-            # Stream response from Anthropic
+            # Stream response from Anthropic (with retry for network errors)
             full_text = ""
             content_blocks = []
+            max_retries = 3
+            retry_delay_base = 2  # 指数退避基数
 
-            try:
-                # Enable Extended Thinking if supported by the model
-                # Note: temperature must be 1.0 when thinking is enabled
-                # Note: max_tokens must be greater than thinking.budget_tokens
-                thinking_budget = 5000  # Budget for thinking tokens
-                output_tokens = max(self.max_tokens, thinking_budget + 4096)  # Ensure enough for output
+            for retry_attempt in range(max_retries):
+                if retry_attempt > 0:
+                    delay = retry_delay_base ** retry_attempt
+                    logger.warning(f"[重试] 第 {retry_attempt}/{max_retries-1} 次重试，等待 {delay} 秒...")
+                    await asyncio.sleep(delay)
 
-                # ===== 请求内容日志 =====
-                logger.info(f"\n{'='*80}")
-                logger.info(f"[API 请求] 迭代 {iteration}")
-                logger.info(f"{'='*80}")
+                try:
+                        # Enable Extended Thinking if supported by the model
+                    # Note: temperature must be 1.0 when thinking is enabled
+                    # Note: max_tokens must be greater than thinking.budget_tokens
+                    thinking_budget = 5000  # Budget for thinking tokens
+                    output_tokens = max(self.max_tokens, thinking_budget + 4096)  # Ensure enough for output
 
-                # 显示用户最新输入
-                if messages:
-                    last_user_msg = None
-                    for msg in reversed(messages):
-                        if msg.get("role") == "user":
-                            last_user_msg = msg
-                            break
-                    if last_user_msg:
-                        user_content = str(last_user_msg.get("content", ""))
-                        logger.info(f"\n[用户输入]")
-                        if len(user_content) > 200:
-                            logger.info(f"{user_content[:200]}...")
-                        else:
-                            logger.info(f"{user_content}")
+                    # ===== 请求内容日志 =====
+                    logger.info(f"\n{'='*80}")
+                    logger.info(f"[API 请求] 迭代 {iteration}")
+                    logger.info(f"{'='*80}")
 
-                # Token 组成估算
-                system_tokens = len(self.system_prompt) // 4
-                tools_tokens = sum(len(str(t)) for t in self.anthropic_tools) // 4
-                history_tokens = sum(len(str(m.get('content', ''))) for m in messages) // 4
+                    # 显示用户最新输入
+                    if messages:
+                        last_user_msg = None
+                        for msg in reversed(messages):
+                            if msg.get("role") == "user":
+                                last_user_msg = msg
+                                break
+                        if last_user_msg:
+                            user_content = str(last_user_msg.get("content", ""))
+                            logger.info(f"\n[用户输入]")
+                            if len(user_content) > 200:
+                                logger.info(f"{user_content[:200]}...")
+                            else:
+                                logger.info(f"{user_content}")
 
-                logger.info(f"\n[Token 组成估算]")
-                logger.info(f"  系统提示词: ~{system_tokens:,} tokens")
-                logger.info(f"  工具定义:   ~{tools_tokens:,} tokens")
-                logger.info(f"  对话历史:   ~{history_tokens:,} tokens")
-                logger.info(f"  预计输入:   ~{system_tokens + tools_tokens + history_tokens:,} tokens")
+                    # Token 组成估算
+                    system_tokens = len(self.system_prompt) // 4
+                    tools_tokens = sum(len(str(t)) for t in self.anthropic_tools) // 4
+                    history_tokens = sum(len(str(m.get('content', ''))) for m in messages) // 4
 
-                async with self.client.messages.stream(
-                    model=self.model,
-                    max_tokens=output_tokens,
-                    temperature=1.0,  # Required for Extended Thinking
-                    system=system_with_cache,  # ← 使用缓存优化的系统提示词
-                    messages=messages,
-                    tools=self.anthropic_tools if self.anthropic_tools else anthropic.NOT_GIVEN,
-                    thinking={
-                        "type": "enabled",
-                        "budget_tokens": thinking_budget
-                    }
-                ) as stream:
-                    thinking_content = ""
-                    is_thinking = False
+                    logger.info(f"\n[Token 组成估算]")
+                    logger.info(f"  系统提示词: ~{system_tokens:,} tokens")
+                    logger.info(f"  工具定义:   ~{tools_tokens:,} tokens")
+                    logger.info(f"  对话历史:   ~{history_tokens:,} tokens")
+                    logger.info(f"  预计输入:   ~{system_tokens + tools_tokens + history_tokens:,} tokens")
 
-                    # Process streaming events
-                    async for event in stream:
-                        # Handle thinking blocks (Extended Thinking feature)
-                        if hasattr(event, 'type'):
-                            if event.type == 'content_block_start':
-                                block = getattr(event, 'content_block', None)
-                                if block and isinstance(block, ThinkingBlock):
-                                    is_thinking = True
-                                    thinking_content = ""
-                                    logger.info("[Thinking] Extended thinking started")
-                            elif event.type == 'content_block_delta':
-                                delta = getattr(event, 'delta', None)
-                                if delta and isinstance(delta, ThinkingDelta):
-                                    # Accumulate thinking content
-                                    thinking_text = getattr(delta, 'thinking', '')
-                                    thinking_content += thinking_text
-                                    # Yield thinking chunks
-                                    yield {
-                                        "type": "thinking",
-                                        "content": thinking_text,
-                                        "metadata": {"iteration": iteration, "is_delta": True}
-                                    }
-                                elif delta and hasattr(delta, 'type') and delta.type == 'text_delta':
-                                    # Regular text content
-                                    text = getattr(delta, 'text', '')
-                                    if text:
-                                        full_text += text
+                    async with self.client.messages.stream(
+                        model=self.model,
+                        max_tokens=output_tokens,
+                        temperature=1.0,  # Required for Extended Thinking
+                        system=system_with_cache,  # ← 使用缓存优化的系统提示词
+                        messages=messages,
+                        tools=self.anthropic_tools if self.anthropic_tools else anthropic.NOT_GIVEN,
+                        thinking={
+                            "type": "enabled",
+                            "budget_tokens": thinking_budget
+                        }
+                    ) as stream:
+                        thinking_content = ""
+                        is_thinking = False
+
+                        # Process streaming events
+                        async for event in stream:
+                            # Handle thinking blocks (Extended Thinking feature)
+                            if hasattr(event, 'type'):
+                                if event.type == 'content_block_start':
+                                    block = getattr(event, 'content_block', None)
+                                    if block and isinstance(block, ThinkingBlock):
+                                        is_thinking = True
+                                        thinking_content = ""
+                                        logger.info("[Thinking] Extended thinking started")
+                                elif event.type == 'content_block_delta':
+                                    delta = getattr(event, 'delta', None)
+                                    if delta and isinstance(delta, ThinkingDelta):
+                                        # Accumulate thinking content
+                                        thinking_text = getattr(delta, 'thinking', '')
+                                        thinking_content += thinking_text
+                                        # Yield thinking chunks
                                         yield {
-                                            "type": "chunk",
-                                            "content": text,
-                                            "metadata": {"iteration": iteration}
+                                            "type": "thinking",
+                                            "content": thinking_text,
+                                            "metadata": {"iteration": iteration, "is_delta": True}
                                         }
-                            elif event.type == 'content_block_stop':
-                                if is_thinking:
-                                    # Thinking block completed
-                                    is_thinking = False
-                                    logger.info(f"[Thinking] Completed: {len(thinking_content)} chars")
+                                    elif delta and hasattr(delta, 'type') and delta.type == 'text_delta':
+                                        # Regular text content
+                                        text = getattr(delta, 'text', '')
+                                        if text:
+                                            full_text += text
+                                            yield {
+                                                "type": "chunk",
+                                                "content": text,
+                                                "metadata": {"iteration": iteration}
+                                            }
+                                elif event.type == 'content_block_stop':
+                                    if is_thinking:
+                                        # Thinking block completed
+                                        is_thinking = False
+                                        logger.info(f"[Thinking] Completed: {len(thinking_content)} chars")
 
-                    # Get final message
-                    final_message = await stream.get_final_message()
-                    content_blocks = final_message.content
+                        # Get final message
+                        final_message = await stream.get_final_message()
+                        content_blocks = final_message.content
 
-                    # Extract token usage from response
-                    usage = getattr(final_message, 'usage', None)
-                    if usage:
-                        input_tokens = getattr(usage, 'input_tokens', 0)
-                        output_tokens = getattr(usage, 'output_tokens', 0)
-                        cache_creation = getattr(usage, 'cache_creation_input_tokens', 0) or 0
-                        cache_read = getattr(usage, 'cache_read_input_tokens', 0) or 0
+                        # Extract token usage from response
+                        usage = getattr(final_message, 'usage', None)
+                        if usage:
+                            input_tokens = getattr(usage, 'input_tokens', 0)
+                            output_tokens = getattr(usage, 'output_tokens', 0)
+                            cache_creation = getattr(usage, 'cache_creation_input_tokens', 0) or 0
+                            cache_read = getattr(usage, 'cache_read_input_tokens', 0) or 0
 
-                        # Accumulate totals
-                        total_input_tokens += input_tokens
-                        total_output_tokens += output_tokens
-                        total_cache_creation_tokens += cache_creation
-                        total_cache_read_tokens += cache_read
+                            # Accumulate totals
+                            total_input_tokens += input_tokens
+                            total_output_tokens += output_tokens
+                            total_cache_creation_tokens += cache_creation
+                            total_cache_read_tokens += cache_read
 
-                        # ===== 实际 Token 使用统计 =====
-                        logger.info(f"\n{'='*80}")
-                        logger.info(f"[Token 使用] 迭代 {iteration}")
-                        logger.info(f"{'='*80}")
+                            # ===== 实际 Token 使用统计 =====
+                            logger.info(f"\n{'='*80}")
+                            logger.info(f"[Token 使用] 迭代 {iteration}")
+                            logger.info(f"{'='*80}")
 
-                        # 本次调用
-                        logger.info(f"\n本次 API 调用:")
-                        logger.info(f"  输入 tokens:  {input_tokens:,}")
-                        if cache_creation > 0:
-                            logger.info(f"    ├─ 缓存创建: {cache_creation:,} tokens (首次，1.25× 价格)")
-                        if cache_read > 0:
-                            logger.info(f"    ├─ 缓存读取: {cache_read:,} tokens (节省 90%!)")
-                        regular_input = input_tokens - cache_creation - cache_read
-                        if regular_input > 0:
-                            logger.info(f"    └─ 常规输入: {regular_input:,} tokens")
-                        logger.info(f"  输出 tokens:  {output_tokens:,}")
-                        logger.info(f"  本次总计:     {input_tokens + output_tokens:,} tokens")
+                            # 本次调用
+                            logger.info(f"\n本次 API 调用:")
+                            logger.info(f"  输入 tokens:  {input_tokens:,}")
+                            if cache_creation > 0:
+                                logger.info(f"    ├─ 缓存创建: {cache_creation:,} tokens (首次，1.25× 价格)")
+                            if cache_read > 0:
+                                logger.info(f"    ├─ 缓存读取: {cache_read:,} tokens (节省 90%!)")
+                            regular_input = input_tokens - cache_creation - cache_read
+                            if regular_input > 0:
+                                logger.info(f"    └─ 常规输入: {regular_input:,} tokens")
+                            logger.info(f"  输出 tokens:  {output_tokens:,}")
+                            logger.info(f"  本次总计:     {input_tokens + output_tokens:,} tokens")
 
-                        # 累计统计
-                        logger.info(f"\n对话累计:")
-                        logger.info(f"  累计输入:  {total_input_tokens:,} tokens")
-                        logger.info(f"  累计输出:  {total_output_tokens:,} tokens")
-                        logger.info(f"  总计:      {total_input_tokens + total_output_tokens:,} tokens")
+                            # 累计统计
+                            logger.info(f"\n对话累计:")
+                            logger.info(f"  累计输入:  {total_input_tokens:,} tokens")
+                            logger.info(f"  累计输出:  {total_output_tokens:,} tokens")
+                            logger.info(f"  总计:      {total_input_tokens + total_output_tokens:,} tokens")
 
-                        # 缓存效果
-                        if cache_read > 0:
-                            savings_pct = (cache_read / input_tokens) * 90  # 90% 节省
-                            logger.info(f"\n缓存节省: ~{savings_pct:.1f}% (读取了 {cache_read:,} tokens)")
+                            # 缓存效果
+                            if cache_read > 0:
+                                savings_pct = (cache_read / input_tokens) * 90  # 90% 节省
+                                logger.info(f"\n缓存节省: ~{savings_pct:.1f}% (读取了 {cache_read:,} tokens)")
 
-                        logger.info(f"{'='*80}\n")
+                            logger.info(f"{'='*80}\n")
 
-                        # 🔍 准备完整的请求和响应内容（用于追踪）
-                        request_data = {
-                            "system": self.system_prompt,
-                            "messages": messages,
-                            "tools": self.anthropic_tools,
-                            "model": self.model,
-                        }
-
-                        response_data = {
-                            "content": full_text,
-                            "content_blocks": [
-                                {
-                                    "type": block.type,
-                                    "text": getattr(block, "text", None) if hasattr(block, "text") else None,
-                                    "tool_use": {
-                                        "id": block.id,
-                                        "name": block.name,
-                                        "input": block.input
-                                    } if isinstance(block, ToolUseBlock) else None
-                                }
-                                for block in content_blocks
-                            ],
-                            "stop_reason": getattr(final_message, "stop_reason", None),
-                            "usage": {
-                                "input_tokens": input_tokens,
-                                "output_tokens": output_tokens,
-                                "cache_creation_input_tokens": cache_creation,
-                                "cache_read_input_tokens": cache_read,
+                            # 🔍 准备完整的请求和响应内容（用于追踪）
+                            request_data = {
+                                "system": self.system_prompt,
+                                "messages": messages,
+                                "tools": self.anthropic_tools,
+                                "model": self.model,
                             }
-                        }
 
-                        # Yield token usage event for this iteration
-                        yield {
-                            "type": "token_usage",
-                            "content": "",
-                            "metadata": {
-                                "iteration": iteration,
-                                "input_tokens": input_tokens,
-                                "output_tokens": output_tokens,
-                                "total_tokens": input_tokens + output_tokens,
-                                "cache_creation_input_tokens": cache_creation,
+                            response_data = {
+                                "content": full_text,
+                                "content_blocks": [
+                                    {
+                                        "type": block.type,
+                                        "text": getattr(block, "text", None) if hasattr(block, "text") else None,
+                                        "tool_use": {
+                                            "id": block.id,
+                                            "name": block.name,
+                                            "input": block.input
+                                        } if isinstance(block, ToolUseBlock) else None
+                                    }
+                                    for block in content_blocks
+                                ],
+                                "stop_reason": getattr(final_message, "stop_reason", None),
+                                "usage": {
+                                    "input_tokens": input_tokens,
+                                    "output_tokens": output_tokens,
+                                    "cache_creation_input_tokens": cache_creation,
+                                    "cache_read_input_tokens": cache_read,
+                                }
+                            }
+
+                            # Yield token usage event for this iteration
+                            yield {
+                                "type": "token_usage",
+                                "content": "",
+                                "metadata": {
+                                    "iteration": iteration,
+                                    "input_tokens": input_tokens,
+                                    "output_tokens": output_tokens,
+                                    "total_tokens": input_tokens + output_tokens,
+                                    "cache_creation_input_tokens": cache_creation,
                                 "cache_read_input_tokens": cache_read,
                                 # 🔍 添加完整的请求和响应数据
                                 "request_data": request_data,
@@ -613,16 +652,40 @@ class AnthropicStreamingAgent:
                             }
                         }
 
-            except Exception as e:
-                from kode.utils.logger import safe_log_exception
-                error_message = str(e)
-                safe_log_exception(logger, f"Error streaming from Anthropic: {error_message}", e)
-                yield {
-                    "type": "error",
-                    "content": f"Error: {error_message}",
-                    "metadata": {"error": error_message}
-                }
-                return
+                    # 成功完成，跳出重试循环
+                    break
+
+                except (httpx.RemoteProtocolError, httpx.ReadError, httpx.ConnectError) as e:
+                    # 网络错误：连接中断、读取错误等
+                    from kode.utils.logger import safe_log_exception
+                    error_message = str(e)
+                    safe_log_exception(logger, f"Network error on attempt {retry_attempt + 1}/{max_retries}: {error_message}", e)
+
+                    # 如果还有重试次数，继续重试
+                    if retry_attempt < max_retries - 1:
+                        logger.warning(f"[网络错误] 将在 {retry_delay_base ** (retry_attempt + 1)} 秒后重试...")
+                        continue
+                    else:
+                        # 最后一次重试也失败，返回错误
+                        logger.error(f"[网络错误] 已重试 {max_retries} 次，全部失败")
+                        yield {
+                            "type": "error",
+                            "content": f"网络连接失败（已重试 {max_retries} 次）: {error_message}",
+                            "metadata": {"error": error_message, "retries": max_retries}
+                        }
+                        return
+
+                except Exception as e:
+                    # 其他非网络错误，直接失败不重试
+                    from kode.utils.logger import safe_log_exception
+                    error_message = str(e)
+                    safe_log_exception(logger, f"Error streaming from Anthropic: {error_message}", e)
+                    yield {
+                        "type": "error",
+                        "content": f"Error: {error_message}",
+                        "metadata": {"error": error_message}
+                    }
+                    return
 
             # Add assistant message to history
             messages.append({
@@ -630,8 +693,32 @@ class AnthropicStreamingAgent:
                 "content": content_blocks
             })
 
-            # Check for tool uses
-            tool_uses = [block for block in content_blocks if isinstance(block, ToolUseBlock)]
+            # ✨ 按照 content_blocks 的原始顺序发送事件（保持文本和工具调用的顺序）
+            tool_uses = []
+            for block in content_blocks:
+                if isinstance(block, TextBlock):
+                    # 发送文本块事件
+                    text_content = block.text
+                    if text_content:
+                        yield {
+                            "type": "text_block",
+                            "content": text_content,
+                            "metadata": {"iteration": iteration}
+                        }
+                elif isinstance(block, ToolUseBlock):
+                    # 记录工具调用，稍后执行
+                    tool_uses.append(block)
+                    # 立即发送 tool_call 事件（保持顺序）
+                    yield {
+                        "type": "tool_call",
+                        "content": f"Executing: {block.name}",
+                        "metadata": {
+                            "tool_name": block.name,
+                            "tool_use_id": block.id,
+                            "status": "started",
+                            "args": block.input
+                        }
+                    }
 
             if not tool_uses:
                 # No tool calls, we're done
@@ -662,16 +749,7 @@ class AnthropicStreamingAgent:
                 if self.verbose:
                     logger.info(f"Tool call: {tool_name}({tool_args})")
 
-                # Yield tool_call event immediately
-                yield {
-                    "type": "tool_call",
-                    "content": f"Executing: {tool_name}",
-                    "metadata": {
-                        "tool_name": tool_name,
-                        "status": "started",
-                        "args": tool_args
-                    }
-                }
+                # ✅ tool_call 事件已经在上面按顺序发送了，这里不需要再发送
 
                 # Callback: tool start
                 if self.on_tool_start:
@@ -697,6 +775,7 @@ class AnthropicStreamingAgent:
 
                         # Check if tool requires user input
                         requires_user_input = False
+                        result_data = None
                         try:
                             import json
                             result_data = json.loads(str(result))
@@ -712,12 +791,43 @@ class AnthropicStreamingAgent:
                             "content": str(result),
                             "metadata": {
                                 "tool_name": tool_name,
+                                "tool_use_id": tool_use_id,  # ← 必须包含以便前端配对
                                 "status": "completed",
                                 "tool_args": tool_args,
                                 "result": str(result),
                                 "requires_user_input": requires_user_input  # Pass to frontend
                             }
                         }
+
+                        # ✨ 特殊处理：ChartGenerator 和 InsightGenerator 额外发送可视化事件
+                        if result_data and isinstance(result_data, dict):
+                            # ChartGenerator 工具返回格式: {"success": true, "chart_type": "...", "config": {...}}
+                            if tool_name == "ChartGenerator" and result_data.get("success"):
+                                chart_config = result_data.get("config")
+                                if chart_config:
+                                    yield {
+                                        "type": "chart",
+                                        "content": chart_config,  # ECharts 配置对象
+                                        "metadata": {
+                                            "chart_type": result_data.get("chart_type"),
+                                            "data_summary": result_data.get("data_summary")
+                                        }
+                                    }
+                                    logger.info(f"[Chart] Generated {result_data.get('chart_type')} chart")
+
+                            # InsightGenerator 工具返回格式: {"success": true, "insights": [...]}
+                            elif tool_name == "InsightGenerator" and result_data.get("success"):
+                                insights_list = result_data.get("insights")
+                                if insights_list:
+                                    yield {
+                                        "type": "insight",
+                                        "content": insights_list,  # 洞察列表
+                                        "metadata": {
+                                            "total_count": len(insights_list) if isinstance(insights_list, list) else 0,
+                                            "data_summary": result_data.get("data_summary")
+                                        }
+                                    }
+                                    logger.info(f"[Insight] Generated {len(insights_list)} insights")
 
                         # Callback: tool end
                         if self.on_tool_end:
@@ -817,6 +927,7 @@ class AnthropicStreamingAgent:
                                         "content": error_msg,
                                         "metadata": {
                                             "tool_name": tool_name,
+                                            "tool_use_id": tool_use_id,
                                             "status": "error",
                                             "error": error_msg
                                         }
@@ -846,6 +957,7 @@ class AnthropicStreamingAgent:
                             "content": error_msg,
                             "metadata": {
                                 "tool_name": tool_name,
+                                "tool_use_id": tool_use_id,
                                 "status": "error",
                                 "tool_args": tool_args,
                                 "error": str(e)
@@ -874,6 +986,7 @@ class AnthropicStreamingAgent:
                         "content": error_msg,
                         "metadata": {
                             "tool_name": tool_name,
+                            "tool_use_id": tool_use_id,
                             "status": "error",
                             "error": error_msg
                         }

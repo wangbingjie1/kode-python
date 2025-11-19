@@ -4,7 +4,7 @@ Chat Schemas
 Pydantic schemas for chat-related API endpoints.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -42,7 +42,13 @@ class MessageResponse(BaseModel):
     class Config:
         from_attributes = True
         populate_by_name = True  # Allow using both 'metadata' and 'message_metadata'
-        by_alias = True  # 序列化时使用别名 'metadata' 而不是 'message_metadata'
+        by_alias = False  # 序列化时使用字段名 'metadata' 而不是别名 'message_metadata'
+
+    @field_validator('metadata', mode='before')
+    @classmethod
+    def ensure_metadata_dict(cls, v):
+        """确保 metadata 不为 None，自动转换为空 dict"""
+        return v if v is not None else {}
 
 
 class WebSocketMessage(BaseModel):

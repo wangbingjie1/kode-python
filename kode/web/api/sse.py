@@ -7,9 +7,10 @@ Provides real-time streaming of AI responses using SSE instead of WebSocket.
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import AsyncGenerator, Optional, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+import asyncio
 import json
 import logging
 
@@ -107,6 +108,85 @@ user_input_session_manager = UserInputSessionManager()
 
 
 # ============================================================
+# Global streaming session manager
+# ============================================================
+class StreamingSessionManager:
+    """
+    管理活跃的SSE streaming会话。
+
+    支持终止正在进行的流式响应和追加新消息。
+    """
+    def __init__(self):
+        self._active_sessions: Dict[str, Dict[str, Any]] = {}  # conversation_id -> session_data
+
+    def register_session(self, conversation_id: str, cancel_event: asyncio.Event, message_queue: asyncio.Queue):
+        """注册一个活跃的streaming会话"""
+        self._active_sessions[conversation_id] = {
+            "cancel_event": cancel_event,
+            "message_queue": message_queue,
+            "created_at": asyncio.get_event_loop().time(),
+        }
+        logger.info(f"[StreamingSession] Registered session for conversation {conversation_id}")
+
+    def get_session(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+        """获取会话数据"""
+        return self._active_sessions.get(conversation_id)
+
+    def remove_session(self, conversation_id: str):
+        """移除会话"""
+        if conversation_id in self._active_sessions:
+            del self._active_sessions[conversation_id]
+            logger.info(f"[StreamingSession] Removed session for conversation {conversation_id}")
+
+    def cancel_session(self, conversation_id: str) -> bool:
+        """
+        终止指定的streaming会话。
+
+        Returns:
+            True if session was cancelled, False if session not found
+        """
+        session = self.get_session(conversation_id)
+        if not session:
+            logger.warning(f"[StreamingSession] No active session found for conversation {conversation_id}")
+            return False
+
+        # Set cancel event
+        cancel_event = session["cancel_event"]
+        cancel_event.set()
+        logger.info(f"[StreamingSession] Cancelled session for conversation {conversation_id}")
+        return True
+
+    async def append_message(self, conversation_id: str, message: str) -> bool:
+        """
+        向活跃的streaming会话追加新消息。
+
+        Args:
+            conversation_id: 会话ID
+            message: 要追加的消息内容
+
+        Returns:
+            True if message was appended, False if session not found
+        """
+        session = self.get_session(conversation_id)
+        if not session:
+            logger.warning(f"[StreamingSession] No active session found for conversation {conversation_id}")
+            return False
+
+        # Put message into queue
+        message_queue = session["message_queue"]
+        await message_queue.put({
+            "role": "user",
+            "content": message,
+        })
+        logger.info(f"[StreamingSession] Appended message to conversation {conversation_id}")
+        return True
+
+
+# Global instance
+streaming_session_manager = StreamingSessionManager()
+
+
+# ============================================================
 # Pydantic models for API
 # ============================================================
 class UserInputResponse(BaseModel):
@@ -167,6 +247,8 @@ async def event_generator(
     user_id: str,
     database_name: str | None = None,
     chat_history: list | None = None,
+    new_title: str | None = None,  # 新增：标题更新
+    user_message_sequence: int = 0,  # 新增：user 消息的序列号（用于后续递增）
 ) -> AsyncGenerator[str, None]:
     """
     Generate SSE events for streaming AI responses.
@@ -179,6 +261,23 @@ async def event_generator(
     data: {"type": "complete", "content": "...", "metadata": {}}
 
     """
+    # 创建取消事件和消息队列
+    cancel_event = asyncio.Event()
+    message_queue = asyncio.Queue()
+
+    # 注册streaming会话
+    streaming_session_manager.register_session(conversation_id, cancel_event, message_queue)
+
+    # 如果有新标题，先发送标题更新事件
+    if new_title:
+        title_update_data = json.dumps({
+            "type": "title_updated",
+            "content": new_title,
+            "metadata": {"conversation_id": conversation_id}
+        }, ensure_ascii=False)
+        yield f"data: {title_update_data}\n\n"
+        logger.info(f"[SSE] Sent title update: {new_title}")
+
     # 最外层异常捕获：确保所有错误（包括初始化阶段）都能被正确处理
     try:
         from kode.database.session import async_session_maker
@@ -196,12 +295,20 @@ async def event_generator(
         # 🔍 API 调用追踪（用于上下文工程优化）
         current_iteration = 0
         api_traces = []  # 记录每次迭代的调用
+
+        # 📝 收集所有消息（文本块 + 工具调用），按顺序保存
+        all_messages = []  # List of Message objects to save (in order)
+        message_sequence = user_message_sequence  # 从 user 消息的序列号开始递增
+
+        # 将cancel_event和message_queue传递给conversation_service
         async for chunk in conversation_service.execute_task_streaming(
             task=task_content,
             conversation_id=conversation_id,
             user_id=user_id,
             database_name=database_name,
             chat_history=chat_history or [],  # ← 传入历史消息
+            cancel_event=cancel_event,  # ← 传入取消事件
+            message_queue=message_queue,  # ← 传入消息队列
         ):
             # Format as SSE event
             chunk_type = chunk.get('type')
@@ -287,9 +394,32 @@ async def event_generator(
                 api_traces.append(trace)
                 current_iteration = iteration_num
 
-            # Collect assistant response content
-            if chunk_type == "chunk":
+            # ✨ 处理文本块事件（按 content_blocks 顺序发送的）
+            if chunk_type == "text_block":
+                text_content = chunk.get("content", "")
+                if text_content:
+                    # 立即保存文本块为 assistant 消息
+                    message_sequence += 1
+                    text_msg = Message(
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=text_content,
+                        sequence=message_sequence,
+                        message_metadata={
+                            "type": "text",  # 标记为文本块
+                            "iteration": current_iteration,
+                        }
+                    )
+                    all_messages.append(text_msg)
+                    logger.info(f"[SSE] Text block saved at sequence {message_sequence}")
+
+            # Collect assistant response content (用于最终统计，但不再单独保存)
+            elif chunk_type == "chunk":
                 assistant_content += chunk.get("content", "")
+            elif chunk_type == "thinking":
+                # ✨ Extended Thinking 内容
+                thinking_text = chunk.get("content", "")
+                assistant_content += f"\n\n[思考]\n{thinking_text}\n"
 
             # Collect chart data into metadata (NOT as separate message)
             elif chunk_type == "chart":
@@ -313,38 +443,107 @@ async def event_generator(
                 })
                 logger.info(f"[SSE] Collected insight data into metadata")
 
-            # Log tool call details for debugging
-            if chunk_type in ('tool_call', 'tool_result'):
+            # 📝 保存工具调用消息到列表（稍后批量保存到数据库）
+            if chunk_type == 'tool_call':
                 metadata = chunk.get('metadata', {})
-                logger.info(f"[SSE] Tool info: name={metadata.get('tool_name')}, status={metadata.get('status')}")
-                if 'args' in metadata:
-                    logger.info(f"[SSE] Tool args: {metadata['args']}")
-                if 'result' in metadata:
-                    result_preview = str(metadata['result'])[:200]
-                    logger.info(f"[SSE] Tool result preview: {result_preview}")
+                tool_name = metadata.get('tool_name')
+                tool_args = metadata.get('args', {})
+                tool_use_id = metadata.get('tool_use_id')
+
+                logger.info(f"[SSE] Tool call: name={tool_name}, id={tool_use_id}, status={metadata.get('status')}")
+                logger.info(f"[SSE] Tool args: {tool_args}")
+
+                # 创建 tool_use 消息
+                message_sequence += 1
+                tool_use_msg = Message(
+                    conversation_id=conversation_id,
+                    role="assistant",  # tool_use 属于 assistant 的一部分
+                    content="",  # content 为空字符串，数据在 metadata 中
+                    sequence=message_sequence,  # ← 确保顺序
+                    message_metadata={
+                        "type": "tool_use",
+                        "tool_use_id": tool_use_id,  # ← 保存 tool_use_id
+                        "tool_name": tool_name,
+                        "tool_args": tool_args,
+                        "iteration": current_iteration,
+                    }
+                )
+                all_messages.append(tool_use_msg)
+
+            elif chunk_type == 'tool_result':
+                metadata = chunk.get('metadata', {})
+                tool_name = metadata.get('tool_name')
+                tool_use_id = metadata.get('tool_use_id')
+                result = metadata.get('result', '')
+                result_preview = str(result)[:200]
+
+                logger.info(f"[SSE] Tool result: name={tool_name}, id={tool_use_id}, status={metadata.get('status')}")
+                logger.info(f"[SSE] Tool result preview: {result_preview}")
+
+                # 创建 tool_result 消息
+                message_sequence += 1
+                tool_result_msg = Message(
+                    conversation_id=conversation_id,
+                    role="user",  # tool_result 作为 user 角色传回给模型
+                    content=result,  # 工具结果存储在 content 中
+                    sequence=message_sequence,  # ← 确保顺序
+                    message_metadata={
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,  # ← 保存 tool_use_id，用于关联
+                        "tool_name": tool_name,
+                        "tool_args": metadata.get('tool_args', {}),
+                        "status": metadata.get('status', 'completed'),
+                        "iteration": current_iteration,
+                    }
+                )
+                all_messages.append(tool_result_msg)
 
             # Serialize chunk to handle non-JSON serializable objects (e.g., ThinkingBlock)
             serialized_chunk = serialize_chunk(chunk)
+
+            # 特别处理 chart 类型：确保 content 是对象而不是字符串
+            if chunk_type == "chart" and isinstance(serialized_chunk.get("content"), str):
+                try:
+                    serialized_chunk["content"] = json.loads(serialized_chunk["content"])
+                    logger.info(f"[SSE] Deserialized chart config string to object")
+                except json.JSONDecodeError:
+                    logger.error(f"[SSE] Chart content is string but not valid JSON")
+
             event_data = json.dumps(serialized_chunk, ensure_ascii=False)
             yield f"data: {event_data}\n\n"
 
         # Save all messages to database (create new session)
         async with async_session_maker() as db:
-            # Save assistant message with token statistics and metadata
-            if assistant_content:
-                assistant_message = Message(
+            # 📝 保存所有消息（文本块 + 工具调用），已按顺序排列
+            if all_messages:
+                for msg in all_messages:
+                    db.add(msg)
+                logger.info(
+                    f"[SSE] Saved {len(all_messages)} messages (text blocks + tools) to conversation {conversation_id}"
+                )
+
+            # ✨ 保存最终的 assistant 消息（包含 token 统计和 metadata）
+            # 注意：这条消息只用于记录 token 使用量和 charts/insights，不包含实际文本内容
+            # 实际文本内容已经在上面的 text_block 消息中保存了
+            if total_input_tokens > 0 or total_output_tokens > 0:
+                message_sequence += 1
+                final_msg = Message(
                     conversation_id=conversation_id,
                     role="assistant",
-                    content=assistant_content,
-                    message_metadata=assistant_metadata,  # Contains charts, insights, etc.
+                    content="",  # 内容为空，只用于记录 token 和 metadata
+                    sequence=message_sequence,
+                    message_metadata={
+                        "type": "final",  # 标记为最终统计消息
+                        **assistant_metadata  # Contains charts, insights, etc.
+                    },
                     input_tokens=total_input_tokens,
                     output_tokens=total_output_tokens,
                     cache_creation_tokens=total_cache_creation_tokens,
                     cache_read_tokens=total_cache_read_tokens,
                 )
-                db.add(assistant_message)
+                db.add(final_msg)
                 logger.info(
-                    f"[SSE] Saved assistant message to conversation {conversation_id} "
+                    f"[SSE] Saved final message (token stats) to conversation {conversation_id} "
                     f"with {total_input_tokens + total_output_tokens} tokens"
                 )
 
@@ -418,6 +617,16 @@ async def event_generator(
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done', 'content': '', 'metadata': {}}, ensure_ascii=False)}\n\n"
 
+    except asyncio.CancelledError:
+        # 用户主动取消了streaming
+        logger.info(f"[SSE] Streaming cancelled by user for conversation {conversation_id}")
+        cancel_data = json.dumps({
+            "type": "cancelled",
+            "content": "用户已终止响应",
+            "metadata": {"reason": "user_cancelled"}
+        }, ensure_ascii=False)
+        yield f"data: {cancel_data}\n\n"
+
     except Exception as e:
         from kode.utils.logger import safe_log_exception
         error_message = str(e)
@@ -429,6 +638,11 @@ async def event_generator(
             "metadata": {"error": error_message}
         }, ensure_ascii=False)
         yield f"data: {error_data}\n\n"
+
+    finally:
+        # 清理会话
+        streaming_session_manager.remove_session(conversation_id)
+        logger.info(f"[SSE] Removed streaming session for conversation {conversation_id}")
 
 
 @router.get("/chat/{conversation_id}/stream")
@@ -481,37 +695,130 @@ async def stream_chat(
             detail="Task parameter is required"
         )
 
-    # Load conversation history (last 50 messages for context)
+    # Load conversation history (last 100 messages for context, to include tool calls)
     messages_result = await db.execute(
         select(Message)
         .where(Message.conversation_id == conversation_id)
         .order_by(Message.created_at)
-        .limit(50)
+        .limit(100)
     )
     messages = messages_result.scalars().all()
 
-    # Convert to chat history format
-    chat_history = [
-        {"role": msg.role, "content": msg.content}
-        for msg in messages
-    ]
+    # Convert to Anthropic API chat history format
+    # 需要重建包含 tool_use 和 tool_result 的完整消息流
+    chat_history = []
+    current_assistant_blocks = []  # 收集当前 assistant 消息的 content blocks
 
-    logger.info(f"Loaded {len(chat_history)} messages from conversation {conversation_id}")
+    for msg in messages:
+        msg_type = msg.message_metadata.get("type") if msg.message_metadata else None
+
+        if msg_type == "tool_use":
+            # 这是一个工具调用，添加到当前 assistant 的 content blocks
+            tool_use_id = msg.message_metadata.get("tool_use_id")
+
+            # ⚠️ 校验 tool_use_id 必须存在且为字符串（Anthropic API 强制要求）
+            if not tool_use_id or not isinstance(tool_use_id, str):
+                logger.warning(f"Invalid tool_use_id in message {msg.id}: {tool_use_id}, skipping tool_use block")
+                continue
+
+            tool_use_block = {
+                "type": "tool_use",
+                "id": tool_use_id,  # 使用保存的 tool_use_id
+                "name": msg.message_metadata.get("tool_name"),
+                "input": msg.message_metadata.get("tool_args", {}),
+            }
+            current_assistant_blocks.append(tool_use_block)
+
+        elif msg_type == "tool_result":
+            # 先提交之前积累的 assistant 消息（如果有）
+            if current_assistant_blocks:
+                chat_history.append({
+                    "role": "assistant",
+                    "content": current_assistant_blocks
+                })
+                current_assistant_blocks = []
+
+            # 添加 tool_result 消息（作为 user 角色）
+            tool_use_id = msg.message_metadata.get("tool_use_id")
+
+            # ⚠️ 校验 tool_use_id 必须存在且为字符串（Anthropic API 强制要求）
+            if not tool_use_id or not isinstance(tool_use_id, str):
+                logger.warning(f"Invalid tool_use_id in tool_result message {msg.id}: {tool_use_id}, skipping")
+                continue
+
+            chat_history.append({
+                "role": "user",
+                "content": [{
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,  # 使用保存的 tool_use_id 关联
+                    "content": msg.content or "",
+                }]
+            })
+
+        elif msg.role == "assistant":
+            # 先提交之前积累的 assistant blocks（如果有）
+            if current_assistant_blocks:
+                chat_history.append({
+                    "role": "assistant",
+                    "content": current_assistant_blocks
+                })
+                current_assistant_blocks = []
+
+            # 普通的 assistant 文本消息
+            if msg.content:
+                chat_history.append({
+                    "role": "assistant",
+                    "content": msg.content
+                })
+
+        elif msg.role == "user":
+            # 先提交之前积累的 assistant blocks（如果有）
+            if current_assistant_blocks:
+                chat_history.append({
+                    "role": "assistant",
+                    "content": current_assistant_blocks
+                })
+                current_assistant_blocks = []
+
+            # 普通的 user 消息（排除已经处理的 tool_result）
+            if msg_type != "tool_result" and msg.content:
+                chat_history.append({
+                    "role": "user",
+                    "content": msg.content
+                })
+
+    # 提交剩余的 assistant blocks
+    if current_assistant_blocks:
+        chat_history.append({
+            "role": "assistant",
+            "content": current_assistant_blocks
+        })
+
+    logger.info(f"Loaded {len(messages)} raw messages, converted to {len(chat_history)} Anthropic API messages")
 
     # Create conversation service
     conversation_service = AsyncConversationService()
+
+    # Get current max sequence for this conversation
+    max_seq_result = await db.execute(
+        select(func.max(Message.sequence)).where(Message.conversation_id == conversation_id)
+    )
+    max_seq = max_seq_result.scalar() or -1  # Start from 0 if no messages
+    next_seq = max_seq + 1
 
     # Save user message to database
     user_message = Message(
         conversation_id=conversation_id,
         role="user",
         content=task,
-        metadata={"database_name": database_name} if database_name else None
+        sequence=next_seq,
+        message_metadata={"database_name": database_name} if database_name else None
     )
     db.add(user_message)
     await db.commit()
 
     # Generate conversation title if this is the first message
+    new_title = None
     is_first_message = len(chat_history) == 0
     if is_first_message and conversation.title in ("New Conversation", "New chat", "新对话"):
         try:
@@ -533,6 +840,8 @@ async def stream_chat(
             current_user.id,
             database_name,
             chat_history,  # ← 传入历史消息
+            new_title,  # ← 传入新标题（如果有）
+            next_seq,  # ← 传入 user 消息的序列号
         ),
         media_type="text/event-stream; charset=utf-8",
         headers={
@@ -662,5 +971,137 @@ async def submit_user_response(
     return {
         "success": True,
         "message": "用户响应已提交",
+        "conversation_id": conversation_id,
+    }
+
+
+@router.post("/chat/{conversation_id}/cancel")
+async def cancel_streaming(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    终止正在进行的streaming响应。
+
+    **使用场景**:
+    - 用户不想等待完整的AI响应
+    - 用户发现AI执行错误的任务
+    - 用户想要重新开始对话
+
+    **Returns**:
+    ```json
+    {
+      "success": true,
+      "message": "已终止streaming会话"
+    }
+    ```
+    """
+    # Verify conversation exists and user has access
+    result = await db.execute(
+        select(Conversation).where(Conversation.id == conversation_id)
+    )
+    conversation = result.scalar_one_or_none()
+
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found"
+        )
+
+    # Cancel the streaming session
+    success = streaming_session_manager.cancel_session(conversation_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="没有找到活跃的streaming会话"
+        )
+
+    logger.info(f"[Cancel] Successfully cancelled streaming for conversation {conversation_id}")
+
+    return {
+        "success": True,
+        "message": "已终止streaming会话",
+        "conversation_id": conversation_id,
+    }
+
+
+class AppendMessageRequest(BaseModel):
+    """追加消息请求模型"""
+    content: str = Field(..., description="要追加的消息内容")
+
+
+@router.post("/chat/{conversation_id}/append")
+async def append_message_to_stream(
+    conversation_id: str,
+    request: AppendMessageRequest = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    向正在进行的streaming会话追加新消息。
+
+    **使用场景**:
+    - AI正在执行任务,用户想要补充指令
+    - AI询问了问题,用户提供额外信息
+    - 多轮交互中的实时补充
+
+    **Request Body**:
+    ```json
+    {
+      "content": "补充的指令或信息"
+    }
+    ```
+
+    **Returns**:
+    ```json
+    {
+      "success": true,
+      "message": "消息已追加到streaming会话"
+    }
+    ```
+
+    **注意**: 追加的消息会在AI完成当前工具调用后被处理
+    """
+    # Verify conversation exists and user has access
+    result = await db.execute(
+        select(Conversation).where(Conversation.id == conversation_id)
+    )
+    conversation = result.scalar_one_or_none()
+
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found"
+        )
+
+    # Append message to the streaming session
+    success = await streaming_session_manager.append_message(
+        conversation_id,
+        request.content
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="没有找到活跃的streaming会话"
+        )
+
+    # Save appended message to database
+    appended_message = Message(
+        conversation_id=conversation_id,
+        role="user",
+        content=request.content,
+        message_metadata={"appended": True}
+    )
+    db.add(appended_message)
+    await db.commit()
+
+    logger.info(f"[Append] Successfully appended message to conversation {conversation_id}")
+
+    return {
+        "success": True,
+        "message": "消息已追加到streaming会话",
         "conversation_id": conversation_id,
     }

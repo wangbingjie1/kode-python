@@ -118,13 +118,30 @@ export const useChatStore = defineStore('chat', () => {
 
       // Load message history
       const history = await api.getConversationMessages(conversationId)
-      messages.value = history.map(msg => {
+
+      // 🔥 合并 tool_use 和 tool_result 消息对
+      const mergedMessages: ChatMessage[] = []
+      const toolUseMap = new Map<string, { msg: any, index: number }>() // tool_use_id -> {msg, index}
+
+      for (const msg of history) {
+        // 🔍 DEBUG: 打印原始消息结构（仅打印前2条tool相关消息）
+        if ((msg.role === 'assistant' || msg.role === 'user') && history.indexOf(msg) < 10) {
+          console.log('[ChatStore] Raw message from API:', {
+            role: msg.role,
+            hasMetadata: 'metadata' in msg,
+            hasMessageMetadata: 'message_metadata' in (msg as any),
+            metadataKeys: msg.metadata ? Object.keys(msg.metadata) : 'N/A',
+            messageMetadataKeys: (msg as any).message_metadata ? Object.keys((msg as any).message_metadata) : 'N/A',
+            metadataType: msg.metadata ? (msg.metadata as any).type : 'N/A'
+          })
+        }
+
         // 兼容后端返回的 message_metadata 字段名
         const metadata = (msg as any).message_metadata || msg.metadata || {}
 
         const baseMessage = {
           id: msg.id,
-          role: msg.role as 'user' | 'assistant' | 'chart' | 'insight',
+          role: msg.role as 'user' | 'assistant' | 'chart' | 'insight' | 'tool',
           content: msg.content,
           timestamp: new Date(msg.created_at),
           metadata
@@ -145,31 +162,155 @@ export const useChatStore = defineStore('chat', () => {
               chartConfig = JSON.parse(chartConfig)
               console.log('[ChatStore] Parsed chart config from string:', chartConfig)
             } catch (e) {
-              console.error('[ChatStore] Failed to parse chart config:', e)
+              console.error('[ChatStore] Failed to parse chart config from history:', e)
+              console.error('[ChatStore] Raw chart config:', chartConfig)
+              // 如果解析失败,返回普通消息
+              mergedMessages.push(baseMessage)
+              continue
             }
           }
 
-          return {
+          // 验证 chartConfig 是有效对象
+          if (!chartConfig || typeof chartConfig !== 'object') {
+            console.error('[ChatStore] Invalid chart config in history (not an object):', chartConfig)
+            mergedMessages.push(baseMessage)
+            continue
+          }
+
+          mergedMessages.push({
             ...baseMessage,
             chart: {
               type: metadata.chart_type || 'unknown',
               config: chartConfig,
               metadata: metadata
             }
-          }
+          })
+          continue
         }
 
         // 还原 insight 消息的数据结构
         if (msg.role === 'insight' && metadata?.insights) {
-          return {
+          mergedMessages.push({
             ...baseMessage,
             insights: metadata.insights
-          }
+          })
+          continue
         }
 
-        return baseMessage
+        // 🔥 处理 tool_use 和 tool_result 消息配对
+        if (metadata?.type === 'tool_use') {
+          // 这是工具调用，先占位并保存到 map 中
+          const toolUseId = metadata.tool_use_id
+          if (toolUseId) {
+            const index = mergedMessages.length
+            const placeholderMsg = {
+              ...baseMessage,
+              role: 'tool' as const,
+              toolCall: {
+                toolName: metadata.tool_name || 'Unknown tool',
+                toolArgs: metadata.tool_args || {},
+                status: 'started'  // 初始状态为 started，等待 result 更新
+              }
+            }
+            // 先占位
+            mergedMessages.push(placeholderMsg)
+            // 记录位置，等待 tool_result 更新
+            toolUseMap.set(toolUseId, { msg: placeholderMsg, index })
+            console.log('[ChatStore] Added tool_use placeholder at index', index, ':', toolUseId, metadata.tool_name)
+          }
+          continue
+        }
+
+        if (metadata?.type === 'tool_result') {
+          // 这是工具结果，查找对应的 tool_use 并更新
+          const toolUseId = metadata.tool_use_id
+          const toolUseData = toolUseId ? toolUseMap.get(toolUseId) : null
+
+          console.log('[ChatStore] Processing tool_result:', {
+            toolUseId: toolUseId?.substring(0, 20),
+            toolName: metadata.tool_name,
+            foundMatch: !!toolUseData,
+            availableToolUseIds: Array.from(toolUseMap.keys()).map(id => id.substring(0, 20))
+          })
+
+          if (toolUseData) {
+            // 找到配对，直接更新占位的消息
+            const toolUseMsg = toolUseData.msg
+            toolUseMsg.toolCall.toolResult = msg.content
+            toolUseMsg.toolCall.toolError = metadata.status === 'error' ? metadata.error : undefined
+            toolUseMsg.toolCall.status = metadata.status || 'completed'  // 使用 tool_result 的 status
+            // 注意：保持 tool_use 的原始时间戳，不要用 tool_result 的
+
+            toolUseMap.delete(toolUseId) // 清理已配对的
+            console.log('[ChatStore] ✅ Updated tool_use at index', toolUseData.index, 'with result:', toolUseMsg.toolCall.toolName, 'status:', toolUseMsg.toolCall.status)
+          } else {
+            // 没找到配对，检查是否是重复的消息（已处理过的 tool_use）
+            let isDuplicate = false
+
+            // Case 1: 有 tool_use_id，检查是否已存在于 mergedMessages 中
+            if (toolUseId) {
+              const existing = mergedMessages.find(m => m.metadata?.tool_use_id === toolUseId)
+              if (existing) {
+                isDuplicate = true
+              }
+            }
+            // Case 2: 无 tool_use_id，检查最近的消息是否是同名且已完成的工具调用
+            else {
+              // 向回查找最近的同名工具消息
+              for (let i = mergedMessages.length - 1; i >= Math.max(0, mergedMessages.length - 10); i--) {
+                const m = mergedMessages[i]
+                if (m.role === 'tool' && m.toolCall?.toolName === metadata.tool_name) {
+                  // 如果该工具消息已有结果或状态为完成，则当前无 ID 的消息极可能是重复的
+                  if (m.toolCall.status === 'completed' || m.toolCall.toolResult) {
+                    isDuplicate = true
+                  }
+                  break // 只检查最近的一个同名工具
+                }
+              }
+            }
+
+            if (isDuplicate) {
+              console.log('[ChatStore] Skipping duplicate/redundant tool_result:', { toolName: metadata.tool_name, toolUseId })
+              continue
+            }
+
+            // 确实没找到配对且不是重复，创建独立的 tool 消息
+            console.warn('[ChatStore] ❌ tool_result without tool_use, creating standalone message. tool_use_id:', toolUseId?.substring(0, 20))
+            mergedMessages.push({
+              ...baseMessage,
+              role: 'tool' as const,
+              toolCall: {
+                toolName: metadata.tool_name || 'Unknown tool',
+                toolArgs: metadata.tool_args || {},
+                toolResult: msg.content,
+                toolError: metadata.status === 'error' ? metadata.error : undefined,
+                status: metadata.status || 'completed'
+              }
+            })
+          }
+          continue
+        }
+
+        // 普通消息（user/assistant）
+        mergedMessages.push(baseMessage)
+      }
+
+      // 检查未配对的 tool_use（理论上不应该有，因为都已经占位了）
+      for (const [toolUseId, toolUseData] of toolUseMap.entries()) {
+        console.warn('[ChatStore] Orphaned tool_use (no result):', toolUseId, 'at index', toolUseData.index)
+        // 已经在 mergedMessages 中了，保持 'started' 状态
+      }
+
+      messages.value = mergedMessages
+      console.log('[ChatStore] Loaded', messages.value.length, 'messages (merged tool messages)')
+
+      // 🔍 DEBUG: 打印最终的消息顺序
+      console.log('[ChatStore] Final message order:')
+      mergedMessages.forEach((m, i) => {
+        const toolName = m.toolCall?.toolName || 'N/A'
+        const preview = m.content?.substring(0, 30) || 'N/A'
+        console.log(`  ${i}: ${m.role} | ${toolName} | ${preview}`)
       })
-      console.log('[ChatStore] Loaded', messages.value.length, 'messages')
 
       // Clear old callbacks before setting up new ones
       sseService.clearCallbacks()
@@ -233,7 +374,19 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  function findToolMessageByUseId(toolUseId: string): ChatMessage | undefined {
+    // 精确匹配 tool_use_id（最可靠）
+    for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+      const message = messages.value[index]
+      if (message.role === 'tool' && message.metadata?.tool_use_id === toolUseId) {
+        return message
+      }
+    }
+    return undefined
+  }
+
   function findLatestToolMessage(toolName: string): ChatMessage | undefined {
+    // 兜底：按工具名查找最新的（用于没有 tool_use_id 的场景）
     for (let index = messages.value.length - 1; index >= 0; index -= 1) {
       const message = messages.value[index]
       if (message.role === 'tool' && message.toolCall?.toolName === toolName) {
@@ -285,17 +438,19 @@ export const useChatStore = defineStore('chat', () => {
         const toolName = chunk.metadata?.tool_name || 'Unknown tool'
         const toolStatus = chunk.metadata?.status || 'executing'
         const toolArgs = chunk.metadata?.args || {}
+        const toolUseId = chunk.metadata?.tool_use_id  // 🔥 获取 tool_use_id
 
         console.log('[ChatStore] Processing tool_call:', {
           toolName,
           toolStatus,
           toolArgs,
+          toolUseId,
           fullMetadata: chunk.metadata
         })
 
-        const latestToolMessage = findLatestToolMessage(toolName)
-        const shouldCreateNewMessage =
-          !latestToolMessage || (toolStatus === 'started' && latestToolMessage.toolCall?.status === 'completed')
+        // 🔥 优先使用 tool_use_id 精确匹配
+        const existingToolMessage = toolUseId ? findToolMessageByUseId(toolUseId) : findLatestToolMessage(toolName)
+        const shouldCreateNewMessage = !existingToolMessage || (toolStatus === 'started' && existingToolMessage.toolCall?.status === 'completed')
 
         if (shouldCreateNewMessage) {
           // Create new tool message
@@ -304,7 +459,7 @@ export const useChatStore = defineStore('chat', () => {
             role: 'tool' as const,
             content: '',
             timestamp: new Date(),
-            metadata: chunk.metadata,
+            metadata: { ...chunk.metadata, tool_use_id: toolUseId },  // 保存 tool_use_id
             isStreaming: false,
             toolCall: {
               toolName,
@@ -314,19 +469,19 @@ export const useChatStore = defineStore('chat', () => {
           }
           console.log('[ChatStore] Creating new tool message:', newMessage)
           messages.value.push(newMessage)
-        } else if (latestToolMessage?.toolCall) {
+        } else if (existingToolMessage?.toolCall) {
           // Update existing tool message
-          const previousToolCall = latestToolMessage.toolCall
-          latestToolMessage.metadata = { ...latestToolMessage.metadata, ...chunk.metadata }
-          latestToolMessage.timestamp = new Date()
-          latestToolMessage.toolCall = {
+          const previousToolCall = existingToolMessage.toolCall
+          existingToolMessage.metadata = { ...existingToolMessage.metadata, ...chunk.metadata }
+          existingToolMessage.timestamp = new Date()
+          existingToolMessage.toolCall = {
             toolName,
             toolArgs: Object.keys(toolArgs).length > 0 ? toolArgs : previousToolCall.toolArgs,
             toolResult: previousToolCall.toolResult,
             toolError: previousToolCall.toolError,
             status: toolStatus
           }
-          console.log('[ChatStore] Updated existing tool message:', latestToolMessage)
+          console.log('[ChatStore] Updated existing tool message:', existingToolMessage)
         }
         break
       }
@@ -336,16 +491,19 @@ export const useChatStore = defineStore('chat', () => {
         const toolResult = chunk.metadata?.result ?? chunk.content
         const toolError = chunk.metadata?.error
         const toolStatus = chunk.metadata?.status || (toolError ? 'error' : 'completed')
+        const toolUseId = chunk.metadata?.tool_use_id  // 🔥 获取 tool_use_id
 
         console.log('[ChatStore] Processing tool_result:', {
           toolName,
           toolResult: typeof toolResult === 'string' ? toolResult.substring(0, 100) : toolResult,
           toolError,
           toolStatus,
+          toolUseId,
           fullMetadata: chunk.metadata
         })
 
-        const toolMessage = findLatestToolMessage(toolName)
+        // 🔥 优先使用 tool_use_id 精确匹配
+        const toolMessage = toolUseId ? findToolMessageByUseId(toolUseId) : findLatestToolMessage(toolName)
 
         if (toolMessage?.toolCall) {
           // Update existing tool message with result
@@ -361,13 +519,14 @@ export const useChatStore = defineStore('chat', () => {
           }
           console.log('[ChatStore] Updated tool message with result:', toolMessage.toolCall)
         } else {
-          // Create new tool result message
+          // Create new tool result message（兜底，理论上不应该走到这里）
+          console.warn('[ChatStore] tool_result without matching tool_use, creating standalone message')
           const newMessage = {
             id: `tool-result-${Date.now()}-${Math.random()}`,
             role: 'tool' as const,
             content: '',
             timestamp: new Date(),
-            metadata: chunk.metadata,
+            metadata: { ...chunk.metadata, tool_use_id: toolUseId },
             isStreaming: false,
             toolCall: {
               toolName,
@@ -477,10 +636,27 @@ export const useChatStore = defineStore('chat', () => {
 
       case 'chart': {
         // 处理图表消息
-        // chunk.content 应该是 config 对象 (已解析的 JSON)
-        const chartConfig = typeof chunk.content === 'string'
-          ? JSON.parse(chunk.content)
-          : chunk.content
+        // chunk.content 可能是对象或字符串,需要统一处理
+        let chartConfig = chunk.content
+
+        // 如果是字符串,尝试解析
+        if (typeof chartConfig === 'string') {
+          try {
+            chartConfig = JSON.parse(chartConfig)
+            console.log('[ChatStore] Parsed chart config from string')
+          } catch (e) {
+            console.error('[ChatStore] Failed to parse chart config:', e)
+            console.error('[ChatStore] Raw content:', chartConfig)
+            // 如果解析失败,跳过此图表
+            break
+          }
+        }
+
+        // 验证 chartConfig 是有效对象
+        if (!chartConfig || typeof chartConfig !== 'object') {
+          console.error('[ChatStore] Invalid chart config (not an object):', chartConfig)
+          break
+        }
 
         const chartMessage = {
           id: `chart-${Date.now()}-${Math.random()}`,
@@ -490,12 +666,13 @@ export const useChatStore = defineStore('chat', () => {
           isStreaming: false,
           chart: {
             type: chunk.metadata?.chart_type || 'unknown',
-            config: chartConfig,  // 确保是对象而不是字符串
+            config: chartConfig,  // 确保是对象
             metadata: chunk.metadata
           }
         }
         console.log('[ChatStore] Adding chart message:', chartMessage)
-        console.log('[ChatStore] Chart config:', chartConfig)
+        console.log('[ChatStore] Chart config type:', typeof chartConfig)
+        console.log('[ChatStore] Chart config keys:', Object.keys(chartConfig))
         messages.value.push(chartMessage)
         break
       }
@@ -565,6 +742,19 @@ export const useChatStore = defineStore('chat', () => {
         // 恢复 typing 状态（Agent 继续执行）
         isTyping.value = true
 
+        break
+      }
+
+      case 'title_updated': {
+        // 会话标题已更新
+        console.log('[ChatStore] Title updated:', chunk.content)
+        if (currentConversation.value) {
+          currentConversation.value.title = chunk.content
+          console.log('[ChatStore] Updated conversation title to:', chunk.content)
+
+          // 通知用户
+          notification.success('标题已生成', `会话标题: ${chunk.content}`)
+        }
         break
       }
 

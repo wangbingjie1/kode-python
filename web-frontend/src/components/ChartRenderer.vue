@@ -64,8 +64,17 @@ const props = withDefaults(defineProps<Props>(), {
 // 验证图表配置
 const validOption = computed(() => {
   if (!props.option || typeof props.option !== 'object') {
+    console.error('[ChartRenderer] Invalid option:', props.option)
     return null
   }
+
+  // 验证必要的 ECharts 配置字段
+  // ECharts 至少需要 series 或 dataset
+  if (!props.option.series && !props.option.dataset) {
+    console.error('[ChartRenderer] Missing required ECharts fields (series/dataset):', props.option)
+    return null
+  }
+
   return props.option
 })
 

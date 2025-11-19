@@ -29,15 +29,18 @@ The codebase follows a modular architecture with clear separation of concerns:
    - `permission.py`: Permission system for tool execution
    - Supports model switching via pointers (main, task, quick, reasoning)
 
-2. **Tools Layer** ([kode/tools/](kode/tools/))
+2. **Tools Layer** ([kode/tools/](kode/tools/)) **[数据分析专用工具集]**
    - `base.py`: Base class `KodeTool` extending LangChain's BaseTool
-   - `file_tools.py`: FileRead, FileWrite, FileEdit tools
-   - `bash_tool.py`: Shell command execution
-   - `grep_tool.py`: Code search functionality
-   - `glob_tool.py`: File pattern matching
-   - `database_tools.py`: **[NEW]** Database connection and schema extraction (PostgreSQL, MySQL, SQLite, etc.)
-     - ✨ **NEW**: Schema 提取支持样例数据（倒数 N 行）
-   - `ontology_tools.py`: **[NEW]** Ontology building and semantic search for database schemas
+   - `database_tools.py`: Database connection and schema extraction (PostgreSQL, MySQL, SQLite, etc.)
+     - ✨ Schema 提取支持样例数据（倒数 N 行）
+   - `ontology_tools.py`: Ontology building and semantic search for database schemas
+   - `visualization_tools.py`: Chart generation (ECharts)
+   - `interaction_tools.py`: AskUser tool for clarification
+   - `memory_tools.py`: MemoryRead/MemoryWrite for conversation context
+   - `advanced_tools.py`: TodoWrite for task planning
+   - `domain_uncertainty_analyzer.py`: Domain-level uncertainty analysis
+   - `uncertainty_qa_tool.py`: Uncertainty Q&A management
+   - **移除**: FileRead, FileWrite, FileEdit, Bash, Grep, Glob（数据分析不需要，节省 ~30% tool token）
    - All tools inherit from KodeTool with permission management
 
 3. **Agents Layer** ([kode/agents/](kode/agents/))

@@ -14,16 +14,12 @@ from kode.agents.base import KodeAgent, AgentConfig
 from kode.agents.anthropic_streaming import AnthropicStreamingAgent
 from kode.core.model_manager import ModelManager
 from kode.tools import (
-    BashTool,
-    FileEditTool,
-    FileReadTool,
-    FileWriteTool,
-    GlobTool,
-    GrepTool,
+    # 数据分析必需工具
     MemoryReadTool,
     MemoryWriteTool,
-    MultiEditTool,
     TodoWriteTool,
+    # 移除文件/代码工具（数据分析不需要）:
+    # BashTool, FileReadTool, FileWriteTool, FileEditTool, MultiEditTool, GrepTool, GlobTool
 )
 # Import database tools if available
 try:
@@ -76,22 +72,13 @@ class AsyncConversationService:
         self.config = self.config_manager.get_all()
         self.model_manager = ModelManager(self.config)
 
-        # Setup tools (matching CLI's tool setup)
+        # Setup tools (数据分析专用工具集 - 精简版)
         self.tools = [
-            # File operations
-            FileReadTool(),
-            FileWriteTool(),
-            FileEditTool(),
-            MultiEditTool(),
-            # Code operations
-            BashTool(),
-            GrepTool(),
-            GlobTool(),
-            # Memory
+            # Memory & Planning (数据分析辅助)
             MemoryReadTool(),
             MemoryWriteTool(),
-            # Advanced
             TodoWriteTool(),
+            # 移除: File/Code/Bash 工具（数据分析不需要，节省 token）
         ]
 
         # Add interaction tools
@@ -213,9 +200,11 @@ SchemaQuery(connection_name="yanfa", table_name="order")
 - 不确定时，优先查询 SchemaQuery
 
 **执行查询**:
-- 使用 DatabaseExecuteQuery 执行 SQL（复杂 JOIN、聚合、分组）
+- **必须**使用 DatabaseExecuteQuery 工具执行 SQL（不要只输出 SQL 代码）
+- 支持复杂查询：JOIN、聚合、分组、子查询等
 - 计算关键业务指标（KPI）：销售额、库存周转率、客户留存率等
 - 识别数据质量问题
+- **禁止**只输出 SQL 代码块让用户自己执行，你必须代替用户执行查询
 
 ### 4. AI 原生可视化分析 ⭐ 核心能力
 - **自动生成图表**：查询数据后，使用 ChartGenerator 自动生成图表配置
@@ -487,17 +476,23 @@ OntologyUncertaintyResolver({{{{
             tools=["*"],  # 所有工具都可用
         )
 
-    def _load_database_connections(self):
-        """Load database connections from persistence into memory."""
+    def _load_database_connections(self, force_reload: bool = False):
+        """
+        Load database connections from persistence into memory.
+
+        Args:
+            force_reload: If True, reload all connections even if already in memory (updates cache)
+        """
         if not HAS_DB_MANAGER:
             return
 
         try:
             db_session = SessionLocal()
             try:
-                count = db_manager.load_connections_from_db(db_session)
+                count = db_manager.load_connections_from_db(db_session, force_reload=force_reload)
                 if count > 0:
-                    logger.info(f"Loaded {count} database connections from persistence")
+                    action = "Reloaded" if force_reload else "Loaded"
+                    logger.info(f"{action} {count} database connections from persistence")
             finally:
                 db_session.close()
         except Exception as e:
@@ -656,6 +651,8 @@ OntologyUncertaintyResolver({{{{
         agent_name: str = "general-purpose",
         chat_history: Optional[List[Dict]] = None,
         database_name: Optional[str] = None,
+        cancel_event: Optional[asyncio.Event] = None,
+        message_queue: Optional[asyncio.Queue] = None,
     ) -> AsyncGenerator[Dict, None]:
         """
         Execute a task and stream results in real-time.
@@ -674,6 +671,8 @@ OntologyUncertaintyResolver({{{{
             agent_name: Agent to use (default: "general-purpose")
             chat_history: Previous conversation history
             database_name: Optional database connection name for context
+            cancel_event: Optional asyncio.Event to signal cancellation
+            message_queue: Optional asyncio.Queue for appending messages during execution
 
         Yields:
             Dict: Streaming response chunks
@@ -682,6 +681,12 @@ OntologyUncertaintyResolver({{{{
             chat_history = []
 
         try:
+            # Reload database connections to ensure we have latest info from DB
+            # 每次对话开始时刷新一次,确保获取最新的数据库连接配置
+            if HAS_DB_MANAGER:
+                self._load_database_connections(force_reload=True)
+                logger.info("Database connections reloaded from persistence")
+
             # Log system info (不发送到前端，避免与真正的思考内容混淆)
             logger.info(f"Loading agent and preparing to execute task for {agent_name}")
 
@@ -702,15 +707,9 @@ OntologyUncertaintyResolver({{{{
 
             async def on_tool_start(tool_name: str, tool_args: dict):
                 """Callback when tool execution starts."""
-                logger.warning(f"[CALLBACK] on_tool_start called: {tool_name}")  # Use warning to ensure visibility
-                logger.warning(f"[CALLBACK] Tool args: {tool_args}")
-                # Send progress update as tool_call event
-                await progress_queue.put({
-                    "type": "tool_call",
-                    "content": f"正在执行工具: {tool_name}",
-                    "metadata": {"tool_name": tool_name, "status": "started", "args": tool_args}
-                })
-                logger.warning(f"[CALLBACK] Queued tool_call event for {tool_name}")
+                logger.info(f"[PROGRESS] Tool start: {tool_name}")
+                # ✅ 不再发送 tool_call 事件，因为 anthropic_streaming.py 已经发送了完整的事件（包含 tool_use_id）
+                # 避免重复保存到数据库
 
             async def on_tool_end(tool_name: str, tool_args: dict, result: str):
                 """Callback when tool execution ends."""
@@ -757,17 +756,8 @@ OntologyUncertaintyResolver({{{{
                     except Exception as e:
                         logger.error(f"[INSIGHT] Failed to parse insight result: {e}")
 
-                # Send standard tool_result for all tools
-                await progress_queue.put({
-                    "type": "tool_result",
-                    "content": f"工具执行完成: {tool_name}",
-                    "metadata": {
-                        "tool_name": tool_name,
-                        "status": "completed",
-                        "tool_args": tool_args,
-                        "result": result_str  # Send full result
-                    }
-                })
+                # ✅ 不再发送 tool_result 事件，因为 anthropic_streaming.py 已经发送了完整的事件（包含 tool_use_id）
+                # chart 和 insight 消息已在上面单独发送，这里不需要再发送通用的 tool_result
 
             async def on_iteration(iteration: int):
                 """Callback at the start of each iteration."""
@@ -803,6 +793,8 @@ OntologyUncertaintyResolver({{{{
                     on_tool_start=on_tool_start,
                     on_tool_end=on_tool_end,
                     on_iteration=on_iteration,
+                    cancel_event=cancel_event,  # ← 传递取消事件
+                    message_queue=message_queue,  # ← 传递消息队列
                 )
                 # IMPORTANT: Set conversation_id for user input session management
                 streaming_agent._current_conversation_id = conversation_id

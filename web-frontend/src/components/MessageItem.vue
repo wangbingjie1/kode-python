@@ -157,7 +157,7 @@
 import { computed, onMounted, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
-import 'highlight.js/styles/github.css'
+import 'highlight.js/styles/github-dark.css'
 import type { ChatMessage } from '@/stores/chat'
 import ToolCallItem from './ToolCallItem.vue'
 import ChartRenderer from './ChartRenderer.vue'
@@ -400,6 +400,7 @@ async function copyMessage() {
 
 .code-block-wrapper pre code {
   padding: 1rem;
+  color: inherit !important;
 }
 
 @keyframes spin {

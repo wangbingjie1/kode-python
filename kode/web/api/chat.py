@@ -186,11 +186,11 @@ async def get_conversation_messages(
         conversation_id, current_user.id, db
     )
 
-    # Get messages
+    # Get messages (按 sequence 排序，确保工具调用顺序正确)
     messages_result = await db.execute(
         select(Message)
         .where(Message.conversation_id == conversation_id)
-        .order_by(Message.created_at)
+        .order_by(Message.sequence, Message.created_at)  # sequence 优先，created_at 次之
         .limit(limit)
     )
     messages = messages_result.scalars().all()

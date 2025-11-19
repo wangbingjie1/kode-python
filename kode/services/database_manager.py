@@ -353,15 +353,16 @@ class DatabaseConnectionManager:
         engine = self.get_engine(name)
         return inspect(engine)
 
-    def load_connections_from_db(self, db_session: Session) -> int:
+    def load_connections_from_db(self, db_session: Session, force_reload: bool = False) -> int:
         """
         Load all database connections from persistence storage.
 
         Args:
             db_session: SQLAlchemy session
+            force_reload: If True, reload even if connection already exists in memory (updates cache)
 
         Returns:
-            Number of connections loaded
+            Number of connections loaded/updated
         """
         from kode.models.database_connection import DatabaseConnectionModel
 
@@ -371,9 +372,13 @@ class DatabaseConnectionManager:
 
             count = 0
             for model in connection_models:
-                # Skip if already loaded in memory
-                if model.name in self._connections:
+                # Skip if already loaded in memory (unless force_reload=True)
+                if model.name in self._connections and not force_reload:
                     continue
+
+                # If force_reload and connection exists, close old engine first
+                if force_reload and model.name in self._connections:
+                    self.close_connection(model.name)
 
                 # Create DatabaseConnection object from model
                 try:
