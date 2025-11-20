@@ -21,6 +21,7 @@ from kode.tools import (
     # 移除文件/代码工具（数据分析不需要）:
     # BashTool, FileReadTool, FileWriteTool, FileEditTool, MultiEditTool, GrepTool, GlobTool
 )
+
 # Import database tools if available
 try:
     from kode.tools.database_tools import (
@@ -35,6 +36,7 @@ try:
     )
     from kode.tools.domain_uncertainty_analyzer import DomainUncertaintyAnalyzer
     from kode.tools.uncertainty_qa_tool import UncertaintyQAManager
+
     HAS_DATABASE_TOOLS = True
 except ImportError:
     HAS_DATABASE_TOOLS = False
@@ -42,6 +44,7 @@ except ImportError:
 # Import visualization tools
 try:
     from kode.tools.visualization_tools import ChartGeneratorTool
+
     HAS_VISUALIZATION_TOOLS = True
 except ImportError:
     HAS_VISUALIZATION_TOOLS = False
@@ -53,6 +56,7 @@ from kode.utils.system_info import format_system_info_for_prompt
 try:
     from kode.services.database_manager import db_manager
     from kode.database.session import SessionLocal
+
     HAS_DB_MANAGER = True
 except ImportError:
     HAS_DB_MANAGER = False
@@ -84,6 +88,7 @@ class AsyncConversationService:
         # Add interaction tools
         try:
             from kode.tools.interaction_tools import AskUserTool
+
             self.tools.append(AskUserTool())
             logger.info("Interaction tools loaded (AskUserTool)")
         except ImportError:
@@ -91,16 +96,18 @@ class AsyncConversationService:
 
         # Add database tools if available (optimized: removed Test/Disconnect/List)
         if HAS_DATABASE_TOOLS:
-            self.tools.extend([
-                DatabaseConnectTool(),
-                DatabaseSchemaExtractorTool(),
-                DatabaseExecuteQueryTool(),
-                SchemaQueryTool(),  # 精确查询单表 schema (节省 token)
-                DomainUncertaintyAnalyzer(),  # 并行域分析工具
-                UncertaintyQAManager(),  # 不确定性问答管理
-                OntologyBuilderTool(),
-                OntologySearchTool(),
-            ])
+            self.tools.extend(
+                [
+                    DatabaseConnectTool(),
+                    DatabaseSchemaExtractorTool(),
+                    DatabaseExecuteQueryTool(),
+                    SchemaQueryTool(),  # 精确查询单表 schema (节省 token)
+                    DomainUncertaintyAnalyzer(),  # 并行域分析工具
+                    UncertaintyQAManager(),  # 不确定性问答管理
+                    OntologyBuilderTool(),
+                    OntologySearchTool(),
+                ]
+            )
             logger.info("Database and ontology tools loaded (with SchemaQuery & uncertainty Q&A)")
 
             # Load existing database connections from persistence FIRST
@@ -113,7 +120,6 @@ class AsyncConversationService:
 
         # 单 agent 系统：在加载完数据库连接后，创建内置的数据分析 agent 配置
         self.agent_config = self._create_data_analyst_agent()
-
 
     def _get_dynamic_context(self) -> str:
         """获取动态上下文信息（缓存、数据库连接）。
@@ -130,7 +136,11 @@ class AsyncConversationService:
         """
         # 获取缓存资源信息
         cached_resources = self._get_cached_resources_context()
-        cache_section = f"## 可用的文件资源\n\n{cached_resources}\n\n**重要**: 优先使用缓存!如果有缓存的schema或ontology\n" if cached_resources else ""
+        cache_section = (
+            f"## 可用的文件资源\n\n{cached_resources}\n\n**重要**: 优先使用缓存!如果有缓存的schema或ontology\n"
+            if cached_resources
+            else ""
+        )
 
         # 获取数据库连接信息
         db_connections = self._get_database_context()
@@ -155,7 +165,9 @@ class AsyncConversationService:
         # 构建 system_prompt（使用字符串格式化避免 f-string 嵌套过深）
         system_prompt = """你是一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
 
-{static_system_info}""".format(static_system_info=static_system_info)
+{static_system_info}""".format(
+            static_system_info=static_system_info
+        )
 
         system_prompt += """
 
@@ -207,11 +219,15 @@ SchemaQuery(connection_name="yanfa", table_name="order")
 - **禁止**只输出 SQL 代码块让用户自己执行，你必须代替用户执行查询
 
 ### 4. AI 原生可视化分析 ⭐ 核心能力
-- **自动生成图表**：查询数据后，使用 ChartGenerator 自动生成图表配置
+- **自动生成图表**：查询数据后，**必须**使用 ChartGenerator 工具生成图表
   - 根据数据特征智能选择图表类型（折线图、柱状图、饼图等）
   - 自动识别 X/Y 轴字段
-  - 生成 ECharts 配置 JSON
+  - **禁止**直接在回复中输出 ECharts JSON 配置代码块
+  - **禁止**让用户手动复制配置，必须使用工具自动渲染
 - **多模态呈现**：每次分析返回"文本解释 + 图表 + 洞察卡片"的组合
+  - 图表通过 ChartGenerator 工具自动渲染
+  - 文本解释数据趋势和关键发现
+  - 使用 InsightExtractor 提取业务洞察
 
 ### 5. 数据建议和指导
 - 发现业务趋势和模式
@@ -528,31 +544,46 @@ OntologyUncertaintyResolver({{{{
                     domain_index_file = schema_file.parent / "domain_index.json"
                     if domain_index_file.exists():
                         import json
+
                         try:
-                            with open(domain_index_file, 'r', encoding='utf-8') as f:
+                            with open(domain_index_file, "r", encoding="utf-8") as f:
                                 domain_index = json.load(f)
 
-                            context_parts.append(f"\n  **领域分组**: {conn_name} 已分组到 {domain_index.get('total_domains', 0)} 个业务域")
+                            context_parts.append(
+                                f"\n  **领域分组**: {conn_name} 已分组到 {domain_index.get('total_domains', 0)} 个业务域"
+                            )
                             context_parts.append(f"  **索引文件**: {domain_index_file.absolute()}")
                             context_parts.append("  **可用领域**:")
-                            for domain in domain_index.get('domains', []):
+                            for domain in domain_index.get("domains", []):
                                 context_parts.append(
                                     f"    - {domain['name']} ({domain['display_name']}): "
                                     f"{domain['table_count']} 个表 - {domain['description']}"
                                 )
-                                context_parts.append(f"      文件: {schema_file.parent / domain['file_path']}")
+                                context_parts.append(
+                                    f"      文件: {schema_file.parent / domain['file_path']}"
+                                )
 
-                            context_parts.append("\n  **使用方法**: 根据用户问题，只加载相关的领域文件（减少上下文占用）")
-                            context_parts.append("  示例: 用户问订单相关 → 只读取 order_payment_system.json")
+                            context_parts.append(
+                                "\n  **使用方法**: 根据用户问题，只加载相关的领域文件（减少上下文占用）"
+                            )
+                            context_parts.append(
+                                "  示例: 用户问订单相关 → 只读取 order_payment_system.json"
+                            )
                         except Exception as e:
                             context_parts.append(f"  (领域索引加载失败: {e})")
 
                     # Check for uncertainty analysis file
                     uncertainties_file = schema_file.parent / "uncertainties.json"
                     if uncertainties_file.exists():
-                        context_parts.append(f"\n  **不确定性分析**: {uncertainties_file.absolute()}")
-                        context_parts.append("  包含业务规则不明确、数据不一致、缺失约束等需要与用户确认的问题")
-                        context_parts.append("  **使用方法**: 需要深入分析数据问题时，使用 UncertaintyQATool 工具进行问答式诊断")
+                        context_parts.append(
+                            f"\n  **不确定性分析**: {uncertainties_file.absolute()}"
+                        )
+                        context_parts.append(
+                            "  包含业务规则不明确、数据不一致、缺失约束等需要与用户确认的问题"
+                        )
+                        context_parts.append(
+                            "  **使用方法**: 需要深入分析数据问题时，使用 UncertaintyQATool 工具进行问答式诊断"
+                        )
 
         # Check ontology cache
         ontology_dir = Path(ontology_path)
@@ -586,7 +617,9 @@ OntologyUncertaintyResolver({{{{
                 return ""
 
             context_parts = ["\n## 可用的数据库连接\n"]
-            context_parts.append("用户已经配置了以下数据库连接,你可以直接使用这些连接进行查询和本体构建:\n")
+            context_parts.append(
+                "用户已经配置了以下数据库连接,你可以直接使用这些连接进行查询和本体构建:\n"
+            )
 
             for name in connection_names:
                 conn = db_manager.get_connection(name)
@@ -635,7 +668,6 @@ OntologyUncertaintyResolver({{{{
             context_parts.append(f"- **数据库名**: {conn.database}")
             if conn.db_schema:
                 context_parts.append(f"- **默认Schema**: {conn.db_schema}")
-
 
             return "\n".join(context_parts)
 
@@ -717,47 +749,9 @@ OntologyUncertaintyResolver({{{{
                 result_preview = result_str[:200] if result_str else ""
                 logger.info(f"[PROGRESS] Tool end: {tool_name}")
                 logger.info(f"[PROGRESS] Tool result preview: {result_preview}")
-
-                # 解析可视化工具结果，发送专门的消息类型
-                if tool_name == "ChartGenerator":
-                    try:
-                        import json
-                        chart_result = json.loads(result_str)
-                        if chart_result.get("success"):
-                            # 发送 chart 类型消息
-                            await progress_queue.put({
-                                "type": "chart",
-                                "content": chart_result.get("config", {}),
-                                "metadata": {
-                                    "chart_type": chart_result.get("chart_type"),
-                                    "data_summary": chart_result.get("data_summary", {})
-                                }
-                            })
-                            logger.info(f"[CHART] Sent chart message for type: {chart_result.get('chart_type')}")
-                    except Exception as e:
-                        logger.error(f"[CHART] Failed to parse chart result: {e}")
-
-                elif tool_name == "InsightExtractor":
-                    try:
-                        import json
-                        insight_result = json.loads(result_str)
-                        if insight_result.get("success"):
-                            insights = insight_result.get("insights", [])
-                            # 发送 insight 类型消息
-                            await progress_queue.put({
-                                "type": "insight",
-                                "content": insights,
-                                "metadata": {
-                                    "total_count": insight_result.get("total_count", 0),
-                                    "data_summary": insight_result.get("data_summary", {})
-                                }
-                            })
-                            logger.info(f"[INSIGHT] Sent {len(insights)} insights")
-                    except Exception as e:
-                        logger.error(f"[INSIGHT] Failed to parse insight result: {e}")
-
-                # ✅ 不再发送 tool_result 事件，因为 anthropic_streaming.py 已经发送了完整的事件（包含 tool_use_id）
-                # chart 和 insight 消息已在上面单独发送，这里不需要再发送通用的 tool_result
+                # ✅ chart 和 insight 事件已由 AnthropicStreamingAgent 直接发送
+                # ✅ tool_result 事件也已由 AnthropicStreamingAgent 发送
+                # 这里不需要重复发送任何事件
 
             async def on_iteration(iteration: int):
                 """Callback at the start of each iteration."""
@@ -801,7 +795,10 @@ OntologyUncertaintyResolver({{{{
                 logger.info(f"[DEBUG] AnthropicStreamingAgent created successfully")
             except Exception as e:
                 from kode.utils.logger import safe_log_exception
-                safe_log_exception(logger, f"[ERROR] Failed to create AnthropicStreamingAgent: {e}", e)
+
+                safe_log_exception(
+                    logger, f"[ERROR] Failed to create AnthropicStreamingAgent: {e}", e
+                )
                 raise
 
             # Stream chunks from agent
@@ -814,10 +811,13 @@ OntologyUncertaintyResolver({{{{
                 if not enhanced_history:
                     dynamic_context = self._get_dynamic_context()
                     if dynamic_context.strip():
-                        enhanced_history.insert(0, {
-                            "role": "user",
-                            "content": f"<context>\n{dynamic_context}\n</context>"
-                        })
+                        enhanced_history.insert(
+                            0,
+                            {
+                                "role": "user",
+                                "content": f"<context>\n{dynamic_context}\n</context>",
+                            },
+                        )
                         logger.info("[Cache Optimization] 动态上下文已注入到对话头部")
 
                 # Start streaming from agent
@@ -825,7 +825,7 @@ OntologyUncertaintyResolver({{{{
                 agent_stream = streaming_agent.stream_response(
                     task=enhanced_task,
                     chat_history=enhanced_history,
-                    max_iterations=agent_config.max_iterations
+                    max_iterations=agent_config.max_iterations,
                 )
 
                 chunk_count = 0
@@ -862,6 +862,7 @@ OntologyUncertaintyResolver({{{{
 
         except Exception as e:
             from kode.utils.logger import safe_log_exception
+
             safe_log_exception(logger, f"Error executing task: {e}", e)
             yield {
                 "type": "error",
@@ -869,9 +870,7 @@ OntologyUncertaintyResolver({{{{
                 "metadata": {"error": str(e), "error_type": type(e).__name__},
             }
 
-    async def get_conversation_history(
-        self, conversation_id: str, user_id: str
-    ) -> List[Dict]:
+    async def get_conversation_history(self, conversation_id: str, user_id: str) -> List[Dict]:
         """
         Retrieve conversation history from database.
 
@@ -961,23 +960,30 @@ OntologyUncertaintyResolver({{{{
                 model="claude-3-5-haiku-20241022",  # Use Haiku for quick tasks
                 max_tokens=20,
                 temperature=0.7,
-                messages=[{
-                    "role": "user",
-                    "content": f"""根据以下用户消息，生成一个简洁的会话标题（4-6个中文字）。
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"""根据以下用户消息，生成一个简洁的会话标题（4-6个中文字）。
 只输出标题文字，不要有任何解释或标点符号。
 
 用户消息：
 {message_preview}
 
-标题："""
-                }]
+标题：""",
+                    }
+                ],
             )
 
             # Extract title from response
             if response.content and len(response.content) > 0:
                 title = response.content[0].text.strip()
                 # Remove any quotes or punctuation
-                title = title.replace('"', '').replace('"', '').replace('"', '').strip(',.!?;:，。！？；：')
+                title = (
+                    title.replace('"', "")
+                    .replace('"', "")
+                    .replace('"', "")
+                    .strip(",.!?;:，。！？；：")
+                )
 
                 # Limit to 20 chars max
                 if len(title) > 20:

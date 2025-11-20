@@ -119,12 +119,17 @@ export const useChatStore = defineStore('chat', () => {
       // Load message history
       const history = await api.getConversationMessages(conversationId)
 
-      // 🔥 合并 tool_use 和 tool_result 消息对
+      // 🔥 合并 tool_use 和 tool_result 消息对，并正确插入 chart/insight
       const mergedMessages: ChatMessage[] = []
       const toolUseMap = new Map<string, { msg: any, index: number }>() // tool_use_id -> {msg, index}
+      
+      // 📊 收集需要插入的 charts 和 insights (来自 final 消息)
+      const chartsToInsert: Array<{ chartData: any, afterToolName: string }> = []
+      const insightsToInsert: Array<{ insightData: any, afterToolName: string }> = []
 
+      // 第一遍：处理所有消息，收集 charts/insights 但不立即插入
       for (const msg of history) {
-        // 🔍 DEBUG: 打印原始消息结构（仅打印前2条tool相关消息）
+        // 🔍 DEBUG: 打印原始消息结构(仅打印前2条tool相关消息)
         if ((msg.role === 'assistant' || msg.role === 'user') && history.indexOf(msg) < 10) {
           console.log('[ChatStore] Raw message from API:', {
             role: msg.role,
@@ -147,7 +152,7 @@ export const useChatStore = defineStore('chat', () => {
           metadata
         }
 
-        // 还原 chart 消息的数据结构
+        // 还原 chart 消息的数据结构 (直接保存的独立 chart 消息)
         if (msg.role === 'chart' && metadata?.chart_config) {
           console.log('[ChatStore] Restoring chart from history:', {
             chart_type: metadata.chart_type,
@@ -188,13 +193,77 @@ export const useChatStore = defineStore('chat', () => {
           continue
         }
 
-        // 还原 insight 消息的数据结构
+        // 还原 insight 消息的数据结构 (直接保存的独立 insight 消息)
         if (msg.role === 'insight' && metadata?.insights) {
           mergedMessages.push({
             ...baseMessage,
             insights: metadata.insights
           })
           continue
+        }
+
+        // 🔥 [FIX] 从 final 消息中提取 charts 和 insights，但不立即插入
+        if (metadata?.type === 'final') {
+          // 1. 提取 charts 到待插入列表
+          if (metadata.charts && Array.isArray(metadata.charts)) {
+            console.log('[ChatStore] Found charts in final message:', metadata.charts.length)
+            for (const chartData of metadata.charts) {
+              let chartConfig = chartData.chart_config
+              
+              // 解析 config 如果是字符串
+              if (typeof chartConfig === 'string') {
+                try {
+                  chartConfig = JSON.parse(chartConfig)
+                } catch (e) {
+                  console.error('[ChatStore] Failed to parse chart config from final message:', e)
+                  continue
+                }
+              }
+
+              if (chartConfig && typeof chartConfig === 'object') {
+                chartsToInsert.push({
+                  chartData: {
+                    ...baseMessage,
+                    id: `chart-${baseMessage.id}-${Math.random()}`,
+                    role: 'chart',
+                    chart: {
+                      type: chartData.chart_type || 'unknown',
+                      config: chartConfig,
+                      metadata: { data_summary: chartData.data_summary }
+                    }
+                  },
+                  afterToolName: 'ChartGenerator' // 插入到 ChartGenerator 之后
+                })
+              }
+            }
+          }
+
+          // 2. 提取 insights 到待插入列表
+          if (metadata.insights && Array.isArray(metadata.insights)) {
+            console.log('[ChatStore] Found insights in final message:', metadata.insights.length)
+            for (const insightData of metadata.insights) {
+              if (insightData.insights && Array.isArray(insightData.insights)) {
+                insightsToInsert.push({
+                  insightData: {
+                    ...baseMessage,
+                    id: `insight-${baseMessage.id}-${Math.random()}`,
+                    role: 'insight',
+                    insights: insightData.insights,
+                    metadata: { 
+                        total_count: insightData.total_count,
+                        data_summary: insightData.data_summary
+                    }
+                  },
+                  afterToolName: 'InsightExtractor' // 插入到 InsightExtractor 之后
+                })
+              }
+            }
+          }
+
+          // 3. 如果 final 消息本身没有文本内容，就跳过
+          if (!msg.content) {
+            continue
+          }
         }
 
         // 🔥 处理 tool_use 和 tool_result 消息配对
@@ -301,15 +370,63 @@ export const useChatStore = defineStore('chat', () => {
         // 已经在 mergedMessages 中了，保持 'started' 状态
       }
 
-      messages.value = mergedMessages
+      // 🎯 第二遍：将收集到的 charts/insights 插入到对应工具调用之后
+      const finalMessages: ChatMessage[] = []
+      let chartIndex = 0
+      let insightIndex = 0
+
+      for (let i = 0; i < mergedMessages.length; i++) {
+        const msg = mergedMessages[i]
+        finalMessages.push(msg)
+
+        // 如果是工具调用消息，检查是否需要在其后插入 chart/insight
+        if (msg.role === 'tool' && msg.toolCall) {
+          const toolName = msg.toolCall.toolName
+
+          // 在 ChartGenerator 之后插入 chart
+          if (toolName === 'ChartGenerator' && chartIndex < chartsToInsert.length) {
+            const chartToInsert = chartsToInsert[chartIndex]
+            if (chartToInsert.afterToolName === 'ChartGenerator') {
+              console.log(`[ChatStore] ✅ Inserting chart after ChartGenerator at position ${finalMessages.length}`)
+              finalMessages.push(chartToInsert.chartData)
+              chartIndex++
+            }
+          }
+
+          // 在 InsightExtractor 之后插入 insight
+          if (toolName === 'InsightExtractor' && insightIndex < insightsToInsert.length) {
+            const insightToInsert = insightsToInsert[insightIndex]
+            if (insightToInsert.afterToolName === 'InsightExtractor') {
+              console.log(`[ChatStore] ✅ Inserting insight after InsightExtractor at position ${finalMessages.length}`)
+              finalMessages.push(insightToInsert.insightData)
+              insightIndex++
+            }
+          }
+        }
+      }
+
+      // 如果还有未插入的 charts/insights (没找到对应工具),放在最后
+      while (chartIndex < chartsToInsert.length) {
+        console.warn('[ChatStore] ⚠️ Chart without matching ChartGenerator tool, appending to end')
+        finalMessages.push(chartsToInsert[chartIndex].chartData)
+        chartIndex++
+      }
+      while (insightIndex < insightsToInsert.length) {
+        console.warn('[ChatStore] ⚠️ Insight without matching InsightExtractor tool, appending to end')
+        finalMessages.push(insightsToInsert[insightIndex].insightData)
+        insightIndex++
+      }
+
+      messages.value = finalMessages
       console.log('[ChatStore] Loaded', messages.value.length, 'messages (merged tool messages)')
 
       // 🔍 DEBUG: 打印最终的消息顺序
       console.log('[ChatStore] Final message order:')
-      mergedMessages.forEach((m, i) => {
+      finalMessages.forEach((m, i) => {
         const toolName = m.toolCall?.toolName || 'N/A'
+        const roleInfo = m.role === 'chart' ? `chart(${m.chart?.type})` : m.role === 'insight' ? 'insight' : m.role
         const preview = m.content?.substring(0, 30) || 'N/A'
-        console.log(`  ${i}: ${m.role} | ${toolName} | ${preview}`)
+        console.log(`  ${i}: ${roleInfo} | ${toolName} | ${preview}`)
       })
 
       // Clear old callbacks before setting up new ones

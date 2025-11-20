@@ -131,6 +131,11 @@
             :data="parsedToolResult"
           />
 
+          <!-- 如果是图表，用图表展示 -->
+          <div v-else-if="isChartTool && parsedToolResult && parsedToolResult.success && parsedToolResult.config" class="chart-container" style="height: 400px; width: 100%;">
+            <ChartRenderer :option="parsedToolResult.config" />
+          </div>
+
           <!-- 否则用代码块展示 -->
           <div v-else class="code-block" :class="{ 'is-error': hasError }">
             <pre>{{ toolResult || toolError }}</pre>
@@ -160,9 +165,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, defineAsyncComponent } from 'vue'
 import QueryResultTable from './QueryResultTable.vue'
 import UncertaintyBatchDialog from './UncertaintyBatchDialog.vue'
+// Use defineAsyncComponent to avoid circular dependencies if any, and for better performance
+const ChartRenderer = defineAsyncComponent(() => import('./ChartRenderer.vue'))
 import { executeDatabaseQuery } from '@/services/api'
 import { notification } from '@/composables/useNotification'
 
@@ -194,6 +201,10 @@ const statusText = computed(() => {
 
 const isDatabaseQueryTool = computed(() => {
   return props.toolName === 'DatabaseExecuteQuery'
+})
+
+const isChartTool = computed(() => {
+  return props.toolName === 'ChartGenerator'
 })
 
 // 先定义 parsedResult 和 parsedToolResult，因为后面的 computed 会用到

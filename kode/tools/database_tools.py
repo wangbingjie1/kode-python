@@ -1271,25 +1271,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 "domains": [
                     {
                         "name": d["name"],
-                        "table_count": d["table_count"],
-                    }
-                    for d in result["clustering_summary"]["domains"]
-                ],
-                "index_file": storage["domain_index_file"],
-            }
-        except Exception as e:
-            # 聚类失败不应该导致整个 schema 提取失败，返回警告信息
-            return {
-                "status": "warning",
-                "message": f"Schema clustering skipped: {str(e)}",
-                "note": "Schema extraction succeeded, but auto-clustering failed. You can manually cluster later."
-            }
-
-
-class DatabaseExecuteQueryTool(KodeTool):
-    """
-    Execute SQL queries on a database connection.
-
     Supports both read operations (SELECT) and write operations (INSERT/UPDATE/DELETE).
     Write operations require explicit permission confirmation.
     """

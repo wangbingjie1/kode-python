@@ -209,7 +209,7 @@ const spacingClass = computed(() => {
 })
 
 const md: MarkdownIt = new MarkdownIt({
-  html: false,
+  html: true,  // 启用 HTML 渲染支持（后端生成的可信 HTML）
   linkify: true,
   typographer: true,
   highlight: (str, lang) => {

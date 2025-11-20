@@ -95,12 +95,12 @@ class AnthropicStreamingAgent:
                 "description": tool.description,
             }
             # Add input schema if available
-            if hasattr(tool, 'args_schema') and tool.args_schema:
+            if hasattr(tool, "args_schema") and tool.args_schema:
                 schema = tool.args_schema.schema()
                 tool_schema["input_schema"] = {
                     "type": "object",
                     "properties": schema.get("properties", {}),
-                    "required": schema.get("required", [])
+                    "required": schema.get("required", []),
                 }
             anthropic_tools.append(tool_schema)
 
@@ -112,7 +112,7 @@ class AnthropicStreamingAgent:
         output_tokens: int,
         cache_creation_tokens: int,
         cache_read_tokens: int,
-        iteration: int
+        iteration: int,
     ) -> str:
         """
         Build context budget information for the agent.
@@ -144,11 +144,7 @@ class AnthropicStreamingAgent:
         usage_percentage = (total_tokens_used / context_limit) * 100 if context_limit > 0 else 0
 
         # Build budget info message
-        budget_lines = [
-            time_info,
-            "",
-            f"## 🔋你的剩余注意力百分比：{100 - usage_percentage:.1f}%"
-        ]
+        budget_lines = [time_info, "", f"## 🔋你的剩余注意力百分比：{100 - usage_percentage:.1f}%"]
 
         # Add warnings based on usage
         if usage_percentage >= 70:
@@ -162,7 +158,9 @@ class AnthropicStreamingAgent:
 
         return "\n".join(budget_lines)
 
-    def _trim_messages_for_context(self, messages: List[Dict], max_context_tokens: int = 150000) -> List[Dict]:
+    def _trim_messages_for_context(
+        self, messages: List[Dict], max_context_tokens: int = 150000
+    ) -> List[Dict]:
         """
         Trim messages to fit within token limit.
 
@@ -179,6 +177,7 @@ class AnthropicStreamingAgent:
         Returns:
             Trimmed list of messages
         """
+
         # Rough token estimation: 1 token ~= 4 characters
         def estimate_tokens(text: str) -> int:
             return len(str(text)) // 4
@@ -203,14 +202,18 @@ class AnthropicStreamingAgent:
             """Check if message contains tool_use blocks."""
             content = msg.get("content", "")
             if isinstance(content, list):
-                return any(isinstance(item, dict) and item.get("type") == "tool_use" for item in content)
+                return any(
+                    isinstance(item, dict) and item.get("type") == "tool_use" for item in content
+                )
             return False
 
         def has_tool_result(msg: Dict) -> bool:
             """Check if message contains tool_result blocks."""
             content = msg.get("content", "")
             if isinstance(content, list):
-                return any(isinstance(item, dict) and item.get("type") == "tool_result" for item in content)
+                return any(
+                    isinstance(item, dict) and item.get("type") == "tool_result" for item in content
+                )
             return False
 
         # Calculate total tokens
@@ -219,7 +222,9 @@ class AnthropicStreamingAgent:
         if total_tokens <= max_context_tokens:
             return messages
 
-        logger.warning(f"Context too large ({total_tokens} tokens), trimming to {max_context_tokens}")
+        logger.warning(
+            f"Context too large ({total_tokens} tokens), trimming to {max_context_tokens}"
+        )
 
         # Strategy: Keep recent messages, maintain tool_use/tool_result pairing
         trimmed = []
@@ -258,13 +263,22 @@ class AnthropicStreamingAgent:
                         # These are large JSON objects that should be summarized
                         try:
                             import json
+
                             result_data = json.loads(result_text)
 
                             # Check if this is a schema/ontology/uncertainty result
-                            is_large_data = any(key in result_data for key in [
-                                "schema", "ontology", "entities", "concepts",
-                                "relationships", "uncertainties", "domains"
-                            ])
+                            is_large_data = any(
+                                key in result_data
+                                for key in [
+                                    "schema",
+                                    "ontology",
+                                    "entities",
+                                    "concepts",
+                                    "relationships",
+                                    "uncertainties",
+                                    "domains",
+                                ]
+                            )
 
                             if is_large_data:
                                 # Create a summary instead of full content
@@ -275,7 +289,12 @@ class AnthropicStreamingAgent:
                                     summary["metadata"] = result_data["metadata"]
 
                                 # Add counts instead of full lists
-                                for key in ["entities", "concepts", "relationships", "uncertainties"]:
+                                for key in [
+                                    "entities",
+                                    "concepts",
+                                    "relationships",
+                                    "uncertainties",
+                                ]:
                                     if key in result_data:
                                         data = result_data[key]
                                         if isinstance(data, list):
@@ -290,14 +309,24 @@ class AnthropicStreamingAgent:
 
                                 # Replace with summary
                                 item["content"] = json.dumps(summary, ensure_ascii=False, indent=2)
-                                logger.info(f"Trimmed large data result: {len(result_text)} -> {len(item['content'])} chars")
+                                logger.info(
+                                    f"Trimmed large data result: {len(result_text)} -> {len(item['content'])} chars"
+                                )
                             elif len(result_text) > 2000:
                                 # Standard truncation for other long results
-                                item["content"] = result_text[:1000] + "\n...[truncated]...\n" + result_text[-500:]
+                                item["content"] = (
+                                    result_text[:1000]
+                                    + "\n...[truncated]...\n"
+                                    + result_text[-500:]
+                                )
                         except (json.JSONDecodeError, Exception):
                             # Not JSON or error parsing, use standard truncation
                             if len(result_text) > 2000:
-                                item["content"] = result_text[:1000] + "\n...[truncated]...\n" + result_text[-500:]
+                                item["content"] = (
+                                    result_text[:1000]
+                                    + "\n...[truncated]...\n"
+                                    + result_text[-500:]
+                                )
 
                         trimmed_content.append(item)
                     else:
@@ -309,9 +338,13 @@ class AnthropicStreamingAgent:
                 # If skipping a tool_use message, mark to skip corresponding tool_result
                 if has_tool_use(msg):
                     skip_next_tool_result = True
-                    logger.info(f"Skipping tool_use message (would exceed limit), will skip corresponding tool_result")
+                    logger.info(
+                        f"Skipping tool_use message (would exceed limit), will skip corresponding tool_result"
+                    )
                 else:
-                    logger.info(f"Skipping message (would exceed limit): role={msg.get('role')}, tokens={msg_tokens}")
+                    logger.info(
+                        f"Skipping message (would exceed limit): role={msg.get('role')}, tokens={msg_tokens}"
+                    )
                 continue
 
             trimmed.append(msg)
@@ -328,7 +361,9 @@ class AnthropicStreamingAgent:
             # Check if this tool_result has a corresponding tool_use
             if has_tool_result(msg):
                 if not last_had_tool_use:
-                    logger.warning(f"Removing orphaned tool_result message at position {len(validated)}")
+                    logger.warning(
+                        f"Removing orphaned tool_result message at position {len(validated)}"
+                    )
                     continue  # Skip orphaned tool_result
 
             # Check if this tool_use will have a corresponding tool_result
@@ -341,13 +376,17 @@ class AnthropicStreamingAgent:
                         has_following_result = True
 
                 if not has_following_result:
-                    logger.warning(f"Removing orphaned tool_use message at position {len(validated)}")
+                    logger.warning(
+                        f"Removing orphaned tool_use message at position {len(validated)}"
+                    )
                     continue  # Skip orphaned tool_use
 
             validated.append(msg)
             last_had_tool_use = has_tool_use(msg)
 
-        logger.info(f"Trimmed context: {len(messages)} -> {len(validated)} messages, {total_tokens} -> {current_tokens} tokens")
+        logger.info(
+            f"Trimmed context: {len(messages)} -> {len(validated)} messages, {total_tokens} -> {current_tokens} tokens"
+        )
         return validated
 
     async def stream_response(
@@ -392,7 +431,7 @@ class AnthropicStreamingAgent:
                 yield {
                     "type": "cancelled",
                     "content": "用户已终止响应",
-                    "metadata": {"iteration": iteration}
+                    "metadata": {"iteration": iteration},
                 }
                 raise asyncio.CancelledError("User cancelled the stream")
 
@@ -401,11 +440,13 @@ class AnthropicStreamingAgent:
                 try:
                     appended_msg = self.message_queue.get_nowait()
                     messages.append(appended_msg)
-                    logger.info(f"[Append] Appended user message: {appended_msg.get('content', '')[:50]}...")
+                    logger.info(
+                        f"[Append] Appended user message: {appended_msg.get('content', '')[:50]}..."
+                    )
                     yield {
                         "type": "message_appended",
                         "content": appended_msg.get("content", ""),
-                        "metadata": {"iteration": iteration}
+                        "metadata": {"iteration": iteration},
                     }
                 except asyncio.QueueEmpty:
                     pass
@@ -418,6 +459,7 @@ class AnthropicStreamingAgent:
             # Callback: iteration start
             if self.on_iteration:
                 import inspect
+
                 if inspect.iscoroutinefunction(self.on_iteration):
                     await self.on_iteration(iteration)
                 else:
@@ -427,17 +469,21 @@ class AnthropicStreamingAgent:
             # ⚠️ IMPORTANT: 不要修改 system prompt，否则会破坏缓存
             # 将 budget info 作为独立的 user message 注入
             context_budget_info = self._build_context_budget_info(
-                total_input_tokens, total_output_tokens,
-                total_cache_creation_tokens, total_cache_read_tokens,
-                iteration
+                total_input_tokens,
+                total_output_tokens,
+                total_cache_creation_tokens,
+                total_cache_read_tokens,
+                iteration,
             )
 
             # 在对话历史的最后插入 budget info（作为 user message）
             if context_budget_info.strip():
-                messages.append({
-                    "role": "user",
-                    "content": f"<system_info>\n{context_budget_info}\n</system_info>"
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"<system_info>\n{context_budget_info}\n</system_info>",
+                    }
+                )
 
             # ===== Prompt Caching Support =====
             # 使用 Anthropic 的 Prompt Caching 功能来缓存系统提示词和工具定义
@@ -448,7 +494,7 @@ class AnthropicStreamingAgent:
                 {
                     "type": "text",
                     "text": self.system_prompt,  # ← 保持静态，不注入动态内容
-                    "cache_control": {"type": "ephemeral"}  # 标记为可缓存
+                    "cache_control": {"type": "ephemeral"},  # 标记为可缓存
                 }
             ]
 
@@ -460,16 +506,20 @@ class AnthropicStreamingAgent:
 
             for retry_attempt in range(max_retries):
                 if retry_attempt > 0:
-                    delay = retry_delay_base ** retry_attempt
-                    logger.warning(f"[重试] 第 {retry_attempt}/{max_retries-1} 次重试，等待 {delay} 秒...")
+                    delay = retry_delay_base**retry_attempt
+                    logger.warning(
+                        f"[重试] 第 {retry_attempt}/{max_retries-1} 次重试，等待 {delay} 秒..."
+                    )
                     await asyncio.sleep(delay)
 
                 try:
-                        # Enable Extended Thinking if supported by the model
+                    # Enable Extended Thinking if supported by the model
                     # Note: temperature must be 1.0 when thinking is enabled
                     # Note: max_tokens must be greater than thinking.budget_tokens
                     thinking_budget = 5000  # Budget for thinking tokens
-                    output_tokens = max(self.max_tokens, thinking_budget + 4096)  # Ensure enough for output
+                    output_tokens = max(
+                        self.max_tokens, thinking_budget + 4096
+                    )  # Ensure enough for output
 
                     # ===== 请求内容日志 =====
                     logger.info(f"\n{'='*80}")
@@ -494,13 +544,15 @@ class AnthropicStreamingAgent:
                     # Token 组成估算
                     system_tokens = len(self.system_prompt) // 4
                     tools_tokens = sum(len(str(t)) for t in self.anthropic_tools) // 4
-                    history_tokens = sum(len(str(m.get('content', ''))) for m in messages) // 4
+                    history_tokens = sum(len(str(m.get("content", ""))) for m in messages) // 4
 
                     logger.info(f"\n[Token 组成估算]")
                     logger.info(f"  系统提示词: ~{system_tokens:,} tokens")
                     logger.info(f"  工具定义:   ~{tools_tokens:,} tokens")
                     logger.info(f"  对话历史:   ~{history_tokens:,} tokens")
-                    logger.info(f"  预计输入:   ~{system_tokens + tools_tokens + history_tokens:,} tokens")
+                    logger.info(
+                        f"  预计输入:   ~{system_tokens + tools_tokens + history_tokens:,} tokens"
+                    )
 
                     async with self.client.messages.stream(
                         model=self.model,
@@ -509,10 +561,7 @@ class AnthropicStreamingAgent:
                         system=system_with_cache,  # ← 使用缓存优化的系统提示词
                         messages=messages,
                         tools=self.anthropic_tools if self.anthropic_tools else anthropic.NOT_GIVEN,
-                        thinking={
-                            "type": "enabled",
-                            "budget_tokens": thinking_budget
-                        }
+                        thinking={"type": "enabled", "budget_tokens": thinking_budget},
                     ) as stream:
                         thinking_content = ""
                         is_thinking = False
@@ -520,52 +569,58 @@ class AnthropicStreamingAgent:
                         # Process streaming events
                         async for event in stream:
                             # Handle thinking blocks (Extended Thinking feature)
-                            if hasattr(event, 'type'):
-                                if event.type == 'content_block_start':
-                                    block = getattr(event, 'content_block', None)
+                            if hasattr(event, "type"):
+                                if event.type == "content_block_start":
+                                    block = getattr(event, "content_block", None)
                                     if block and isinstance(block, ThinkingBlock):
                                         is_thinking = True
                                         thinking_content = ""
                                         logger.info("[Thinking] Extended thinking started")
-                                elif event.type == 'content_block_delta':
-                                    delta = getattr(event, 'delta', None)
+                                elif event.type == "content_block_delta":
+                                    delta = getattr(event, "delta", None)
                                     if delta and isinstance(delta, ThinkingDelta):
                                         # Accumulate thinking content
-                                        thinking_text = getattr(delta, 'thinking', '')
+                                        thinking_text = getattr(delta, "thinking", "")
                                         thinking_content += thinking_text
                                         # Yield thinking chunks
                                         yield {
                                             "type": "thinking",
                                             "content": thinking_text,
-                                            "metadata": {"iteration": iteration, "is_delta": True}
+                                            "metadata": {"iteration": iteration, "is_delta": True},
                                         }
-                                    elif delta and hasattr(delta, 'type') and delta.type == 'text_delta':
+                                    elif (
+                                        delta
+                                        and hasattr(delta, "type")
+                                        and delta.type == "text_delta"
+                                    ):
                                         # Regular text content
-                                        text = getattr(delta, 'text', '')
+                                        text = getattr(delta, "text", "")
                                         if text:
                                             full_text += text
                                             yield {
                                                 "type": "chunk",
                                                 "content": text,
-                                                "metadata": {"iteration": iteration}
+                                                "metadata": {"iteration": iteration},
                                             }
-                                elif event.type == 'content_block_stop':
+                                elif event.type == "content_block_stop":
                                     if is_thinking:
                                         # Thinking block completed
                                         is_thinking = False
-                                        logger.info(f"[Thinking] Completed: {len(thinking_content)} chars")
+                                        logger.info(
+                                            f"[Thinking] Completed: {len(thinking_content)} chars"
+                                        )
 
                         # Get final message
                         final_message = await stream.get_final_message()
                         content_blocks = final_message.content
 
                         # Extract token usage from response
-                        usage = getattr(final_message, 'usage', None)
+                        usage = getattr(final_message, "usage", None)
                         if usage:
-                            input_tokens = getattr(usage, 'input_tokens', 0)
-                            output_tokens = getattr(usage, 'output_tokens', 0)
-                            cache_creation = getattr(usage, 'cache_creation_input_tokens', 0) or 0
-                            cache_read = getattr(usage, 'cache_read_input_tokens', 0) or 0
+                            input_tokens = getattr(usage, "input_tokens", 0)
+                            output_tokens = getattr(usage, "output_tokens", 0)
+                            cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
+                            cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
 
                             # Accumulate totals
                             total_input_tokens += input_tokens
@@ -582,7 +637,9 @@ class AnthropicStreamingAgent:
                             logger.info(f"\n本次 API 调用:")
                             logger.info(f"  输入 tokens:  {input_tokens:,}")
                             if cache_creation > 0:
-                                logger.info(f"    ├─ 缓存创建: {cache_creation:,} tokens (首次，1.25× 价格)")
+                                logger.info(
+                                    f"    ├─ 缓存创建: {cache_creation:,} tokens (首次，1.25× 价格)"
+                                )
                             if cache_read > 0:
                                 logger.info(f"    ├─ 缓存读取: {cache_read:,} tokens (节省 90%!)")
                             regular_input = input_tokens - cache_creation - cache_read
@@ -595,12 +652,16 @@ class AnthropicStreamingAgent:
                             logger.info(f"\n对话累计:")
                             logger.info(f"  累计输入:  {total_input_tokens:,} tokens")
                             logger.info(f"  累计输出:  {total_output_tokens:,} tokens")
-                            logger.info(f"  总计:      {total_input_tokens + total_output_tokens:,} tokens")
+                            logger.info(
+                                f"  总计:      {total_input_tokens + total_output_tokens:,} tokens"
+                            )
 
                             # 缓存效果
                             if cache_read > 0:
                                 savings_pct = (cache_read / input_tokens) * 90  # 90% 节省
-                                logger.info(f"\n缓存节省: ~{savings_pct:.1f}% (读取了 {cache_read:,} tokens)")
+                                logger.info(
+                                    f"\n缓存节省: ~{savings_pct:.1f}% (读取了 {cache_read:,} tokens)"
+                                )
 
                             logger.info(f"{'='*80}\n")
 
@@ -617,12 +678,20 @@ class AnthropicStreamingAgent:
                                 "content_blocks": [
                                     {
                                         "type": block.type,
-                                        "text": getattr(block, "text", None) if hasattr(block, "text") else None,
-                                        "tool_use": {
-                                            "id": block.id,
-                                            "name": block.name,
-                                            "input": block.input
-                                        } if isinstance(block, ToolUseBlock) else None
+                                        "text": (
+                                            getattr(block, "text", None)
+                                            if hasattr(block, "text")
+                                            else None
+                                        ),
+                                        "tool_use": (
+                                            {
+                                                "id": block.id,
+                                                "name": block.name,
+                                                "input": block.input,
+                                            }
+                                            if isinstance(block, ToolUseBlock)
+                                            else None
+                                        ),
                                     }
                                     for block in content_blocks
                                 ],
@@ -632,7 +701,7 @@ class AnthropicStreamingAgent:
                                     "output_tokens": output_tokens,
                                     "cache_creation_input_tokens": cache_creation,
                                     "cache_read_input_tokens": cache_read,
-                                }
+                                },
                             }
 
                             # Yield token usage event for this iteration
@@ -645,12 +714,12 @@ class AnthropicStreamingAgent:
                                     "output_tokens": output_tokens,
                                     "total_tokens": input_tokens + output_tokens,
                                     "cache_creation_input_tokens": cache_creation,
-                                "cache_read_input_tokens": cache_read,
-                                # 🔍 添加完整的请求和响应数据
-                                "request_data": request_data,
-                                "response_data": response_data,
+                                    "cache_read_input_tokens": cache_read,
+                                    # 🔍 添加完整的请求和响应数据
+                                    "request_data": request_data,
+                                    "response_data": response_data,
+                                },
                             }
-                        }
 
                     # 成功完成，跳出重试循环
                     break
@@ -658,12 +727,19 @@ class AnthropicStreamingAgent:
                 except (httpx.RemoteProtocolError, httpx.ReadError, httpx.ConnectError) as e:
                     # 网络错误：连接中断、读取错误等
                     from kode.utils.logger import safe_log_exception
+
                     error_message = str(e)
-                    safe_log_exception(logger, f"Network error on attempt {retry_attempt + 1}/{max_retries}: {error_message}", e)
+                    safe_log_exception(
+                        logger,
+                        f"Network error on attempt {retry_attempt + 1}/{max_retries}: {error_message}",
+                        e,
+                    )
 
                     # 如果还有重试次数，继续重试
                     if retry_attempt < max_retries - 1:
-                        logger.warning(f"[网络错误] 将在 {retry_delay_base ** (retry_attempt + 1)} 秒后重试...")
+                        logger.warning(
+                            f"[网络错误] 将在 {retry_delay_base ** (retry_attempt + 1)} 秒后重试..."
+                        )
                         continue
                     else:
                         # 最后一次重试也失败，返回错误
@@ -671,27 +747,27 @@ class AnthropicStreamingAgent:
                         yield {
                             "type": "error",
                             "content": f"网络连接失败（已重试 {max_retries} 次）: {error_message}",
-                            "metadata": {"error": error_message, "retries": max_retries}
+                            "metadata": {"error": error_message, "retries": max_retries},
                         }
                         return
 
                 except Exception as e:
                     # 其他非网络错误，直接失败不重试
                     from kode.utils.logger import safe_log_exception
+
                     error_message = str(e)
-                    safe_log_exception(logger, f"Error streaming from Anthropic: {error_message}", e)
+                    safe_log_exception(
+                        logger, f"Error streaming from Anthropic: {error_message}", e
+                    )
                     yield {
                         "type": "error",
                         "content": f"Error: {error_message}",
-                        "metadata": {"error": error_message}
+                        "metadata": {"error": error_message},
                     }
                     return
 
             # Add assistant message to history
-            messages.append({
-                "role": "assistant",
-                "content": content_blocks
-            })
+            messages.append({"role": "assistant", "content": content_blocks})
 
             # ✨ 按照 content_blocks 的原始顺序发送事件（保持文本和工具调用的顺序）
             tool_uses = []
@@ -703,7 +779,7 @@ class AnthropicStreamingAgent:
                         yield {
                             "type": "text_block",
                             "content": text_content,
-                            "metadata": {"iteration": iteration}
+                            "metadata": {"iteration": iteration},
                         }
                 elif isinstance(block, ToolUseBlock):
                     # 记录工具调用，稍后执行
@@ -716,8 +792,8 @@ class AnthropicStreamingAgent:
                             "tool_name": block.name,
                             "tool_use_id": block.id,
                             "status": "started",
-                            "args": block.input
-                        }
+                            "args": block.input,
+                        },
                     }
 
             if not tool_uses:
@@ -734,8 +810,8 @@ class AnthropicStreamingAgent:
                             "total_tokens": total_input_tokens + total_output_tokens,
                             "cache_creation_input_tokens": total_cache_creation_tokens,
                             "cache_read_input_tokens": total_cache_read_tokens,
-                        }
-                    }
+                        },
+                    },
                 }
                 return
 
@@ -754,6 +830,7 @@ class AnthropicStreamingAgent:
                 # Callback: tool start
                 if self.on_tool_start:
                     import inspect
+
                     if inspect.iscoroutinefunction(self.on_tool_start):
                         await self.on_tool_start(tool_name, tool_args)
                     else:
@@ -778,10 +855,15 @@ class AnthropicStreamingAgent:
                         result_data = None
                         try:
                             import json
+
                             result_data = json.loads(str(result))
-                            if isinstance(result_data, dict) and result_data.get("requires_user_input"):
+                            if isinstance(result_data, dict) and result_data.get(
+                                "requires_user_input"
+                            ):
                                 requires_user_input = True
-                                logger.info(f"[Tool '{tool_name}'] Requires user input - Agent will pause after this iteration")
+                                logger.info(
+                                    f"[Tool '{tool_name}'] Requires user input - Agent will pause after this iteration"
+                                )
                         except (json.JSONDecodeError, ValueError):
                             pass  # Result is not JSON, continue normally
 
@@ -795,8 +877,8 @@ class AnthropicStreamingAgent:
                                 "status": "completed",
                                 "tool_args": tool_args,
                                 "result": str(result),
-                                "requires_user_input": requires_user_input  # Pass to frontend
-                            }
+                                "requires_user_input": requires_user_input,  # Pass to frontend
+                            },
                         }
 
                         # ✨ 特殊处理：ChartGenerator 和 InsightGenerator 额外发送可视化事件
@@ -810,10 +892,12 @@ class AnthropicStreamingAgent:
                                         "content": chart_config,  # ECharts 配置对象
                                         "metadata": {
                                             "chart_type": result_data.get("chart_type"),
-                                            "data_summary": result_data.get("data_summary")
-                                        }
+                                            "data_summary": result_data.get("data_summary"),
+                                        },
                                     }
-                                    logger.info(f"[Chart] Generated {result_data.get('chart_type')} chart")
+                                    logger.info(
+                                        f"[Chart] Generated {result_data.get('chart_type')} chart"
+                                    )
 
                             # InsightGenerator 工具返回格式: {"success": true, "insights": [...]}
                             elif tool_name == "InsightGenerator" and result_data.get("success"):
@@ -823,37 +907,49 @@ class AnthropicStreamingAgent:
                                         "type": "insight",
                                         "content": insights_list,  # 洞察列表
                                         "metadata": {
-                                            "total_count": len(insights_list) if isinstance(insights_list, list) else 0,
-                                            "data_summary": result_data.get("data_summary")
-                                        }
+                                            "total_count": (
+                                                len(insights_list)
+                                                if isinstance(insights_list, list)
+                                                else 0
+                                            ),
+                                            "data_summary": result_data.get("data_summary"),
+                                        },
                                     }
-                                    logger.info(f"[Insight] Generated {len(insights_list)} insights")
+                                    logger.info(
+                                        f"[Insight] Generated {len(insights_list)} insights"
+                                    )
 
                         # Callback: tool end
                         if self.on_tool_end:
                             import inspect
+
                             if inspect.iscoroutinefunction(self.on_tool_end):
                                 await self.on_tool_end(tool_name, tool_args, result)
                             else:
                                 self.on_tool_end(tool_name, tool_args, result)
 
                         # Add tool result
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tool_use_id,
-                            "content": str(result),
-                        })
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tool_use_id,
+                                "content": str(result),
+                            }
+                        )
 
                         # Track tool call
-                        tool_calls_history.append({
-                            "name": tool_name,
-                            "args": tool_args,
-                            "result": str(result)[:500],
-                        })
+                        tool_calls_history.append(
+                            {
+                                "name": tool_name,
+                                "args": tool_args,
+                                "result": str(result)[:500],
+                            }
+                        )
 
                     except Exception as e:
                         # Special handling for UserInputRequired exception
                         from kode.exceptions import UserInputRequired
+
                         if isinstance(e, UserInputRequired):
                             logger.info(f"[User Input Required] {e.question}")
 
@@ -861,17 +957,24 @@ class AnthropicStreamingAgent:
                             # This allows POST /api/sse/chat/{conversation_id}/user-response to find it
                             try:
                                 from kode.web.api.sse import user_input_session_manager
+
                                 # conversation_id is passed via _current_conversation_id attribute
-                                conversation_id = getattr(self, '_current_conversation_id', None)
+                                conversation_id = getattr(self, "_current_conversation_id", None)
                                 if conversation_id:
                                     user_input_session_manager.register_pending_input(
                                         conversation_id, e.tool_instance
                                     )
-                                    logger.info(f"[User Input] Registered pending input for conversation {conversation_id}")
+                                    logger.info(
+                                        f"[User Input] Registered pending input for conversation {conversation_id}"
+                                    )
                                 else:
-                                    logger.warning("[User Input] No conversation_id available for registration")
+                                    logger.warning(
+                                        "[User Input] No conversation_id available for registration"
+                                    )
                             except ImportError:
-                                logger.warning("[User Input] Could not import user_input_session_manager")
+                                logger.warning(
+                                    "[User Input] Could not import user_input_session_manager"
+                                )
 
                             # Yield special SSE event for user input
                             yield {
@@ -881,11 +984,11 @@ class AnthropicStreamingAgent:
                                     "tool_name": tool_name,
                                     "tool_use_id": tool_use_id,
                                     "question_data": e.to_dict(),
-                                }
+                                },
                             }
 
                             # Wait for user response (tool instance has _wait_for_response method)
-                            if hasattr(e.tool_instance, '_wait_for_response'):
+                            if hasattr(e.tool_instance, "_wait_for_response"):
                                 try:
                                     user_answer = await e.tool_instance._wait_for_response()
                                     logger.info(f"[User Input Received] {user_answer}")
@@ -897,23 +1000,27 @@ class AnthropicStreamingAgent:
                                         "metadata": {
                                             "tool_name": tool_name,
                                             "question": e.question,
-                                        }
+                                        },
                                     }
 
                                     # Add user answer as tool result
-                                    tool_results.append({
-                                        "type": "tool_result",
-                                        "tool_use_id": tool_use_id,
-                                        "content": user_answer,
-                                    })
+                                    tool_results.append(
+                                        {
+                                            "type": "tool_result",
+                                            "tool_use_id": tool_use_id,
+                                            "content": user_answer,
+                                        }
+                                    )
 
                                     # Track in history
-                                    tool_calls_history.append({
-                                        "name": tool_name,
-                                        "args": tool_args,
-                                        "result": user_answer[:500],
-                                        "user_interaction": True,
-                                    })
+                                    tool_calls_history.append(
+                                        {
+                                            "name": tool_name,
+                                            "args": tool_args,
+                                            "result": user_answer[:500],
+                                            "user_interaction": True,
+                                        }
+                                    )
 
                                     # Continue to next tool
                                     continue
@@ -929,22 +1036,26 @@ class AnthropicStreamingAgent:
                                             "tool_name": tool_name,
                                             "tool_use_id": tool_use_id,
                                             "status": "error",
-                                            "error": error_msg
-                                        }
+                                            "error": error_msg,
+                                        },
                                     }
 
-                                    tool_results.append({
-                                        "type": "tool_result",
-                                        "tool_use_id": tool_use_id,
-                                        "content": error_msg,
-                                        "is_error": True,
-                                    })
+                                    tool_results.append(
+                                        {
+                                            "type": "tool_result",
+                                            "tool_use_id": tool_use_id,
+                                            "content": error_msg,
+                                            "is_error": True,
+                                        }
+                                    )
 
-                                    tool_calls_history.append({
-                                        "name": tool_name,
-                                        "args": tool_args,
-                                        "error": error_msg,
-                                    })
+                                    tool_calls_history.append(
+                                        {
+                                            "name": tool_name,
+                                            "args": tool_args,
+                                            "error": error_msg,
+                                        }
+                                    )
                                     continue
 
                         # Regular exception handling
@@ -960,22 +1071,26 @@ class AnthropicStreamingAgent:
                                 "tool_use_id": tool_use_id,
                                 "status": "error",
                                 "tool_args": tool_args,
-                                "error": str(e)
-                            }
+                                "error": str(e),
+                            },
                         }
 
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tool_use_id,
-                            "content": error_msg,
-                            "is_error": True,
-                        })
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tool_use_id,
+                                "content": error_msg,
+                                "is_error": True,
+                            }
+                        )
 
-                        tool_calls_history.append({
-                            "name": tool_name,
-                            "args": tool_args,
-                            "error": str(e),
-                        })
+                        tool_calls_history.append(
+                            {
+                                "name": tool_name,
+                                "args": tool_args,
+                                "error": str(e),
+                            }
+                        )
                 else:
                     error_msg = f"Tool '{tool_name}' not found"
                     logger.error(error_msg)
@@ -988,22 +1103,21 @@ class AnthropicStreamingAgent:
                             "tool_name": tool_name,
                             "tool_use_id": tool_use_id,
                             "status": "error",
-                            "error": error_msg
-                        }
+                            "error": error_msg,
+                        },
                     }
 
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use_id,
-                        "content": error_msg,
-                        "is_error": True,
-                    })
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": error_msg,
+                            "is_error": True,
+                        }
+                    )
 
             # Add tool results to messages
-            messages.append({
-                "role": "user",
-                "content": tool_results
-            })
+            messages.append({"role": "user", "content": tool_results})
 
             # 🔥 不需要检查 requires_user_input，让工具循环继续
             # Agent 会自动等待用户提交答案（前端会发送新消息）
@@ -1025,6 +1139,6 @@ class AnthropicStreamingAgent:
                     "total_tokens": total_input_tokens + total_output_tokens,
                     "cache_creation_input_tokens": total_cache_creation_tokens,
                     "cache_read_input_tokens": total_cache_read_tokens,
-                }
-            }
+                },
+            },
         }
