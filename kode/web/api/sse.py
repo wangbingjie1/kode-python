@@ -36,9 +36,10 @@ def serialize_chunk(chunk: Dict[str, Any]) -> Dict[str, Any]:
 
     主要处理 Anthropic SDK 返回的特殊对象如 ThinkingBlock, ToolUseBlock 等。
     """
+
     def convert_value(v):
         # 处理 Anthropic SDK 对象（有 model_dump 方法）
-        if hasattr(v, 'model_dump'):
+        if hasattr(v, "model_dump"):
             return v.model_dump()
         # 处理字典
         elif isinstance(v, dict):
@@ -63,13 +64,16 @@ class UserInputSessionManager:
     当 Agent 调用 AskUserTool 时，会在这里注册等待的工具实例。
     前端通过 POST 端点提交答案后，通过此管理器注入响应。
     """
+
     def __init__(self):
         self._pending_sessions: Dict[str, Any] = {}  # conversation_id -> tool_instance
 
     def register_pending_input(self, conversation_id: str, tool_instance: Any):
         """注册等待用户输入的会话"""
         self._pending_sessions[conversation_id] = tool_instance
-        logger.info(f"[UserInputSession] Registered pending input for conversation {conversation_id}")
+        logger.info(
+            f"[UserInputSession] Registered pending input for conversation {conversation_id}"
+        )
 
     def get_pending_input(self, conversation_id: str) -> Optional[Any]:
         """获取等待中的工具实例"""
@@ -79,9 +83,13 @@ class UserInputSessionManager:
         """移除已完成的会话"""
         if conversation_id in self._pending_sessions:
             del self._pending_sessions[conversation_id]
-            logger.info(f"[UserInputSession] Removed pending input for conversation {conversation_id}")
+            logger.info(
+                f"[UserInputSession] Removed pending input for conversation {conversation_id}"
+            )
 
-    async def submit_user_response(self, conversation_id: str, response_data: Dict[str, Any]) -> bool:
+    async def submit_user_response(
+        self, conversation_id: str, response_data: Dict[str, Any]
+    ) -> bool:
         """
         提交用户响应到等待中的工具实例。
 
@@ -90,16 +98,20 @@ class UserInputSessionManager:
         """
         tool_instance = self.get_pending_input(conversation_id)
         if not tool_instance:
-            logger.warning(f"[UserInputSession] No pending input found for conversation {conversation_id}")
+            logger.warning(
+                f"[UserInputSession] No pending input found for conversation {conversation_id}"
+            )
             return False
 
         # Inject response into tool instance
-        if hasattr(tool_instance, '_set_user_response'):
+        if hasattr(tool_instance, "_set_user_response"):
             await tool_instance._set_user_response(response_data)
             self.remove_pending_input(conversation_id)
             return True
         else:
-            logger.error(f"[UserInputSession] Tool instance does not have _set_user_response method")
+            logger.error(
+                f"[UserInputSession] Tool instance does not have _set_user_response method"
+            )
             return False
 
 
@@ -116,10 +128,13 @@ class StreamingSessionManager:
 
     支持终止正在进行的流式响应和追加新消息。
     """
+
     def __init__(self):
         self._active_sessions: Dict[str, Dict[str, Any]] = {}  # conversation_id -> session_data
 
-    def register_session(self, conversation_id: str, cancel_event: asyncio.Event, message_queue: asyncio.Queue):
+    def register_session(
+        self, conversation_id: str, cancel_event: asyncio.Event, message_queue: asyncio.Queue
+    ):
         """注册一个活跃的streaming会话"""
         self._active_sessions[conversation_id] = {
             "cancel_event": cancel_event,
@@ -147,7 +162,9 @@ class StreamingSessionManager:
         """
         session = self.get_session(conversation_id)
         if not session:
-            logger.warning(f"[StreamingSession] No active session found for conversation {conversation_id}")
+            logger.warning(
+                f"[StreamingSession] No active session found for conversation {conversation_id}"
+            )
             return False
 
         # Set cancel event
@@ -169,15 +186,19 @@ class StreamingSessionManager:
         """
         session = self.get_session(conversation_id)
         if not session:
-            logger.warning(f"[StreamingSession] No active session found for conversation {conversation_id}")
+            logger.warning(
+                f"[StreamingSession] No active session found for conversation {conversation_id}"
+            )
             return False
 
         # Put message into queue
         message_queue = session["message_queue"]
-        await message_queue.put({
-            "role": "user",
-            "content": message,
-        })
+        await message_queue.put(
+            {
+                "role": "user",
+                "content": message,
+            }
+        )
         logger.info(f"[StreamingSession] Appended message to conversation {conversation_id}")
         return True
 
@@ -191,6 +212,7 @@ streaming_session_manager = StreamingSessionManager()
 # ============================================================
 class UserInputResponse(BaseModel):
     """用户输入响应模型"""
+
     answer: Any  # 可以是 str, bool, list[str] 等
     question_type: str = "text"  # text, select, multiselect, confirm
 
@@ -270,11 +292,14 @@ async def event_generator(
 
     # 如果有新标题，先发送标题更新事件
     if new_title:
-        title_update_data = json.dumps({
-            "type": "title_updated",
-            "content": new_title,
-            "metadata": {"conversation_id": conversation_id}
-        }, ensure_ascii=False)
+        title_update_data = json.dumps(
+            {
+                "type": "title_updated",
+                "content": new_title,
+                "metadata": {"conversation_id": conversation_id},
+            },
+            ensure_ascii=False,
+        )
         yield f"data: {title_update_data}\n\n"
         logger.info(f"[SSE] Sent title update: {new_title}")
 
@@ -311,7 +336,7 @@ async def event_generator(
             message_queue=message_queue,  # ← 传入消息队列
         ):
             # Format as SSE event
-            chunk_type = chunk.get('type')
+            chunk_type = chunk.get("type")
             logger.info(f"[SSE] Sending chunk: type={chunk_type}")
 
             # Handle user_input_required event (special case)
@@ -337,7 +362,7 @@ async def event_generator(
             # ✨ 收集真实的 token 统计（来自 Anthropic API）
             if chunk_type == "token_usage":
                 metadata = chunk.get("metadata", {})
-                iteration_num = metadata.get('iteration', 1)
+                iteration_num = metadata.get("iteration", 1)
 
                 # 累加总量
                 total_input_tokens += metadata.get("input_tokens", 0)
@@ -357,7 +382,7 @@ async def event_generator(
                 trace = api_trace_service.create_trace(
                     conversation_id=conversation_id,
                     user_id=user_id,
-                    model_name=metadata.get('model', 'claude-sonnet-4-5'),
+                    model_name=metadata.get("model", "claude-sonnet-4-5"),
                     iteration=iteration_num,
                 )
                 trace.set_token_usage(
@@ -376,19 +401,19 @@ async def event_generator(
                     )
 
                 # 🔍 设置完整的请求和响应内容
-                request_data = metadata.get('request_data')
-                response_data = metadata.get('response_data')
+                request_data = metadata.get("request_data")
+                response_data = metadata.get("response_data")
                 if request_data:
                     trace.set_request_content(
-                        system_prompt=request_data.get('system', ''),
-                        messages=request_data.get('messages', []),
-                        tools=request_data.get('tools', [])
+                        system_prompt=request_data.get("system", ""),
+                        messages=request_data.get("messages", []),
+                        tools=request_data.get("tools", []),
                     )
                 if response_data:
                     trace.set_response_content(
-                        content=response_data.get('content', ''),
-                        stop_reason=response_data.get('stop_reason', ''),
-                        usage=response_data.get('usage', {})
+                        content=response_data.get("content", ""),
+                        stop_reason=response_data.get("stop_reason", ""),
+                        usage=response_data.get("usage", {}),
                     )
 
                 api_traces.append(trace)
@@ -408,7 +433,7 @@ async def event_generator(
                         message_metadata={
                             "type": "text",  # 标记为文本块
                             "iteration": current_iteration,
-                        }
+                        },
                     )
                     all_messages.append(text_msg)
                     logger.info(f"[SSE] Text block saved at sequence {message_sequence}")
@@ -425,32 +450,38 @@ async def event_generator(
             elif chunk_type == "chart":
                 if "charts" not in assistant_metadata:
                     assistant_metadata["charts"] = []
-                assistant_metadata["charts"].append({
-                    "chart_type": chunk.get("metadata", {}).get("chart_type"),
-                    "chart_config": chunk.get("content"),  # ECharts config
-                    "data_summary": chunk.get("metadata", {}).get("data_summary")
-                })
+                assistant_metadata["charts"].append(
+                    {
+                        "chart_type": chunk.get("metadata", {}).get("chart_type"),
+                        "chart_config": chunk.get("content"),  # ECharts config
+                        "data_summary": chunk.get("metadata", {}).get("data_summary"),
+                    }
+                )
                 logger.info(f"[SSE] Collected chart data into metadata")
 
             # Collect insight data into metadata (NOT as separate message)
             elif chunk_type == "insight":
                 if "insights" not in assistant_metadata:
                     assistant_metadata["insights"] = []
-                assistant_metadata["insights"].append({
-                    "insights": chunk.get("content"),  # List of insights
-                    "total_count": chunk.get("metadata", {}).get("total_count"),
-                    "data_summary": chunk.get("metadata", {}).get("data_summary")
-                })
+                assistant_metadata["insights"].append(
+                    {
+                        "insights": chunk.get("content"),  # List of insights
+                        "total_count": chunk.get("metadata", {}).get("total_count"),
+                        "data_summary": chunk.get("metadata", {}).get("data_summary"),
+                    }
+                )
                 logger.info(f"[SSE] Collected insight data into metadata")
 
             # 📝 保存工具调用消息到列表（稍后批量保存到数据库）
-            if chunk_type == 'tool_call':
-                metadata = chunk.get('metadata', {})
-                tool_name = metadata.get('tool_name')
-                tool_args = metadata.get('args', {})
-                tool_use_id = metadata.get('tool_use_id')
+            if chunk_type == "tool_call":
+                metadata = chunk.get("metadata", {})
+                tool_name = metadata.get("tool_name")
+                tool_args = metadata.get("args", {})
+                tool_use_id = metadata.get("tool_use_id")
 
-                logger.info(f"[SSE] Tool call: name={tool_name}, id={tool_use_id}, status={metadata.get('status')}")
+                logger.info(
+                    f"[SSE] Tool call: name={tool_name}, id={tool_use_id}, status={metadata.get('status')}"
+                )
                 logger.info(f"[SSE] Tool args: {tool_args}")
 
                 # 创建 tool_use 消息
@@ -466,18 +497,58 @@ async def event_generator(
                         "tool_name": tool_name,
                         "tool_args": tool_args,
                         "iteration": current_iteration,
-                    }
+                    },
                 )
                 all_messages.append(tool_use_msg)
 
-            elif chunk_type == 'tool_result':
-                metadata = chunk.get('metadata', {})
-                tool_name = metadata.get('tool_name')
-                tool_use_id = metadata.get('tool_use_id')
-                result = metadata.get('result', '')
+            # 📝 保存用户输入响应消息（当用户回答问题后）
+            elif chunk_type == "user_input_received":
+                metadata = chunk.get("metadata", {})
+                user_answer = chunk.get("content", "")
+
+                # 格式化 user_answer 为可读文本
+                if isinstance(user_answer, dict):
+                    # 如果是批量问答格式 {"answers": {...}}
+                    if "answers" in user_answer:
+                        answer_count = len(user_answer["answers"])
+                        answer_text = f"已提交 {answer_count} 个问题的回答"
+                    else:
+                        answer_text = str(user_answer)
+                elif isinstance(user_answer, str):
+                    answer_text = user_answer
+                else:
+                    answer_text = str(user_answer)
+
+                logger.info(
+                    f"[SSE] User input received: {answer_text[:100]}"
+                )
+
+                # 创建 user 消息记录用户的回答
+                message_sequence += 1
+                user_answer_msg = Message(
+                    conversation_id=conversation_id,
+                    role="user",
+                    content=f"回答: {answer_text}",
+                    sequence=message_sequence,
+                    message_metadata={
+                        "type": "user_answer",
+                        "tool_name": metadata.get("tool_name"),
+                        "question": metadata.get("question"),
+                        "iteration": current_iteration,
+                    },
+                )
+                all_messages.append(user_answer_msg)
+
+            elif chunk_type == "tool_result":
+                metadata = chunk.get("metadata", {})
+                tool_name = metadata.get("tool_name")
+                tool_use_id = metadata.get("tool_use_id")
+                result = metadata.get("result", "")
                 result_preview = str(result)[:200]
 
-                logger.info(f"[SSE] Tool result: name={tool_name}, id={tool_use_id}, status={metadata.get('status')}")
+                logger.info(
+                    f"[SSE] Tool result: name={tool_name}, id={tool_use_id}, status={metadata.get('status')}"
+                )
                 logger.info(f"[SSE] Tool result preview: {result_preview}")
 
                 # 创建 tool_result 消息
@@ -491,10 +562,10 @@ async def event_generator(
                         "type": "tool_result",
                         "tool_use_id": tool_use_id,  # ← 保存 tool_use_id，用于关联
                         "tool_name": tool_name,
-                        "tool_args": metadata.get('tool_args', {}),
-                        "status": metadata.get('status', 'completed'),
+                        "tool_args": metadata.get("tool_args", {}),
+                        "status": metadata.get("status", "completed"),
                         "iteration": current_iteration,
-                    }
+                    },
                 )
                 all_messages.append(tool_result_msg)
 
@@ -534,7 +605,7 @@ async def event_generator(
                     sequence=message_sequence,
                     message_metadata={
                         "type": "final",  # 标记为最终统计消息
-                        **assistant_metadata  # Contains charts, insights, etc.
+                        **assistant_metadata,  # Contains charts, insights, etc.
                     },
                     input_tokens=total_input_tokens,
                     output_tokens=total_output_tokens,
@@ -554,16 +625,24 @@ async def event_generator(
 
             # 💰 计算真实成本（Anthropic 定价，< 200K tokens）
             # 参考: https://www.anthropic.com/pricing
-            regular_input_tokens = total_input_tokens - total_cache_creation_tokens - total_cache_read_tokens
+            regular_input_tokens = (
+                total_input_tokens - total_cache_creation_tokens - total_cache_read_tokens
+            )
             regular_input_cost = regular_input_tokens * 3 / 1_000_000  # $3/MTok
-            cache_creation_cost = total_cache_creation_tokens * 3.75 / 1_000_000  # $3.75/MTok (1.25×)
+            cache_creation_cost = (
+                total_cache_creation_tokens * 3.75 / 1_000_000
+            )  # $3.75/MTok (1.25×)
             cache_read_cost = total_cache_read_tokens * 0.30 / 1_000_000  # $0.30/MTok (节省90%)
             output_cost = total_output_tokens * 15 / 1_000_000  # $15/MTok
 
             actual_cost = regular_input_cost + cache_creation_cost + cache_read_cost + output_cost
 
             # 计算无缓存的成本（对比）
-            no_cache_input_cost = (regular_input_tokens + total_cache_creation_tokens + total_cache_read_tokens) * 3 / 1_000_000
+            no_cache_input_cost = (
+                (regular_input_tokens + total_cache_creation_tokens + total_cache_read_tokens)
+                * 3
+                / 1_000_000
+            )
             no_cache_cost = no_cache_input_cost + output_cost
 
             # 节省的成本和百分比
@@ -608,7 +687,9 @@ async def event_generator(
                     # 使用异步保存（当前在 async 上下文中，db 是异步会话）
                     await api_trace_service.save_trace_async(trace, db)
 
-                logger.info(f"[API Trace] Saved {len(api_traces)} trace records to database for conversation {conversation_id}")
+                logger.info(
+                    f"[API Trace] Saved {len(api_traces)} trace records to database for conversation {conversation_id}"
+                )
 
             except Exception as e:
                 # 使用量更新失败不应该影响主流程
@@ -620,23 +701,30 @@ async def event_generator(
     except asyncio.CancelledError:
         # 用户主动取消了streaming
         logger.info(f"[SSE] Streaming cancelled by user for conversation {conversation_id}")
-        cancel_data = json.dumps({
-            "type": "cancelled",
-            "content": "用户已终止响应",
-            "metadata": {"reason": "user_cancelled"}
-        }, ensure_ascii=False)
+        cancel_data = json.dumps(
+            {
+                "type": "cancelled",
+                "content": "用户已终止响应",
+                "metadata": {"reason": "user_cancelled"},
+            },
+            ensure_ascii=False,
+        )
         yield f"data: {cancel_data}\n\n"
 
     except Exception as e:
         from kode.utils.logger import safe_log_exception
+
         error_message = str(e)
         safe_log_exception(logger, f"Error in SSE stream: {error_message}", e)
 
-        error_data = json.dumps({
-            "type": "error",
-            "content": f"Error: {error_message}",
-            "metadata": {"error": error_message}
-        }, ensure_ascii=False)
+        error_data = json.dumps(
+            {
+                "type": "error",
+                "content": f"Error: {error_message}",
+                "metadata": {"error": error_message},
+            },
+            ensure_ascii=False,
+        )
         yield f"data: {error_data}\n\n"
 
     finally:
@@ -678,123 +766,109 @@ async def stream_chat(
     await check_user_quota(current_user.id, db)
 
     # Verify conversation exists
-    result = await db.execute(
-        select(Conversation).where(Conversation.id == conversation_id)
-    )
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalar_one_or_none()
 
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found"
+            detail=f"Conversation {conversation_id} not found",
         )
 
     if not task:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Task parameter is required"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Task parameter is required"
         )
 
     # Load conversation history (last 100 messages for context, to include tool calls)
     messages_result = await db.execute(
         select(Message)
         .where(Message.conversation_id == conversation_id)
-        .order_by(Message.created_at)
+        .order_by(Message.sequence)
         .limit(100)
     )
     messages = messages_result.scalars().all()
 
     # Convert to Anthropic API chat history format
     # 需要重建包含 tool_use 和 tool_result 的完整消息流
+    # Convert to Anthropic API chat history format
+    # 需要重建包含 tool_use 和 tool_result 的完整消息流
     chat_history = []
-    current_assistant_blocks = []  # 收集当前 assistant 消息的 content blocks
+    current_assistant_content = []  # List of blocks for current assistant message
 
     for msg in messages:
         msg_type = msg.message_metadata.get("type") if msg.message_metadata else None
 
-        if msg_type == "tool_use":
-            # 这是一个工具调用，添加到当前 assistant 的 content blocks
+        # 1. Handle Tool Result (User Role)
+        if msg_type == "tool_result":
+            # Flush pending assistant content first
+            if current_assistant_content:
+                chat_history.append({"role": "assistant", "content": current_assistant_content})
+                current_assistant_content = []
+
+            # Add tool result message
             tool_use_id = msg.message_metadata.get("tool_use_id")
+            if tool_use_id and isinstance(tool_use_id, str):
+                chat_history.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tool_use_id,
+                                "content": msg.content or "",
+                            }
+                        ],
+                    }
+                )
+            else:
+                logger.warning(
+                    f"Invalid tool_use_id in tool_result message {msg.id}: {tool_use_id}, skipping"
+                )
 
-            # ⚠️ 校验 tool_use_id 必须存在且为字符串（Anthropic API 强制要求）
-            if not tool_use_id or not isinstance(tool_use_id, str):
-                logger.warning(f"Invalid tool_use_id in message {msg.id}: {tool_use_id}, skipping tool_use block")
-                continue
-
-            tool_use_block = {
-                "type": "tool_use",
-                "id": tool_use_id,  # 使用保存的 tool_use_id
-                "name": msg.message_metadata.get("tool_name"),
-                "input": msg.message_metadata.get("tool_args", {}),
-            }
-            current_assistant_blocks.append(tool_use_block)
-
-        elif msg_type == "tool_result":
-            # 先提交之前积累的 assistant 消息（如果有）
-            if current_assistant_blocks:
-                chat_history.append({
-                    "role": "assistant",
-                    "content": current_assistant_blocks
-                })
-                current_assistant_blocks = []
-
-            # 添加 tool_result 消息（作为 user 角色）
-            tool_use_id = msg.message_metadata.get("tool_use_id")
-
-            # ⚠️ 校验 tool_use_id 必须存在且为字符串（Anthropic API 强制要求）
-            if not tool_use_id or not isinstance(tool_use_id, str):
-                logger.warning(f"Invalid tool_use_id in tool_result message {msg.id}: {tool_use_id}, skipping")
-                continue
-
-            chat_history.append({
-                "role": "user",
-                "content": [{
-                    "type": "tool_result",
-                    "tool_use_id": tool_use_id,  # 使用保存的 tool_use_id 关联
-                    "content": msg.content or "",
-                }]
-            })
-
+        # 2. Handle Assistant Messages (Text or Tool Use)
         elif msg.role == "assistant":
-            # 先提交之前积累的 assistant blocks（如果有）
-            if current_assistant_blocks:
-                chat_history.append({
-                    "role": "assistant",
-                    "content": current_assistant_blocks
-                })
-                current_assistant_blocks = []
+            if msg_type == "tool_use":
+                # Tool Use Block
+                tool_use_id = msg.message_metadata.get("tool_use_id")
+                if tool_use_id and isinstance(tool_use_id, str):
+                    current_assistant_content.append(
+                        {
+                            "type": "tool_use",
+                            "id": tool_use_id,
+                            "name": msg.message_metadata.get("tool_name"),
+                            "input": msg.message_metadata.get("tool_args", {}),
+                        }
+                    )
+                else:
+                    logger.warning(
+                        f"Invalid tool_use_id in message {msg.id}: {tool_use_id}, skipping tool_use block"
+                    )
+            elif msg_type == "final":
+                # Skip final stats message (it has no content)
+                pass
+            else:
+                # Text Block (default)
+                if msg.content:
+                    current_assistant_content.append({"type": "text", "text": msg.content})
 
-            # 普通的 assistant 文本消息
-            if msg.content:
-                chat_history.append({
-                    "role": "assistant",
-                    "content": msg.content
-                })
-
+        # 3. Handle User Messages (Text)
         elif msg.role == "user":
-            # 先提交之前积累的 assistant blocks（如果有）
-            if current_assistant_blocks:
-                chat_history.append({
-                    "role": "assistant",
-                    "content": current_assistant_blocks
-                })
-                current_assistant_blocks = []
+            # Flush pending assistant content first
+            if current_assistant_content:
+                chat_history.append({"role": "assistant", "content": current_assistant_content})
+                current_assistant_content = []
 
-            # 普通的 user 消息（排除已经处理的 tool_result）
-            if msg_type != "tool_result" and msg.content:
-                chat_history.append({
-                    "role": "user",
-                    "content": msg.content
-                })
+            if msg.content:
+                chat_history.append({"role": "user", "content": msg.content})
 
-    # 提交剩余的 assistant blocks
-    if current_assistant_blocks:
-        chat_history.append({
-            "role": "assistant",
-            "content": current_assistant_blocks
-        })
+    # Flush remaining assistant content
+    if current_assistant_content:
+        chat_history.append({"role": "assistant", "content": current_assistant_content})
 
-    logger.info(f"Loaded {len(messages)} raw messages, converted to {len(chat_history)} Anthropic API messages")
+    logger.info(
+        f"Loaded {len(messages)} raw messages, converted to {len(chat_history)} Anthropic API messages"
+    )
 
     # Create conversation service
     conversation_service = AsyncConversationService()
@@ -812,7 +886,7 @@ async def stream_chat(
         role="user",
         content=task,
         sequence=next_seq,
-        message_metadata={"database_name": database_name} if database_name else None
+        message_metadata={"database_name": database_name} if database_name else None,
     )
     db.add(user_message)
     await db.commit()
@@ -848,7 +922,7 @@ async def stream_chat(
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Disable nginx buffering
-        }
+        },
     )
 
 
@@ -868,22 +942,17 @@ async def send_message_sse(
     Returns SSE stream same as GET endpoint.
     """
     # Verify conversation exists
-    result = await db.execute(
-        select(Conversation).where(Conversation.id == conversation_id)
-    )
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalar_one_or_none()
 
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found"
+            detail=f"Conversation {conversation_id} not found",
         )
 
     if not task:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Task is required"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task is required")
 
     # Create conversation service
     conversation_service = AsyncConversationService()
@@ -896,7 +965,7 @@ async def send_message_sse(
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
-        }
+        },
     )
 
 
@@ -939,15 +1008,13 @@ async def submit_user_response(
     7. Agent 继续执行
     """
     # Verify conversation exists and user has access
-    result = await db.execute(
-        select(Conversation).where(Conversation.id == conversation_id)
-    )
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalar_one_or_none()
 
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found"
+            detail=f"Conversation {conversation_id} not found",
         )
 
     # TODO: Verify user owns this conversation (add owner_id to Conversation model)
@@ -956,14 +1023,13 @@ async def submit_user_response(
     logger.info(f"[User Response] Received for conversation {conversation_id}: {response.dict()}")
 
     success = await user_input_session_manager.submit_user_response(
-        conversation_id,
-        response.dict()
+        conversation_id, response.dict()
     )
 
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No pending user input found for this conversation. The question may have already timed out."
+            detail="No pending user input found for this conversation. The question may have already timed out.",
         )
 
     logger.info(f"[User Response] Successfully submitted for conversation {conversation_id}")
@@ -998,15 +1064,13 @@ async def cancel_streaming(
     ```
     """
     # Verify conversation exists and user has access
-    result = await db.execute(
-        select(Conversation).where(Conversation.id == conversation_id)
-    )
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalar_one_or_none()
 
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found"
+            detail=f"Conversation {conversation_id} not found",
         )
 
     # Cancel the streaming session
@@ -1014,8 +1078,7 @@ async def cancel_streaming(
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="没有找到活跃的streaming会话"
+            status_code=status.HTTP_404_NOT_FOUND, detail="没有找到活跃的streaming会话"
         )
 
     logger.info(f"[Cancel] Successfully cancelled streaming for conversation {conversation_id}")
@@ -1029,6 +1092,7 @@ async def cancel_streaming(
 
 class AppendMessageRequest(BaseModel):
     """追加消息请求模型"""
+
     content: str = Field(..., description="要追加的消息内容")
 
 
@@ -1065,27 +1129,21 @@ async def append_message_to_stream(
     **注意**: 追加的消息会在AI完成当前工具调用后被处理
     """
     # Verify conversation exists and user has access
-    result = await db.execute(
-        select(Conversation).where(Conversation.id == conversation_id)
-    )
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalar_one_or_none()
 
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found"
+            detail=f"Conversation {conversation_id} not found",
         )
 
     # Append message to the streaming session
-    success = await streaming_session_manager.append_message(
-        conversation_id,
-        request.content
-    )
+    success = await streaming_session_manager.append_message(conversation_id, request.content)
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="没有找到活跃的streaming会话"
+            status_code=status.HTTP_404_NOT_FOUND, detail="没有找到活跃的streaming会话"
         )
 
     # Save appended message to database
@@ -1093,7 +1151,7 @@ async def append_message_to_stream(
         conversation_id=conversation_id,
         role="user",
         content=request.content,
-        message_metadata={"appended": True}
+        message_metadata={"appended": True},
     )
     db.add(appended_message)
     await db.commit()

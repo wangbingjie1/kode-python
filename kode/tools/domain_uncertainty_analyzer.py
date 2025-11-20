@@ -12,6 +12,7 @@ from kode.core.model_manager import ModelManager
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
 from kode.utils.logger import setup_logger
+from kode.utils.path_utils import get_safe_connection_path
 
 logger = setup_logger(__name__)
 
@@ -71,7 +72,8 @@ class DomainUncertaintyAnalyzer(KodeTool):
             # 加载配置和域索引
             config = ConfigManager()
             schema_path = config.get("storage.schema_path", "./schema_store")
-            domain_index_file = Path(schema_path) / connection_name / "domain_index.json"
+            safe_conn_name = get_safe_connection_path(connection_name)
+            domain_index_file = Path(schema_path) / safe_conn_name / "domain_index.json"
 
             if not domain_index_file.exists():
                 raise FileNotFoundError(f"Domain index not found: {domain_index_file}")
@@ -91,7 +93,7 @@ class DomainUncertaintyAnalyzer(KodeTool):
             # 单域分析函数
             def analyze_domain(domain: Dict[str, Any]) -> Dict[str, Any]:
                 domain_name = domain["name"]
-                domain_file = Path(schema_path) / connection_name / domain["file_path"]
+                domain_file = Path(schema_path) / safe_conn_name / domain["file_path"]
 
                 logger.info(f"分析域: {domain_name} ({domain['table_count']} 个表)")
 
@@ -325,7 +327,8 @@ priority: high/medium/low
         每个领域文件新增 'uncertainties' 字段，存储该领域的所有不确定性。
         """
         try:
-            base_dir = Path(schema_path) / connection_name / "domains"
+            safe_conn_name = get_safe_connection_path(connection_name)
+            base_dir = Path(schema_path) / safe_conn_name / "domains"
             updated_count = 0
 
             for domain_result in domain_results:

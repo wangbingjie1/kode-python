@@ -13,6 +13,7 @@ from sqlalchemy import text
 from kode.services.database_manager import DatabaseConnection, db_manager
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
+from kode.utils.path_utils import get_safe_connection_path
 
 
 # ==================== Tool Input Schemas ====================
@@ -354,12 +355,20 @@ class DatabaseSchemaExtractorTool(KodeTool):
 
             # Auto-cluster schema into domains (if enabled in config)
             clustering_result = None
+            uncertainty_result = None
             if auto_save and save_result and save_result.get("saved"):
                 clustering_result = self._auto_cluster_schema(
                     connection_name=connection_name,
                     schema_file=save_result.get("latest_file"),
                     enable_progress=enable_progress
                 )
+                
+                # 🔥 新增: 自动分析不确定性（仅在聚类成功后）
+                if clustering_result and clustering_result.get("status") == "success":
+                    uncertainty_result = self._auto_analyze_uncertainties(
+                        connection_name=connection_name,
+                        enable_progress=enable_progress
+                    )
 
             # 构建概要信息(不返回完整数据,避免上下文爆炸)
             # 注意: schema_data["tables"] 是字典 {table_name: table_data}, 不是列表
@@ -406,6 +415,10 @@ class DatabaseSchemaExtractorTool(KodeTool):
             # 如果执行了聚类,添加聚类结果
             if clustering_result:
                 summary["clustering"] = clustering_result
+            
+            # 如果执行了不确定性分析,添加分析结果
+            if uncertainty_result:
+                summary["uncertainty"] = uncertainty_result
 
             return json.dumps(summary, indent=2, ensure_ascii=False)
 
@@ -1163,7 +1176,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
 
             # Create storage directory
             base_dir = Path(storage_path)
-            conn_dir = base_dir / connection_name
+            conn_dir = base_dir / get_safe_connection_path(connection_name)
             conn_dir.mkdir(parents=True, exist_ok=True)
 
             # Generate version
@@ -1271,6 +1284,85 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 "domains": [
                     {
                         "name": d["name"],
+                        "table_count": d["table_count"]
+                    }
+                    for d in result["clustering_summary"]["domains"]
+                ],
+                "domain_index_file": storage.get("domain_index_file")
+            }
+
+        except Exception as e:
+            if enable_progress:
+                self._emit_progress(f"Clustering failed: {str(e)}", 0, 1)
+            raise  # Re-raise to caller
+
+    def _auto_analyze_uncertainties(
+        self, connection_name: str, enable_progress: bool = True
+    ) -> Dict[str, Any]:
+        """
+        自动分析领域不确定性（仅在聚类成功后调用）
+
+        Args:
+            connection_name: 数据库连接名
+            enable_progress: 是否启用进度回调
+
+        Returns:
+            不确定性分析结果摘要
+        """
+        try:
+            if enable_progress:
+                self._emit_progress("AI analyzing domain uncertainties...", 0, 1)
+
+            # 导入并实例化不确定性分析器
+            from kode.tools.domain_uncertainty_analyzer import DomainUncertaintyAnalyzer
+
+            analyzer = DomainUncertaintyAnalyzer()
+
+            # 执行不确定性分析
+            result_json = analyzer._run(
+                connection_name=connection_name,
+                llm_model="main",
+                max_concurrent_domains=5
+            )
+
+            # 解析结果
+            result = json.loads(result_json)
+
+            if result.get("status") != "success":
+                error_msg = result.get("message", "Unknown error")
+                raise RuntimeError(f"Uncertainty analysis failed: {error_msg}")
+
+            if enable_progress:
+                total_uncertainties = result.get("statistics", {}).get("total_uncertainties", 0)
+                self._emit_progress(
+                    f"Identified {total_uncertainties} uncertainties", 1, 1
+                )
+
+            # 返回紧凑摘要
+            stats = result.get("statistics", {})
+            return {
+                "status": "success",
+                "total_uncertainties": stats.get("total_uncertainties", 0),
+                "high_priority": stats.get("high_priority", 0),
+                "medium_priority": stats.get("medium_priority", 0),
+                "low_priority": stats.get("low_priority", 0),
+                "next_step": result.get("next_step", "")
+            }
+
+        except Exception as e:
+            if enable_progress:
+                self._emit_progress(f"Uncertainty analysis failed: {str(e)}", 0, 1)
+            # 不中断流程，只记录失败
+            return {
+                "status": "failed",
+                "error": str(e),
+                "message": "Uncertainty analysis failed but schema extraction succeeded"
+            }
+
+
+class DatabaseExecuteQueryTool(KodeTool):
+    """
+    Execute SQL queries on connected databases.
     Supports both read operations (SELECT) and write operations (INSERT/UPDATE/DELETE).
     Write operations require explicit permission confirmation.
     """
@@ -1512,7 +1604,9 @@ class SchemaQueryTool(KodeTool):
             # Construct schema file path
             config = ConfigManager()
             storage_path = config.get("storage.schema_path", "./schema_store")
-            schema_file = Path(storage_path) / connection_name / "schema_latest.json"
+            safe_conn_name = get_safe_connection_path(connection_name)
+
+            schema_file = Path(storage_path) / safe_conn_name / "schema_latest.json"
 
             if not schema_file.exists():
                 return json.dumps(

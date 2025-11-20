@@ -12,6 +12,7 @@ from kode.tools.base import KodeTool
 from kode.core.model_manager import ModelManager
 from kode.utils.config import ConfigManager
 from kode.utils.logger import setup_logger
+from kode.utils.path_utils import get_safe_connection_path
 
 logger = setup_logger(__name__)
 
@@ -122,7 +123,7 @@ class OntologyBuilderTool(KodeTool):
             # Load schema from saved file
             config = ConfigManager()
             schema_path = config.get("storage.schema_path", "./schema_store")
-            schema_file = Path(schema_path) / connection_name / "schema_latest.json"
+            schema_file = Path(schema_path) / get_safe_connection_path(connection_name) / "schema_latest.json"
 
             if not schema_file.exists():
                 return json.dumps(
@@ -139,7 +140,7 @@ class OntologyBuilderTool(KodeTool):
             # 🔍 检查本体是否已存在（仅当未强制重建时）
             if not force_rebuild:
                 ontology_path = config.get("storage.ontology_path", "./ontology_store")
-                existing_ontology_file = Path(ontology_path) / connection_name / "ontology_latest.json"
+                existing_ontology_file = Path(ontology_path) / get_safe_connection_path(connection_name) / "ontology_latest.json"
 
                 if existing_ontology_file.exists():
                     # 读取现有本体的元数据
@@ -182,7 +183,7 @@ class OntologyBuilderTool(KodeTool):
 
             # 【智能门禁检查】检查不确定性分析状态（从各领域文件中读取）
             # ✨ 新架构：不确定性数据已分散存储在各 domain JSON 文件中
-            domains_dir = Path(schema_path) / connection_name / "domains"
+            domains_dir = Path(schema_path) / get_safe_connection_path(connection_name) / "domains"
 
             if not domains_dir.exists() or not list(domains_dir.glob("*.json")):
                 # 🔍 情况1: 没有领域文件 → Schema 未提取
@@ -258,7 +259,7 @@ class OntologyBuilderTool(KodeTool):
                 schema_metadata = schema_data
 
             # 🚀 新的简化流程：优先使用 domain_index.json（如果存在）
-            domain_index_file = Path(schema_path) / connection_name / "domain_index.json"
+            domain_index_file = Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
             database = schema_metadata.get("database", "未知")
             db_schema = schema_metadata.get("schema")
 
@@ -629,7 +630,7 @@ Schema: {db_schema or "默认"}
 
             # Create storage directory
             base_dir = Path(storage_path)
-            conn_dir = base_dir / connection_name
+            conn_dir = base_dir / get_safe_connection_path(connection_name)
             conn_dir.mkdir(parents=True, exist_ok=True)
 
             # Generate version
@@ -777,7 +778,7 @@ Schema: {db_schema or "默认"}
             from langchain_core.messages import HumanMessage
 
             # 1. 读取 domain_index.json
-            domain_index_file = Path(schema_path) / connection_name / "domain_index.json"
+            domain_index_file = Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
             with open(domain_index_file, "r", encoding="utf-8") as f:
                 domain_index = json.load(f)
 
@@ -855,7 +856,7 @@ Schema: {db_schema or "默认"}
             logger.info(f"🚀 开始构建 {domain_name}（{domain_info['table_count']} 个表）")
 
             # 读取领域的完整 schema
-            domain_file = Path(schema_path) / connection_name / domain_info["file_path"]
+            domain_file = Path(schema_path) / get_safe_connection_path(connection_name) / domain_info["file_path"]
             with open(domain_file, "r", encoding="utf-8") as f:
                 domain_data = json.load(f)
 
@@ -1007,7 +1008,7 @@ Schema: {db_schema or "默认"}
             schema_path = config.get("storage.schema_path", "./schema_store")
 
             # ✨ 从领域JSON文件读取
-            domain_file = Path(schema_path) / connection_name / "domains" / f"{domain_name}.json"
+            domain_file = Path(schema_path) / get_safe_connection_path(connection_name) / "domains" / f"{domain_name}.json"
             if not domain_file.exists():
                 logger.warning(f"领域文件 {domain_file} 不存在")
                 return []
@@ -1044,7 +1045,7 @@ Schema: {db_schema or "默认"}
             schema_path = config.get("storage.schema_path", "./schema_store")
 
             # ✨ 新逻辑：从领域JSON文件中读取 uncertainties
-            domain_file = Path(schema_path) / connection_name / "domains" / f"{domain_name}.json"
+            domain_file = Path(schema_path) / get_safe_connection_path(connection_name) / "domains" / f"{domain_name}.json"
             if not domain_file.exists():
                 logger.warning(f"领域文件 {domain_file} 不存在")
                 return ""

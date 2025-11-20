@@ -128,6 +128,7 @@
             :disabled="!isConnected"
             :is-sending="chatStore.isTyping"
             @send="handleSendMessage"
+            @stop="handleStopGeneration"
           />
         </div>
       </footer>
@@ -473,6 +474,18 @@ function handleUserInputCancel() {
   // 目前仅清除状态，不发送取消请求
   // 如果需要发送取消信号给后端，可以在这里添加
   notification.info('已取消', '您取消了回答问题', 2000)
+}
+
+/**
+ * 处理停止生成
+ */
+async function handleStopGeneration() {
+  try {
+    await chatStore.cancelStreaming()
+  } catch (error: any) {
+    console.error('[ChatView] Error stopping generation:', error)
+    // notification 已在 chatStore 中处理
+  }
 }
 
 async function initializeConversation() {

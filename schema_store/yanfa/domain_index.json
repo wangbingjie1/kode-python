@@ -1,51 +1,50 @@
 {
   "connection_name": "yanfa",
   "total_tables": 110,
-  "total_domains": 11,
-  "created_at": "2025-11-18T13:53:19.654790",
+  "total_domains": 14,
+  "created_at": "2025-11-20T13:32:51.333090",
   "domains": [
     {
       "name": "user_management",
       "display_name": "User Management",
-      "description": "Core user account management including registration, authentication, profiles, devices, and wallet information.",
+      "description": "Core user account management including authentication, profiles, devices, and user-related configurations.",
       "table_count": 10,
       "tables": [
         "platform_user",
         "platform_user_account",
         "platform_user_device",
-        "platform_user_wallet",
         "platform_user_blacklist",
-        "platform_email_domain_blacklist",
+        "platform_user_wallet",
         "user",
         "user_option",
+        "pre_signup",
         "backup_disabled_blacklist_accounts",
-        "pre_signup"
+        "platform_email_domain_blacklist"
       ],
       "file_path": "domains/user_management.json"
     },
     {
       "name": "order_payment_system",
       "display_name": "Order & Payment System",
-      "description": "Handles orders, payments, subscriptions, invoices and transaction records across multiple payment platforms.",
-      "table_count": 10,
+      "description": "Order processing, payment transactions, and financial operations including top-ups and refunds.",
+      "table_count": 9,
       "tables": [
         "order",
         "platform_trade_order",
         "platform_trade_order_sub",
-        "platform_trade_product",
-        "platform_trade_product_sku",
+        "top_up_record",
         "invoices",
         "unified_payments",
         "stripesubscriptions",
-        "license_coupon",
-        "top_up_record"
+        "commission",
+        "license_coupon"
       ],
       "file_path": "domains/order_payment_system.json"
     },
     {
       "name": "subscription_management",
       "display_name": "Subscription Management",
-      "description": "Manages user subscriptions, subscription plans, renewal logs, and retention offers.",
+      "description": "Subscription lifecycle management including plans, renewals, cancellations, and subscription logs.",
       "table_count": 7,
       "tables": [
         "subscription",
@@ -59,107 +58,96 @@
       "file_path": "domains/subscription_management.json"
     },
     {
+      "name": "product_catalog",
+      "display_name": "Product Catalog",
+      "description": "Product and SKU management including pricing, inventory, and product configurations.",
+      "table_count": 4,
+      "tables": [
+        "platform_trade_product",
+        "platform_trade_product_sku",
+        "robot",
+        "features_manage"
+      ],
+      "file_path": "domains/product_catalog.json"
+    },
+    {
       "name": "ai_agent_system",
       "display_name": "AI Agent System",
-      "description": "Core AI agent configuration, categorization, templates, and role-based agent management for various AI capabilities.",
-      "table_count": 10,
+      "description": "AI agent configurations, categories, templates, and role-based agent mappings for intelligent interactions.",
+      "table_count": 11,
       "tables": [
         "platform_ai_agent",
-        "platform_ai_agent_20250625bak",
         "platform_ai_agent_categray",
         "platform_ai_agent_categray_mapping",
         "platform_ai_agent_tag",
-        "platform_ai_animation_template",
-        "platform_ai_voice_template",
-        "platform_ai_template_effect",
-        "robot",
-        "chatpal_agent_ad"
-      ],
-      "file_path": "domains/ai_agent_system.json"
-    },
-    {
-      "name": "ai_role_management",
-      "display_name": "AI Role Management",
-      "description": "Manages AI roles, role-agent mappings, user role preferences, and role-based guides for personalized AI experiences.",
-      "table_count": 6,
-      "tables": [
         "platform_ai_role",
         "platform_ai_role_agent_mapping",
         "platform_ai_role_user",
         "platform_ai_role_user_agent_mapping",
         "platform_ai_role_user_default_agent",
-        "platform_ai_role_guide"
+        "platform_ai_role_guide",
+        "chatpal_agent_ad"
       ],
-      "file_path": "domains/ai_role_management.json"
+      "file_path": "domains/ai_agent_system.json"
     },
     {
-      "name": "conversation_messaging",
-      "display_name": "Conversation & Messaging",
-      "description": "Handles AI conversations, chat messages, task-based interactions, and conversation history management.",
-      "table_count": 8,
+      "name": "ai_conversation_system",
+      "display_name": "AI Conversation System",
+      "description": "Conversation management including messages, chat history, and multi-turn dialogue tracking.",
+      "table_count": 5,
       "tables": [
         "platform_ai_conversation",
         "platform_ai_conversation_msg",
         "task",
         "message",
-        "note_chat_conversation",
-        "candy_chat_girl_friend",
-        "crush_chat_boy_friend",
-        "fantasy_image_session"
+        "note_chat_conversation"
       ],
-      "file_path": "domains/conversation_messaging.json"
+      "file_path": "domains/ai_conversation_system.json"
     },
     {
-      "name": "task_generation_system",
-      "display_name": "Task & Generation System",
-      "description": "Manages AI task execution, batch processing, task metadata, tags, and SEO-related content generation tasks.",
-      "table_count": 7,
+      "name": "ai_task_processing",
+      "display_name": "AI Task Processing",
+      "description": "Task execution and processing for AI operations including templates, batch processing, and task metadata.",
+      "table_count": 8,
       "tables": [
         "platform_ai_task",
         "platform_ai_task_batch",
         "platform_ai_task_ext",
         "platform_ai_tasktags",
-        "platform_ai_tag",
-        "platform_ai_prompt",
+        "platform_ai_animation_template",
+        "platform_ai_voice_template",
+        "platform_ai_template_effect",
         "seo_task"
       ],
-      "file_path": "domains/task_generation_system.json"
+      "file_path": "domains/ai_task_processing.json"
     },
     {
-      "name": "billing_credits_system",
-      "display_name": "Billing & Credits System",
-      "description": "Tracks AI usage billing, token consumption, cost calculations, and model pricing across different services.",
-      "table_count": 6,
+      "name": "billing_analytics",
+      "display_name": "Billing & Analytics",
+      "description": "Financial tracking, usage billing, token consumption, and cost analytics for AI services.",
+      "table_count": 13,
       "tables": [
         "bill",
         "platform_ai_bill",
         "platform_ai_model",
-        "commission",
+        "platform_ai_prompt",
+        "features_token_usage",
         "basi_bill",
-        "features_token_usage"
+        "basi_10.15-11.15_bill",
+        "chat",
+        "gpt-5-chat",
+        "draw_10.15-11.15_bill",
+        "opennext",
+        "opennext_chat_10.15-11.15_bill",
+        "video_all"
       ],
-      "file_path": "domains/billing_credits_system.json"
+      "file_path": "domains/billing_analytics.json"
     },
     {
-      "name": "gamification_rewards",
-      "display_name": "Gamification & Rewards",
-      "description": "Manages user engagement through sign-ins, rewards, game mechanics, and special event campaigns like Halloween.",
-      "table_count": 6,
-      "tables": [
-        "platform_user_sign_detail",
-        "platform_user_sign_status",
-        "halloween_pumpkin_rewards",
-        "ao_bencat_user",
-        "ao_bencat_acquired",
-        "ao_bencat_send"
-      ],
-      "file_path": "domains/gamification_rewards.json"
-    },
-    {
-      "name": "ao_game_system",
-      "display_name": "AO Game System",
-      "description": "Dedicated game system including battles, rounds, rewards, user feeds, and NPC interactions for AO platform games.",
-      "table_count": 12,
+      "name": "gamification_system",
+      "display_name": "Gamification System",
+      "description": "Game mechanics including battles, rewards, leaderboards, and user engagement features.",
+      "table_count": 13,
       "tables": [
         "ao_permble_game",
         "ao_permble_round",
@@ -168,50 +156,89 @@
         "ao_permble_round_fight_2024_12_13",
         "ao_permble_round_rwd",
         "ao_permble_round_rwd_2024_12_13",
+        "ao_permble_user",
         "ao_permble_game_user_feeds",
         "ao_permble_game_user_feeds_2024_11_28",
         "ao_permble_game_user_feeds_2024_12_13",
-        "ao_permble_user",
-        "ao_permble_clean_old_records_log"
+        "ao_permble_clean_old_records_log",
+        "halloween_pumpkin_rewards"
       ],
-      "file_path": "domains/ao_game_system.json"
+      "file_path": "domains/gamification_system.json"
     },
     {
-      "name": "social_analytics_content",
-      "display_name": "Social Analytics & Content",
-      "description": "Tracks user events, analytics, social features, content management, and experiment tracking for platform optimization.",
-      "table_count": 28,
+      "name": "social_interaction",
+      "display_name": "Social & Interaction",
+      "description": "Social features including friendships, PK battles, role evaluations, and user interactions.",
+      "table_count": 9,
       "tables": [
-        "event",
-        "eventbak",
-        "daily_new_users",
-        "daily_new_uuid",
-        "daily_uuid",
-        "experiment",
-        "ao_awareness",
-        "ao_npc",
         "ao_friends",
         "ao_fission_pk",
         "ao_fission_pk_friends",
         "ao_fission_role_evaluation",
+        "ao_npc",
+        "ao_awareness",
+        "candy_chat_girl_friend",
+        "crush_chat_boy_friend",
+        "fantasy_image_session"
+      ],
+      "file_path": "domains/social_interaction.json"
+    },
+    {
+      "name": "token_reward_system",
+      "display_name": "Token & Reward System",
+      "description": "Token management, rewards distribution, staking, and blockchain-related financial operations.",
+      "table_count": 4,
+      "tables": [
+        "ao_bencat_user",
+        "ao_bencat_send",
+        "ao_bencat_acquired",
+        "platform_ai_tag"
+      ],
+      "file_path": "domains/token_reward_system.json"
+    },
+    {
+      "name": "content_management",
+      "display_name": "Content Management",
+      "description": "Content organization including notes, categories, articles, and user-generated content management.",
+      "table_count": 6,
+      "tables": [
         "note_categroy",
         "note_categroy_records",
         "note_feedback",
         "note_free_trial_whitelist",
         "platform_article",
-        "platform_enterprise_inquiry",
-        "chatpal_app_version",
+        "platform_enterprise_inquiry"
+      ],
+      "file_path": "domains/content_management.json"
+    },
+    {
+      "name": "user_engagement",
+      "display_name": "User Engagement",
+      "description": "User activity tracking including sign-ins, events, experiments, and behavioral analytics.",
+      "table_count": 8,
+      "tables": [
+        "platform_user_sign_detail",
+        "platform_user_sign_status",
+        "event",
+        "eventbak",
+        "experiment",
+        "daily_new_users",
+        "daily_new_uuid",
+        "daily_uuid"
+      ],
+      "file_path": "domains/user_engagement.json"
+    },
+    {
+      "name": "system_infrastructure",
+      "display_name": "System Infrastructure",
+      "description": "System-level configurations including migrations, tokens, app versions, and technical infrastructure.",
+      "table_count": 3,
+      "tables": [
         "migrations",
         "personal_access_tokens",
-        "opennext",
-        "chat",
-        "gpt-5-chat",
-        "video_all",
-        "basi_10.15-11.15_bill",
-        "draw_10.15-11.15_bill",
-        "opennext_chat_10.15-11.15_bill"
+        "chatpal_app_version"
       ],
-      "file_path": "domains/social_analytics_content.json"
+      "file_path": "domains/system_infrastructure.json"
     }
   ]
 }

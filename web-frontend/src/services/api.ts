@@ -509,7 +509,7 @@ export async function createStripeCheckout(
  */
 export interface UserResponsePayload {
   answer: any  // string | boolean | string[]
-  question_type: 'text' | 'select' | 'multiselect' | 'confirm'
+  question_type: 'text' | 'select' | 'multiselect' | 'confirm' | 'batch_form'
 }
 
 export async function submitUserResponse(
@@ -519,6 +519,20 @@ export async function submitUserResponse(
   const response = await apiClient.post(
     `/sse/chat/${conversationId}/user-response`,
     data
+  )
+  return response.data
+}
+
+/**
+ * Cancel ongoing streaming response
+ *
+ * Stops the AI from generating further responses in the current conversation
+ */
+export async function cancelStreaming(
+  conversationId: string
+): Promise<{ success: boolean; message: string; conversation_id: string }> {
+  const response = await apiClient.post(
+    `/sse/chat/${conversationId}/cancel`
   )
   return response.data
 }

@@ -34,14 +34,29 @@
             </svg>
           </button>
 
+          <!-- 停止按钮 (仅在 AI 正在回复时显示) -->
           <button
+            v-if="isSending"
+            type="button"
+            @click="handleStop"
+            class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 hover:border-red-300"
+            title="停止生成"
+          >
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="1" />
+            </svg>
+            <span>停止</span>
+          </button>
+
+          <!-- 发送按钮 (仅在 AI 未回复时显示) -->
+          <button
+            v-if="!isSending"
             type="submit"
             :disabled="!canSend"
             class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900 text-white transition hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
-            :title="isSending ? '发送中...' : '发送 (Enter)'"
+            title="发送 (Enter)"
           >
             <svg
-              v-if="!isSending"
               class="h-4 w-4"
               viewBox="0 0 24 24"
               fill="none"
@@ -49,17 +64,6 @@
               stroke-width="2"
             >
               <path stroke-linecap="round" stroke-linejoin="round" d="M7 17L17 7m0 0H9m8 0v8" />
-            </svg>
-            <svg
-              v-else
-              class="h-4 w-4 animate-spin"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <circle class="opacity-25" cx="12" cy="12" r="9" />
-              <path d="M21 12a9 9 0 00-9-9" stroke-linecap="round" />
             </svg>
           </button>
         </div>
@@ -121,6 +125,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   send: [message: string, databaseName?: string]
+  stop: []
 }>()
 
 const message = ref('')
@@ -210,6 +215,10 @@ function handleClickOutside(event: MouseEvent) {
   if (!target.closest('.database-trigger') && !target.closest('.database-menu')) {
     showDatabaseDropdown.value = false
   }
+}
+
+function handleStop() {
+  emit('stop')
 }
 </script>
 

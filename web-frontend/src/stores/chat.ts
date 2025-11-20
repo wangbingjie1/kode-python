@@ -54,8 +54,8 @@ export interface ConversationTokenUsage {
 
 export interface UserInputQuestion {
   question: string
-  question_type: 'text' | 'select' | 'multiselect' | 'confirm'
-  options?: string[]
+  question_type: 'text' | 'select' | 'multiselect' | 'confirm' | 'batch_form'
+  options?: any[]  // For batch_form, this contains the groups array
   default_value?: string
   required?: boolean
   context?: string
@@ -364,10 +364,13 @@ export const useChatStore = defineStore('chat', () => {
         mergedMessages.push(baseMessage)
       }
 
-      // 检查未配对的 tool_use（理论上不应该有，因为都已经占位了）
+      // 检查未配对的 tool_use（历史数据中可能出现）
       for (const [toolUseId, toolUseData] of toolUseMap.entries()) {
         console.warn('[ChatStore] Orphaned tool_use (no result):', toolUseId, 'at index', toolUseData.index)
-        // 已经在 mergedMessages 中了，保持 'started' 状态
+        // 🔥 如果是从数据库加载的历史数据，没有 result 说明工具已经执行完成了
+        // 将状态改为 'completed'，避免显示"执行中..."
+        toolUseData.msg.toolCall.status = 'completed'
+        console.log('[ChatStore] Set orphaned tool status to completed')
       }
 
       // 🎯 第二遍：将收集到的 charts/insights 插入到对应工具调用之后
@@ -819,7 +822,43 @@ export const useChatStore = defineStore('chat', () => {
           question_type: 'text'
         }
 
-        // 创建用户输入消息（带特殊标记）
+        // 🔥 特殊处理:如果是 batch_form 类型,需要更新对应工具调用的 toolResult
+        // 这样 ToolCallItem 组件才能从 parsedToolResult 中读取到 groups 数据
+        if (questionData.question_type === 'batch_form' && questionData.options) {
+          const toolUseId = chunk.metadata?.tool_use_id
+          if (toolUseId) {
+            const toolMessage = findToolMessageByUseId(toolUseId)
+            if (toolMessage?.toolCall) {
+              // 将 options 格式化为 groups 结构并保存到 toolResult
+              const batchData = {
+                status: 'success',
+                total_loaded: questionData.options.reduce((sum: number, group: any) => sum + (group.question_count || 0), 0),
+                groups: questionData.options,
+                message: questionData.question,
+                connection_name: chunk.metadata?.connection_name || toolMessage.toolCall.toolArgs?.connection_name
+              }
+              toolMessage.toolCall.toolResult = JSON.stringify(batchData, null, 2)
+              console.log('[ChatStore] Updated tool message with batch data:', toolMessage)
+              
+              // 设置为待回答状态
+              // 构造一个包含 userInputQuestion 的对象，以便 submitUserResponse 能正确识别类型
+              pendingUserInput.value = {
+                ...toolMessage,
+                userInputQuestion: questionData
+              }
+              
+              // 停止 typing 状态(等待用户输入)
+              isTyping.value = false
+              
+              // 对于 batch_form,不创建新的 userInputMessage
+              // ToolCallItem 组件会自动显示对话框
+              console.log('[ChatStore] batch_form will be handled by ToolCallItem component')
+              break
+            }
+          }
+        }
+
+        // 创建用户输入消息(带特殊标记) - 仅用于非 batch_form 类型
         const userInputMessage: ChatMessage = {
           id: `user-input-${Date.now()}`,
           role: 'assistant',
@@ -839,7 +878,7 @@ export const useChatStore = defineStore('chat', () => {
         // 设置为待回答状态
         pendingUserInput.value = userInputMessage
 
-        // 停止 typing 状态（等待用户输入）
+        // 停止 typing 状态(等待用户输入)
         isTyping.value = false
 
         // 通知前端渲染问题界面
@@ -910,7 +949,10 @@ export const useChatStore = defineStore('chat', () => {
    * 提交用户对交互式提问的响应
    */
   async function submitUserResponse(answer: any) {
-    if (!pendingUserInput.value) {
+    // 保存引用，防止在 await 期间被 SSE 事件清空
+    const currentPendingInput = pendingUserInput.value
+    
+    if (!currentPendingInput) {
       console.warn('[ChatStore] No pending user input to submit')
       return
     }
@@ -920,7 +962,7 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
 
-    const questionType = pendingUserInput.value.userInputQuestion?.question_type || 'text'
+    const questionType = currentPendingInput.userInputQuestion?.question_type || 'text'
 
     try {
       console.log('[ChatStore] Submitting user response:', { answer, questionType })
@@ -933,10 +975,17 @@ export const useChatStore = defineStore('chat', () => {
 
       console.log('[ChatStore] User response submitted successfully')
 
-      // 添加用户答案到消息列表（作为用户消息）
-      const answerText = Array.isArray(answer)
-        ? answer.join(', ')
-        : String(answer)
+      // 立即添加用户答案到消息列表（UX：用户需要看到自己的回答）
+      let answerText = ''
+      if (questionType === 'batch_form') {
+        // 批量问答特殊展示
+        const count = answer.answers ? Object.keys(answer.answers).length : 0
+        answerText = `已提交 ${count} 个问题的回答`
+      } else {
+        answerText = Array.isArray(answer)
+          ? answer.join(', ')
+          : String(answer)
+      }
 
       messages.value.push({
         id: `user-answer-${Date.now()}`,
@@ -945,7 +994,7 @@ export const useChatStore = defineStore('chat', () => {
         timestamp: new Date(),
         metadata: {
           isUserAnswer: true,
-          questionId: pendingUserInput.value.id
+          questionId: currentPendingInput.id
         }
       })
 
@@ -958,6 +1007,48 @@ export const useChatStore = defineStore('chat', () => {
         error.response?.data?.detail || '无法提交您的回答，请重试'
       )
       throw error
+    }
+  }
+
+  /**
+   * Cancel ongoing streaming response
+   */
+  async function cancelStreaming() {
+    if (!currentConversation.value) {
+      console.warn('[ChatStore] No active conversation to cancel')
+      return
+    }
+
+    try {
+      console.log('[ChatStore] Cancelling streaming for conversation:', currentConversation.value.id)
+
+      await api.cancelStreaming(currentConversation.value.id)
+
+      // 立即停止 typing 状态
+      isTyping.value = false
+
+      // 如果有正在流式输出的消息,标记为已完成
+      if (currentStreamingMessage.value) {
+        currentStreamingMessage.value.isStreaming = false
+        currentStreamingMessage.value = null
+      }
+
+      console.log('[ChatStore] Streaming cancelled successfully')
+      notification.info('已停止', 'AI 响应已终止', 2000)
+    } catch (error: any) {
+      console.error('[ChatStore] Error cancelling streaming:', error)
+
+      // 即使 API 调用失败,也尝试本地清理状态
+      isTyping.value = false
+      if (currentStreamingMessage.value) {
+        currentStreamingMessage.value.isStreaming = false
+        currentStreamingMessage.value = null
+      }
+
+      notification.error(
+        '停止失败',
+        error.response?.data?.detail || '无法停止 AI 响应'
+      )
     }
   }
 
@@ -1002,6 +1093,7 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage,
     createNewConversation,
     clearConversation,
-    submitUserResponse  // 新增：提交用户响应
+    submitUserResponse,  // 新增：提交用户响应
+    cancelStreaming  // 新增：终止 streaming
   }
 })

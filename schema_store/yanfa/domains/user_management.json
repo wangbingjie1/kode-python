@@ -1,9 +1,9 @@
 {
   "domain_name": "user_management",
   "display_name": "User Management",
-  "description": "Core user account management including registration, authentication, profiles, devices, and wallet information.",
+  "description": "Core user account management including authentication, profiles, devices, and user-related configurations.",
   "table_count": 10,
-  "created_at": "2025-11-18T13:53:18.740276",
+  "created_at": "2025-11-20T13:32:49.939858",
   "connection": {
     "name": "yanfa",
     "db_type": "mysql",
@@ -972,6 +972,79 @@
         "json_path": "schema.tables.platform_user_device"
       }
     },
+    "platform_user_blacklist": {
+      "name": "platform_user_blacklist",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "reason",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "拉黑原因"
+        },
+        {
+          "name": "evidence",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "证据信息"
+        },
+        {
+          "name": "blacklist_at",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "拉黑时间"
+        },
+        {
+          "name": "status",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "1",
+          "comment": "状态：1=已拉黑，0=已解除"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 7,
+      "sample_data": {
+        "row_count": 0,
+        "rows": [],
+        "note": "前 0 行样例数据（快速采样，无排序）"
+      },
+      "schema_ref": {
+        "connection": "yanfa",
+        "table": "platform_user_blacklist",
+        "schema_file": "schema_store\\yanfa\\schema_raw.json",
+        "json_path": "schema.tables.platform_user_blacklist"
+      }
+    },
     "platform_user_wallet": {
       "name": "platform_user_wallet",
       "columns": [
@@ -1137,174 +1210,6 @@
         "table": "platform_user_wallet",
         "schema_file": "schema_store\\yanfa\\schema_raw.json",
         "json_path": "schema.tables.platform_user_wallet"
-      }
-    },
-    "platform_user_blacklist": {
-      "name": "platform_user_blacklist",
-      "columns": [
-        {
-          "name": "id",
-          "type": "bigint",
-          "nullable": false,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "user_id",
-          "type": "bigint",
-          "nullable": false,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "reason",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "拉黑原因"
-        },
-        {
-          "name": "evidence",
-          "type": "text",
-          "nullable": true,
-          "default": null,
-          "comment": "证据信息"
-        },
-        {
-          "name": "blacklist_at",
-          "type": "bigint",
-          "nullable": false,
-          "default": null,
-          "comment": "拉黑时间"
-        },
-        {
-          "name": "status",
-          "type": "tinyint",
-          "nullable": true,
-          "default": "1",
-          "comment": "状态：1=已拉黑，0=已解除"
-        },
-        {
-          "name": "create_at",
-          "type": "bigint",
-          "nullable": true,
-          "default": null,
-          "comment": ""
-        }
-      ],
-      "foreign_keys": [],
-      "primary_key": {
-        "name": "PRIMARY",
-        "columns": [
-          "id"
-        ]
-      },
-      "column_count": 7,
-      "sample_data": {
-        "row_count": 0,
-        "rows": [],
-        "note": "前 0 行样例数据（快速采样，无排序）"
-      },
-      "schema_ref": {
-        "connection": "yanfa",
-        "table": "platform_user_blacklist",
-        "schema_file": "schema_store\\yanfa\\schema_raw.json",
-        "json_path": "schema.tables.platform_user_blacklist"
-      }
-    },
-    "platform_email_domain_blacklist": {
-      "name": "platform_email_domain_blacklist",
-      "columns": [
-        {
-          "name": "id",
-          "type": "bigint",
-          "nullable": false,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "domain",
-          "type": "varchar",
-          "nullable": false,
-          "default": null,
-          "comment": "邮箱域名"
-        },
-        {
-          "name": "reason",
-          "type": "varchar",
-          "nullable": true,
-          "default": "临时邮箱域名",
-          "comment": "拉黑原因"
-        },
-        {
-          "name": "create_at",
-          "type": "bigint",
-          "nullable": true,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "status",
-          "type": "tinyint",
-          "nullable": true,
-          "default": "1",
-          "comment": "状态：1=启用，0=禁用"
-        }
-      ],
-      "foreign_keys": [],
-      "primary_key": {
-        "name": "PRIMARY",
-        "columns": [
-          "id"
-        ]
-      },
-      "column_count": 5,
-      "sample_data": {
-        "row_count": 5,
-        "rows": [
-          {
-            "id": 1,
-            "domain": "tmpmail.net",
-            "reason": "临时邮箱域名 - 发现大量黑客使用",
-            "create_at": 1749874608000,
-            "status": 1
-          },
-          {
-            "id": 2,
-            "domain": "disbox.net",
-            "reason": "临时邮箱域名 - 发现大量黑客使用",
-            "create_at": 1749874608000,
-            "status": 1
-          },
-          {
-            "id": 3,
-            "domain": "moakt.ws",
-            "reason": "临时邮箱域名 - 发现大量黑客使用",
-            "create_at": 1749874608000,
-            "status": 1
-          },
-          {
-            "id": 4,
-            "domain": "bareed.ws",
-            "reason": "临时邮箱域名 - 发现大量黑客使用",
-            "create_at": 1749874608000,
-            "status": 1
-          },
-          {
-            "id": 5,
-            "domain": "tmpbox.net",
-            "reason": "临时邮箱域名 - 发现大量黑客使用",
-            "create_at": 1749874608000,
-            "status": 1
-          }
-        ],
-        "note": "前 5 行样例数据（快速采样，无排序）"
-      },
-      "schema_ref": {
-        "connection": "yanfa",
-        "table": "platform_email_domain_blacklist",
-        "schema_file": "schema_store\\yanfa\\schema_raw.json",
-        "json_path": "schema.tables.platform_email_domain_blacklist"
       }
     },
     "user": {
@@ -1599,7 +1504,7 @@
             "name": null,
             "email": "richardlegalnow@gmail.com",
             "password": "8186f37f028ba5967babfb8fb03e8ce2",
-            "balance": "87.358845",
+            "balance": "81.747330",
             "block_amount": "0.000000",
             "chain_account": null,
             "source": "Email",
@@ -1691,6 +1596,101 @@
         "table": "user_option",
         "schema_file": "schema_store\\yanfa\\schema_raw.json",
         "json_path": "schema.tables.user_option"
+      }
+    },
+    "pre_signup": {
+      "name": "pre_signup",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "email",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "用户email"
+        },
+        {
+          "name": "source",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "用户来源"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "创建时间"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "更新时间"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 5,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 11,
+            "email": "1178377059@qq.com",
+            "source": null,
+            "created_at": "2025-10-21T12:14:32",
+            "updated_at": "2025-10-21T12:14:32"
+          },
+          {
+            "id": 12,
+            "email": "rRooBet9001@protonmail.com",
+            "source": null,
+            "created_at": "2025-10-21T12:15:12",
+            "updated_at": "2025-10-21T12:15:12"
+          },
+          {
+            "id": 19,
+            "email": "antoine.becotte2@qolab.ca",
+            "source": null,
+            "created_at": "2025-10-21T12:18:51",
+            "updated_at": "2025-10-21T12:18:51"
+          },
+          {
+            "id": 27,
+            "email": "v9bg4@8mtz.com",
+            "source": null,
+            "created_at": "2025-10-21T12:32:49",
+            "updated_at": "2025-10-21T12:32:49"
+          },
+          {
+            "id": 28,
+            "email": "eugenianguyen1914@tubermail.com",
+            "source": null,
+            "created_at": "2025-10-21T12:34:09",
+            "updated_at": "2025-10-21T12:34:09"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      },
+      "schema_ref": {
+        "connection": "yanfa",
+        "table": "pre_signup",
+        "schema_file": "schema_store\\yanfa\\schema_raw.json",
+        "json_path": "schema.tables.pre_signup"
       }
     },
     "backup_disabled_blacklist_accounts": {
@@ -2058,8 +2058,8 @@
         "json_path": "schema.tables.backup_disabled_blacklist_accounts"
       }
     },
-    "pre_signup": {
-      "name": "pre_signup",
+    "platform_email_domain_blacklist": {
+      "name": "platform_email_domain_blacklist",
       "columns": [
         {
           "name": "id",
@@ -2069,32 +2069,32 @@
           "comment": ""
         },
         {
-          "name": "email",
+          "name": "domain",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "邮箱域名"
+        },
+        {
+          "name": "reason",
           "type": "varchar",
           "nullable": true,
-          "default": null,
-          "comment": "用户email"
+          "default": "临时邮箱域名",
+          "comment": "拉黑原因"
         },
         {
-          "name": "source",
-          "type": "varchar",
+          "name": "create_at",
+          "type": "bigint",
           "nullable": true,
           "default": null,
-          "comment": "用户来源"
+          "comment": ""
         },
         {
-          "name": "created_at",
-          "type": "timestamp",
-          "nullable": false,
-          "default": "CURRENT_TIMESTAMP",
-          "comment": "创建时间"
-        },
-        {
-          "name": "updated_at",
-          "type": "timestamp",
-          "nullable": false,
-          "default": "CURRENT_TIMESTAMP",
-          "comment": "更新时间"
+          "name": "status",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "1",
+          "comment": "状态：1=启用，0=禁用"
         }
       ],
       "foreign_keys": [],
@@ -2109,48 +2109,48 @@
         "row_count": 5,
         "rows": [
           {
-            "id": 11,
-            "email": "1178377059@qq.com",
-            "source": null,
-            "created_at": "2025-10-21T12:14:32",
-            "updated_at": "2025-10-21T12:14:32"
+            "id": 1,
+            "domain": "tmpmail.net",
+            "reason": "临时邮箱域名 - 发现大量黑客使用",
+            "create_at": 1749874608000,
+            "status": 1
           },
           {
-            "id": 12,
-            "email": "rRooBet9001@protonmail.com",
-            "source": null,
-            "created_at": "2025-10-21T12:15:12",
-            "updated_at": "2025-10-21T12:15:12"
+            "id": 2,
+            "domain": "disbox.net",
+            "reason": "临时邮箱域名 - 发现大量黑客使用",
+            "create_at": 1749874608000,
+            "status": 1
           },
           {
-            "id": 19,
-            "email": "antoine.becotte2@qolab.ca",
-            "source": null,
-            "created_at": "2025-10-21T12:18:51",
-            "updated_at": "2025-10-21T12:18:51"
+            "id": 3,
+            "domain": "moakt.ws",
+            "reason": "临时邮箱域名 - 发现大量黑客使用",
+            "create_at": 1749874608000,
+            "status": 1
           },
           {
-            "id": 27,
-            "email": "v9bg4@8mtz.com",
-            "source": null,
-            "created_at": "2025-10-21T12:32:49",
-            "updated_at": "2025-10-21T12:32:49"
+            "id": 4,
+            "domain": "bareed.ws",
+            "reason": "临时邮箱域名 - 发现大量黑客使用",
+            "create_at": 1749874608000,
+            "status": 1
           },
           {
-            "id": 28,
-            "email": "eugenianguyen1914@tubermail.com",
-            "source": null,
-            "created_at": "2025-10-21T12:34:09",
-            "updated_at": "2025-10-21T12:34:09"
+            "id": 5,
+            "domain": "tmpbox.net",
+            "reason": "临时邮箱域名 - 发现大量黑客使用",
+            "create_at": 1749874608000,
+            "status": 1
           }
         ],
         "note": "前 5 行样例数据（快速采样，无排序）"
       },
       "schema_ref": {
         "connection": "yanfa",
-        "table": "pre_signup",
+        "table": "platform_email_domain_blacklist",
         "schema_file": "schema_store\\yanfa\\schema_raw.json",
-        "json_path": "schema.tables.pre_signup"
+        "json_path": "schema.tables.platform_email_domain_blacklist"
       }
     }
   },
@@ -2158,223 +2158,165 @@
   "uncertainties": [
     {
       "type": "schema_ambiguity",
-      "category": "数据模型",
-      "priority": "high",
-      "entity": "user vs platform_user",
-      "question": "存在两个用户主表（user 和 platform_user），它们之间的关系和使用场景不明确",
-      "context": "user 表包含 balance、chain_account 等区块链相关字段；platform_user 包含 sex、birthday 等个人信息字段。两者都有 id、email、nick_name 等基础字段",
-      "impact": "无法确定用户数据的主数据源，影响用户画像分析、数据统计口径、跨表关联逻辑",
-      "suggestions": [
-        "明确两个表的业务边界：是否一个用于平台用户，一个用于特定产品用户",
-        "确认 user.id 和 platform_user.id 是否存在映射关系",
-        "建议统一用户主表或明确文档说明使用场景"
-      ],
-      "domain": "user_management",
-      "id": "user_management_user vs platform_user_26",
-      "status": "resolved",
-      "answer": "user 表是glbgpt产品的， platform_user表是divino产品的",
-      "answered_at": "2025-11-18T14:24:02.110427"
-    },
-    {
-      "type": "naming_confusion",
-      "category": "字段命名",
-      "priority": "high",
-      "entity": "platform_user_account.id vs account_id",
-      "question": "platform_user_account 表的主键 id 注释为'账号ID'，但在 platform_user_device 表中又出现 account_id 字段，且该表主键 id 也注释为'账号ID'",
-      "context": "platform_user_device 同时有 user_id 和 account_id，说明用户和账号是分离的，但 platform_user_device.id 的注释与业务逻辑矛盾",
-      "impact": "影响用户-账号-设备三者关系的理解，可能导致关联分析错误",
-      "suggestions": [
-        "修正 platform_user_device.id 的注释，应为'设备ID'或'记录ID'",
-        "明确一个用户可以有多个账号的业务规则",
-        "建立清晰的 user -> account -> device 关系文档"
-      ],
-      "domain": "user_management",
-      "id": "user_management_platform_user_account.id vs account_id_27",
-      "status": "resolved",
-      "answer": "请求: userId (platform_user 的 ID)\n     ↓\n  查询 platform_user_account:\n     WHERE user_id = userId AND type = 'glbgpt'\n     ↓\n  获取 account.mainPartnerId (这个值是 user 表的 ID)\n     ↓\n  查询 user 表:\n     SELECT * FROM user WHERE id = account.mainPartnerId\n     ↓\n  返回: user 表中的用户信息（余额、订阅状态等）\n\n  表关系图\n\n  ┌─────────────────────────┐\n  │  platform_user (平台用户) │\n  │  - id: 100              │\n  │  - nick_name: \"张三\"     │\n  └───────────┬─────────────┘\n              │\n              │ user_id (FK)\n              ↓\n  ┌─────────────────────────────────┐         ┌──────────────────────────┐\n  │  platform_user_account (账号表)  │         │  user (AI服务用户表)      │\n  │  - id: 1001                     │         │  - id: \"abc123\"          │\n  │  - user_id: 100         ────────┼─────┐   │  - balance: 10.50        │\n  │  - type: \"glbgpt\"               │     │   │  - top_up_tag: 1         │\n  │  - main_partner_id: \"abc123\" ───┼─────┴──→│  - subscription_tag: 0   │\n  │  - channel: \"glbgpt\"            │      ",
-      "answered_at": "2025-11-18T14:24:02.110427"
-    },
-    {
-      "type": "business_logic_unclear",
-      "category": "业务流程",
+      "category": "表职责",
       "priority": "high",
       "entity": "backup_disabled_blacklist_accounts",
-      "question": "表名包含 'backup'、'disabled'、'blacklist' 三个概念，业务含义不明确",
-      "context": "该表结构与 platform_user_account 完全相同，但缺少主键定义，且表名暗示多重状态（备份、禁用、黑名单）",
-      "impact": "无法判断该表是历史备份表、黑名单表还是禁用账号表，影响用户状态分析和数据清洗策略",
+      "question": "表名包含'backup'、'disabled'、'blacklist'三个概念，无法确定该表的实际用途：是备份表？禁用账号表？黑名单表？还是三者的组合？",
+      "context": "该表结构与platform_user_account完全相同，但表名暗示多重用途",
+      "impact": "无法确定该表在用户管理流程中的作用，影响账号状态管理、黑名单机制的理解",
       "suggestions": [
-        "明确该表的业务用途：是否为被禁用账号的备份表",
-        "说明与 platform_user_account 和 platform_user_blacklist 的关系",
-        "建议重命名为更清晰的名称，如 'archived_blacklisted_accounts'"
+        "明确表的主要用途，建议拆分为独立的backup、disabled、blacklist表",
+        "添加表注释说明该表的业务场景和数据来源",
+        "如果是历史遗留表，建议标注是否仍在使用"
       ],
       "domain": "user_management",
-      "id": "user_management_backup_disabled_blacklist_accounts_28",
-      "status": "resolved",
-      "answer": "platform_user_blacklist  只有这个表在用其他的表没有使用",
-      "answered_at": "2025-11-18T14:24:02.110427"
+      "id": "user_management_backup_disabled_blacklist_accounts_39"
     },
     {
-      "type": "schema_ambiguity",
-      "category": "数据安全",
+      "type": "business_logic_unclear",
+      "category": "数据关系",
       "priority": "high",
-      "entity": "private_key 字段",
-      "question": "私钥以明文形式存储在多个表中（platform_user_wallet.private_key, user.private_key）",
-      "context": "区块链钱包私钥是高敏感信息，通常不应以明文存储在业务数据库中",
-      "impact": "存在严重安全风险，影响数据治理合规性评估",
+      "entity": "platform_user, user",
+      "question": "存在两个用户主表（platform_user和user），无法确定它们的关系：是否服务不同业务？是否存在数据同步？用户唯一标识如何关联？",
+      "context": "platform_user使用id作为user_id，user表也有独立的id；两表字段差异大（user包含钱包、余额等金融属性）",
+      "impact": "影响用户数据的统一视图构建、跨表查询逻辑、用户身份识别",
       "suggestions": [
-        "确认私钥存储方式是否符合安全规范",
-        "建议使用加密存储或密钥管理服务",
-        "评估是否需要将私钥迁移到独立的安全存储系统"
+        "明确两表的业务边界（如platform_user管理基础信息，user管理交易相关）",
+        "建立明确的关联关系或说明两者独立的原因",
+        "统一用户标识的命名规范"
       ],
       "domain": "user_management",
-      "id": "user_management_private_key 字段_29",
-      "status": "resolved",
-      "answer": "先不管这个问题了",
-      "answered_at": "2025-11-18T14:24:02.110427"
+      "id": "user_management_platform_user, user_40"
     },
     {
       "type": "naming_confusion",
       "category": "字段命名",
-      "priority": "medium",
-      "entity": "时间字段命名不一致",
-      "question": "时间字段命名混乱：create_at、created_at、blacklist_at、update_at、updated_at 多种格式并存",
-      "context": "platform_user 使用 create_at (bigint)，user 使用 created_at (timestamp)，缺乏统一规范",
-      "impact": "影响时间维度分析的 SQL 编写效率，增加数据处理复杂度",
+      "priority": "high",
+      "entity": "platform_user_account.id, platform_user_device.id",
+      "question": "多个表的id字段注释不一致：platform_user_account.id注释为'账号ID'，platform_user_device.id也注释为'账号ID'，但实际应该是设备ID",
+      "context": "platform_user_device表中同时存在id、user_id、account_id三个ID字段",
+      "impact": "导致主键含义混淆，影响表关联逻辑的理解",
       "suggestions": [
-        "统一时间字段命名规范：建议使用 created_at/updated_at",
-        "统一时间字段类型：建议使用 timestamp 或 bigint（毫秒时间戳）",
-        "建立数据字典明确时间字段的时区和精度"
+        "修正platform_user_device.id的注释为'设备ID'",
+        "统一ID字段的注释规范",
+        "考虑使用更明确的字段名如device_id"
       ],
       "domain": "user_management",
-      "id": "user_management_时间字段命名不一致_30"
+      "id": "user_management_platform_user_account.id, platform_user_device.id_41"
     },
     {
       "type": "business_logic_unclear",
-      "category": "业务规则",
+      "category": "账号类型",
       "priority": "medium",
       "entity": "platform_user_account.type",
-      "question": "账号类型字段注释仅列举 'appleid、googleid'，但使用 varchar 类型，枚举值不完整",
-      "context": "该字段应该是有限枚举值，但注释中只有示例，缺少完整的账号类型列表（如是否支持 email、mobile、facebook 等）",
-      "impact": "影响第三方登录渠道分析、用户来源统计的准确性",
+      "question": "type字段注释为'账号类型 appleid、googleid'，但同时存在main_partner_id和second_partner_id，无法确定：为何需要主次两个第三方ID？type是否还有其他值（如手机号、邮箱登录）？",
+      "context": "表中同时有mobile、login_name、第三方账号等多种登录方式相关字段",
+      "impact": "影响账号类型枚举的完整性理解、多账号绑定逻辑的分析",
       "suggestions": [
-        "提供完整的账号类型枚举值列表",
-        "说明 login_name 与 type 的关系",
-        "明确 mobile/email 登录是否也算作独立的 type"
+        "补充完整的type枚举值列表",
+        "说明main_partner_id和second_partner_id的业务场景（如账号合并、迁移）",
+        "明确一个user_id可以关联多少个account"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_account.type_31"
+      "id": "user_management_platform_user_account.type_42"
     },
     {
       "type": "schema_ambiguity",
-      "category": "数据关系",
-      "priority": "medium",
-      "entity": "platform_user_wallet vs user 钱包字段",
-      "question": "钱包信息在两处存储：platform_user_wallet 表和 user 表（chain_account, assign_chain_account, private_key）",
-      "context": "user 表有 3 个钱包相关字段，platform_user_wallet 是独立的钱包表，存在数据冗余或分离存储的情况",
-      "impact": "无法确定钱包数据的主数据源，可能导致数据不一致",
+      "category": "安全性",
+      "priority": "high",
+      "entity": "platform_user_wallet.private_key, user.private_key",
+      "question": "私钥以明文形式存储在数据库中（text/varchar类型），无法确定是否已加密，存在严重安全隐患",
+      "context": "两个表都存储钱包私钥，这是区块链资产的核心凭证",
+      "impact": "如果未加密，存在资产安全风险；影响数据安全合规性评估",
       "suggestions": [
-        "明确两处钱包信息的用途差异",
-        "说明 chain_account 和 assign_chain_account 的区别",
-        "建议统一钱包信息存储位置或建立同步机制"
+        "明确说明私钥是否已加密存储",
+        "如未加密，建议使用加密存储或密钥管理服务",
+        "添加字段注释说明加密方式"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_wallet vs user 钱包字段_32"
+      "id": "user_management_platform_user_wallet.private_key, user.private_key_43"
     },
     {
       "type": "naming_confusion",
-      "category": "字段命名",
+      "category": "时间字段",
       "priority": "medium",
-      "entity": "partner 相关字段",
-      "question": "main_partner_id 和 second_partner_id 的业务含义不明确",
-      "context": "platform_user_account 中有主次两个 partner_id，但没有说明为什么需要两个，以及它们与 type 字段的关系",
-      "impact": "影响第三方账号绑定关系分析，无法理解多账号绑定的业务逻辑",
+      "entity": "create_at, created_at",
+      "question": "时间字段命名不一致：部分表使用create_at（bigint），部分使用created_at（timestamp），无法确定命名标准",
+      "context": "platform_*系列表使用create_at，user/pre_signup等表使用created_at",
+      "impact": "影响时间字段的统一处理、数据迁移和ETL逻辑",
       "suggestions": [
-        "说明为什么需要主次两个第三方账号 ID",
-        "明确 main_partner_id 和 second_partner_id 的使用场景",
-        "建议改为更清晰的命名，如 primary_oauth_id 和 secondary_oauth_id"
+        "统一时间字段命名规范（建议使用created_at）",
+        "统一时间类型（timestamp更标准）",
+        "制定数据建模规范文档"
       ],
       "domain": "user_management",
-      "id": "user_management_partner 相关字段_33"
+      "id": "user_management_create_at, created_at_44"
     },
     {
       "type": "business_logic_unclear",
-      "category": "业务规则",
+      "category": "状态管理",
       "priority": "medium",
-      "entity": "user.balance vs block_amount",
-      "question": "余额和冻结金额的业务规则不清晰",
-      "context": "user 表有 balance（充值余额）和 block_amount（冻结金额），但缺少可用余额字段，不清楚三者的计算关系",
-      "impact": "影响用户资产分析、财务对账逻辑的准确性",
+      "entity": "platform_user_account.status, platform_user_blacklist.status",
+      "question": "status字段在不同表中含义不同：platform_user_account中0=不可用/1=可用，platform_user_blacklist中1=已拉黑/0=已解除，缺乏统一的状态管理逻辑",
+      "context": "账号禁用和用户拉黑是两个独立的状态维度",
+      "impact": "影响用户可用性判断逻辑、状态变更流程的理解",
       "suggestions": [
-        "明确可用余额 = balance - block_amount 还是独立字段",
-        "说明冻结金额的业务场景（如提现中、交易锁定等）",
-        "建议增加 available_balance 字段或在文档中明确计算规则"
+        "明确账号禁用与用户拉黑的业务区别和优先级",
+        "统一status字段的值含义（建议1=启用/正常）",
+        "说明两种状态的组合逻辑"
       ],
       "domain": "user_management",
-      "id": "user_management_user.balance vs block_amount_34"
+      "id": "user_management_platform_user_account.status, platform_user_blacklist.status_45"
     },
     {
       "type": "schema_ambiguity",
-      "category": "数据完整性",
+      "category": "字段用途",
       "priority": "low",
-      "entity": "pre_signup 表",
-      "question": "pre_signup 表与正式用户表的关系不明确",
-      "context": "pre_signup 只有 email 和 source 字段，缺少与 user 或 platform_user 的关联字段",
-      "impact": "无法追踪预注册到正式注册的转化漏斗",
+      "entity": "platform_user_device.adid",
+      "question": "adid字段注释提到'有助于识别iOS端缺失IDFA信息的LAT用户'，但LAT（Limit Ad Tracking）概念未在schema中说明，业务含义不清晰",
+      "context": "该表收集多种设备标识符（android_id、idfv、imei、idfa等）",
+      "impact": "影响设备追踪策略的理解、广告归因逻辑的分析",
       "suggestions": [
-        "说明预注册用户转化为正式用户的流程",
-        "建议增加状态字段标识是否已转化",
-        "考虑增加 user_id 字段用于关联正式用户"
+        "补充LAT相关业务背景说明",
+        "说明各设备标识符的优先级和使用场景",
+        "明确adid与idfa的关系"
       ],
       "domain": "user_management",
-      "id": "user_management_pre_signup 表_35"
+      "id": "user_management_platform_user_device.adid_46"
     },
     {
-      "type": "naming_confusion",
-      "category": "字段命名",
-      "priority": "low",
-      "entity": "sex vs partner_sex",
-      "question": "性别字段编码不一致：platform_user.sex 和 platform_user_account.partner_sex 都是 '1男2女0未知'，但一个用 int 一个也用 int，命名却不同",
-      "context": "两个字段含义相同但命名不同，partner_sex 是第三方账号的性别，可能与用户主表性别不一致",
-      "impact": "轻微影响性别维度分析的字段选择",
+      "type": "business_logic_unclear",
+      "category": "数据一致性",
+      "priority": "medium",
+      "entity": "user.chain_account, user.assign_chain_account",
+      "question": "同时存在chain_account（用户链上地址）和assign_chain_account（分配给用户的地址），无法确定两者的区别和使用场景",
+      "context": "两个字段都是varchar类型，都与区块链地址相关",
+      "impact": "影响钱包地址管理逻辑、资产归属判断",
       "suggestions": [
-        "统一性别字段的命名规范",
-        "说明当用户性别与第三方账号性别不一致时的处理逻辑",
-        "建议使用枚举类型或建立性别码表"
+        "明确两个地址的业务含义（如用户自有地址 vs 平台托管地址）",
+        "说明两者的关联关系和使用优先级",
+        "补充地址生成和分配的业务流程"
       ],
       "domain": "user_management",
-      "id": "user_management_sex vs partner_sex_36"
+      "id": "user_management_user.chain_account, user.assign_chain_account_47"
+    },
+    {
+      "type": "schema_ambiguity",
+      "category": "软删除",
+      "priority": "low",
+      "entity": "platform_user_wallet.is_del",
+      "question": "只有platform_user_wallet表有is_del字段，其他表没有软删除标记，无法确定删除策略是否一致",
+      "context": "用户相关的敏感数据（账号、设备、黑名单等）可能需要保留历史记录",
+      "impact": "影响数据删除策略的理解、历史数据查询逻辑",
+      "suggestions": [
+        "明确各表的删除策略（物理删除 vs 软删除）",
+        "统一软删除字段命名（建议使用deleted_at）",
+        "说明钱包数据需要软删除的业务原因"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user_wallet.is_del_48"
     }
   ],
-  "uncertainty_count": 11,
-  "uncertainty_analyzed_at": "2025-11-18T13:57:15.056285",
-  "business_rules": [
-    {
-      "entity": "user vs platform_user",
-      "category": "数据模型",
-      "question": "存在两个用户主表（user 和 platform_user），它们之间的关系和使用场景不明确",
-      "answer": "user 表是glbgpt产品的， platform_user表是divino产品的",
-      "added_at": "2025-11-18T14:24:02.110427"
-    },
-    {
-      "entity": "platform_user_account.id vs account_id",
-      "category": "字段命名",
-      "question": "platform_user_account 表的主键 id 注释为'账号ID'，但在 platform_user_device 表中又出现 account_id 字段，且该表主键 id 也注释为'账号ID'",
-      "answer": "请求: userId (platform_user 的 ID)\n     ↓\n  查询 platform_user_account:\n     WHERE user_id = userId AND type = 'glbgpt'\n     ↓\n  获取 account.mainPartnerId (这个值是 user 表的 ID)\n     ↓\n  查询 user 表:\n     SELECT * FROM user WHERE id = account.mainPartnerId\n     ↓\n  返回: user 表中的用户信息（余额、订阅状态等）\n\n  表关系图\n\n  ┌─────────────────────────┐\n  │  platform_user (平台用户) │\n  │  - id: 100              │\n  │  - nick_name: \"张三\"     │\n  └───────────┬─────────────┘\n              │\n              │ user_id (FK)\n              ↓\n  ┌─────────────────────────────────┐         ┌──────────────────────────┐\n  │  platform_user_account (账号表)  │         │  user (AI服务用户表)      │\n  │  - id: 1001                     │         │  - id: \"abc123\"          │\n  │  - user_id: 100         ────────┼─────┐   │  - balance: 10.50        │\n  │  - type: \"glbgpt\"               │     │   │  - top_up_tag: 1         │\n  │  - main_partner_id: \"abc123\" ───┼─────┴──→│  - subscription_tag: 0   │\n  │  - channel: \"glbgpt\"            │      ",
-      "added_at": "2025-11-18T14:24:02.110427"
-    },
-    {
-      "entity": "backup_disabled_blacklist_accounts",
-      "category": "业务流程",
-      "question": "表名包含 'backup'、'disabled'、'blacklist' 三个概念，业务含义不明确",
-      "answer": "platform_user_blacklist  只有这个表在用其他的表没有使用",
-      "added_at": "2025-11-18T14:24:02.110427"
-    },
-    {
-      "entity": "private_key 字段",
-      "category": "数据安全",
-      "question": "私钥以明文形式存储在多个表中（platform_user_wallet.private_key, user.private_key）",
-      "answer": "先不管这个问题了",
-      "added_at": "2025-11-18T14:24:02.110427"
-    }
-  ]
+  "uncertainty_count": 10,
+  "uncertainty_analyzed_at": "2025-11-20T13:34:53.941552"
 }

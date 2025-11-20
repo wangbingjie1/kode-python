@@ -1,6 +1,6 @@
 {
-  "version": "v20251118_135241",
-  "created_at": "2025-11-18T13:52:41.502933",
+  "version": "v20251120_133205",
+  "created_at": "2025-11-20T13:32:05.016789",
   "connection_name": "yanfa",
   "schema": {
     "status": "success",
@@ -6463,58 +6463,58 @@
           "row_count": 5,
           "rows": [
             {
-              "id": 4530535,
-              "uuid": "2f0d6adc-5c47-4266-af16-d3db032c48ea",
-              "user_id": 1061833,
+              "id": 4546736,
+              "uuid": "6fe75dd4-15ce-47fc-b07d-c9aed3fbdebf",
+              "user_id": 1066025,
+              "page_name": "pc_subscribe_4008",
+              "event_name": "pageview",
+              "dom_name": "",
+              "created_at": "2025-10-20T11:15:26",
+              "updated_at": "2025-10-20T11:15:26",
+              "channel": "glbgpt"
+            },
+            {
+              "id": 4546737,
+              "uuid": "d8d1b468-8219-4cfe-a30d-cc6b1019270b",
+              "user_id": 1066027,
+              "page_name": "pc_subscribe_4008",
+              "event_name": "pageview",
+              "dom_name": "",
+              "created_at": "2025-10-20T11:15:26",
+              "updated_at": "2025-10-20T11:15:26",
+              "channel": "glbgpt"
+            },
+            {
+              "id": 4546738,
+              "uuid": "d269658a-fdea-46ef-ad9c-4379971e354c",
+              "user_id": 1066026,
               "page_name": "mobile_subscribe_4008",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-18T11:15:26",
-              "updated_at": "2025-10-18T11:15:26",
+              "created_at": "2025-10-20T11:15:27",
+              "updated_at": "2025-10-20T11:15:27",
               "channel": "glbgpt"
             },
             {
-              "id": 4530536,
-              "uuid": "f41f1852-7a77-464e-a5ee-97ccfa8062d0",
-              "user_id": 1061828,
+              "id": 4546739,
+              "uuid": "ef4129b7-940d-4e44-8f4e-43f1eb068ba0",
+              "user_id": 1065973,
               "page_name": "mobile_subscribe_4002",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-18T11:15:36",
-              "updated_at": "2025-10-18T11:15:36",
+              "created_at": "2025-10-20T11:15:41",
+              "updated_at": "2025-10-20T11:15:41",
               "channel": "glbgpt"
             },
             {
-              "id": 4530537,
-              "uuid": "f41f1852-7a77-464e-a5ee-97ccfa8062d0",
-              "user_id": 1061828,
+              "id": 4546740,
+              "uuid": "ef4129b7-940d-4e44-8f4e-43f1eb068ba0",
+              "user_id": 1065973,
               "page_name": "mobile_subscribe_4002",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-18T11:16:09",
-              "updated_at": "2025-10-18T11:16:09",
-              "channel": "glbgpt"
-            },
-            {
-              "id": 4530538,
-              "uuid": "f41f1852-7a77-464e-a5ee-97ccfa8062d0",
-              "user_id": 1061828,
-              "page_name": "mobile_subscribe_4002",
-              "event_name": "pageview",
-              "dom_name": "",
-              "created_at": "2025-10-18T11:16:10",
-              "updated_at": "2025-10-18T11:16:10",
-              "channel": "glbgpt"
-            },
-            {
-              "id": 4530539,
-              "uuid": "f41f1852-7a77-464e-a5ee-97ccfa8062d0",
-              "user_id": 1061828,
-              "page_name": "mobile_subscribe_4002",
-              "event_name": "pageview",
-              "dom_name": "",
-              "created_at": "2025-10-18T11:16:11",
-              "updated_at": "2025-10-18T11:16:11",
+              "created_at": "2025-10-20T11:15:57",
+              "updated_at": "2025-10-20T11:15:57",
               "channel": "glbgpt"
             }
           ],
@@ -6951,6 +6951,119 @@
               "update_name": null,
               "create_by": null,
               "session_input": null
+            }
+          ],
+          "note": "前 5 行样例数据（快速采样，无排序）"
+        }
+      },
+      "features_manage": {
+        "name": "features_manage",
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint",
+            "nullable": false,
+            "default": null,
+            "comment": "主键ID"
+          },
+          {
+            "name": "name",
+            "type": "varchar",
+            "nullable": false,
+            "default": null,
+            "comment": "功能名称"
+          },
+          {
+            "name": "path",
+            "type": "varchar",
+            "nullable": false,
+            "default": null,
+            "comment": "功能路径"
+          },
+          {
+            "name": "desc",
+            "type": "text",
+            "nullable": true,
+            "default": null,
+            "comment": "功能描述"
+          },
+          {
+            "name": "category",
+            "type": "varchar",
+            "nullable": true,
+            "default": null,
+            "comment": "分类"
+          },
+          {
+            "name": "created_at",
+            "type": "datetime",
+            "nullable": true,
+            "default": "CURRENT_TIMESTAMP",
+            "comment": "创建时间"
+          },
+          {
+            "name": "updated_at",
+            "type": "datetime",
+            "nullable": true,
+            "default": "CURRENT_TIMESTAMP",
+            "comment": "更新时间"
+          }
+        ],
+        "foreign_keys": [],
+        "primary_key": {
+          "name": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        },
+        "column_count": 7,
+        "sample_data": {
+          "row_count": 5,
+          "rows": [
+            {
+              "id": 20,
+              "name": "ai-cat-image-generator",
+              "path": "ai-cat-image-generator",
+              "desc": "{\n    \"path\": \"ai-cat-image-generator\",\n    \"tdk\": {\n      \"title\": \"AI Cat Image Generator: Create Cute AI-Generated Cat Images for Free | Global GPT\",\n      \"description\": \"Turn your text ideas into unique, high-quality cat images with GlobalGPT’s AI Cat Image Generator. Try it for free and generate adorable, realistic, or fantasy-style cats in seconds.\"\n    },\n    \"sections\": [\n      {\n        \"id\": \"hero\",\n        \"type\": \"hero\",\n        \"title\": \"AI Cat Image Generator\",\n        \"images\": [\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_cat_1.webp\",\n            \"image_alt\": \"Example cat 1\"\n          },\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_cat_2.webp\",\n            \"image_alt\": \"Example cat 2\"\n          },\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_cat_3.webp\",\n            \"image_alt\": \"Example cat 3\"\n          }\n        ],\n        \"form\": {\n          \"modelSelect\": {\n            \"freeModels\": [\n              {\n                \"value\": \"nano-banana\",\n                \"label\": \"Nano Banana\"\n              }\n            ],\n            \"paidModels\": [\n              {\n                \"value\": \"gpt-image-1\",\n                \"label\": \"GPT Image 1\"\n              },\n              {\n                \"value\": \"sora-image\",\n                \"label\": \"Sora Image\"\n              },\n              {\n                \"value\": \"flux\",\n                \"label\": \"Flux\"\n              },\n              {\n                \"value\": \"unikorn\",\n                \"label\": \"Unikorn (MJ like)\"\n              },\n              {\n                \"value\": \"ideogram\",\n                \"label\": \"Ideogram\"\n              }\n            ],\n            \"paidRedirectUrl\": \"/image\"\n          },\n          \"defaultPrompt\": \"A cute kitten reading a tiny book in a cozy library, warm light\",\n          \"promptPlaceholder\": \"Describe the cat you want to generate...\",\n          \"buttonText\": \"Create\",\n          \"apiPath\": \"/api/image/generate/simple\"\n        }\n      },\n      {\n        \"id\": \"intro\",\n        \"type\": \"text-center\",\n        \"title\": \"Create Cute AI Cats With Our Cat AI Image Generator\",\n        \"content\": \"With GlobalGPT, you can explore endless artistic styles for your cats, from watercolor and pixel art to cyberpunk and fantasy designs. Create lifelike tabbies, charming cartoon kittens, or imaginative magical felines — all generated from your prompt.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"features\",\n        \"type\": \"features-grid\",\n        \"title\": \"Why GlobalGPT AI Cat Generator Stands Out\",\n        \"features\": [\n          {\n            \"title\": \"All-in-One AI Image Platform\",\n            \"description\": \"Integrates a dozen+ popular AI image generation models.\"\n          },\n          {\n            \"title\": \"Text-to-Image & Image-to-Image\",\n            \"description\": \"Create from prompts or enhance existing images.\"\n          },\n          {\n            \"title\": \"Always Up-to-Date\",\n            \"description\": \"Unlock the latest AI image generation models instantly.\"\n          }\n        ]\n      },\n      {\n        \"id\": \"gallery\",\n        \"type\": \"image-gallery\",\n        \"title\": \"Explore More AI Cat Images – Endless Creativity\",\n        \"images\": [\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_cat_1.webp\",\n            \"caption\": \"A cute kitten reading a tiny book in a cozy library, warm light\",\n            \"image_alt\": \"AI Cat example 1\"\n          },\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_cat_2.webp\",\n            \"caption\": \"Watercolor cat in a magical garden with butterflies\",\n            \"image_alt\": \"AI Cat example 2\"\n          },\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_cat_3.webp\",\n            \"caption\": \"Cyberpunk cat with neon lights in futuristic city\",\n            \"image_alt\": \"AI Cat example 3\"\n          }\n        ]\n      },\n      {\n        \"id\": \"unique-art\",\n        \"type\": \"text-image-right\",\n        \"title\": \"Unique Cat Art That Inspires\",\n        \"content\": \"Forget about ordinary cat images. GlobalGPT delivers one-of-a-kind visuals that capture personality, mood, and style. Perfect for digital art, illustration projects, or simply adding fun and creativity to your content.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_cat_4.webp\",\n        \"image_alt\": \"AI Cat Generator examples\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"for-creators\",\n        \"type\": \"text-image-left\",\n        \"title\": \"Built for Cat Lovers and Creators\",\n        \"content\": \"Whether you're a cat enthusiast, an artist, or a business owner, the AI Cat Image Generator adapts to your needs. Use it to design cat-themed merchandise, generate digital artwork, or bring your feline fantasies to life — quickly and effortlessly.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_cat_5.webp\",\n        \"image_alt\": \"AI Cat for social media and creative projects\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"video-section\",\n        \"type\": \"cta\",\n        \"title\": \"Bring Your AI Cats to Life in Videos\",\n        \"content\": \"Turn any AI-generated cat image into a dynamic AI cat video for social media, storytelling, or marketing campaigns.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_cat_6.webp\",\n        \"image_alt\": \"AI Cat videos for social media\",\n        \"button\": {\n          \"text\": \"Make Video Now\",\n          \"url\": \"/video?inviter=hub_features_video&login=1\"\n        }\n      },\n      {\n        \"id\": \"how-to\",\n        \"type\": \"steps\",\n        \"title\": \"How to Generate Your Cat Image\",\n        \"steps\": [\n          {\n            \"title\": \"Step 1\",\n            \"description\": \"Enter Your Prompt – Describe the cat you want, including its pose, style, and mood.\"\n          },\n          {\n            \"title\": \"Step 2\",\n            \"description\": \"Click Create – GlobalGPT instantly generates your cat image.\"\n          },\n          {\n            \"title\": \"Step 3\",\n            \"description\": \"Download or Share – Save your creation or share it directly on social media or messaging apps.\"\n          }\n        ],\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"unlock-creativity\",\n        \"type\": \"cta\",\n        \"title\": \"Unlock your creativity with 100+ AI models on GlobalGPT\",\n        \"content\": \"Including Unikorn, Nano Banana, Sora, GPT Image1, Ideogram, and Flux — effortlessly create stunning images from text to image or from image to image!\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"faq\",\n        \"type\": \"faq\",\n        \"title\": \"FAQs\",\n        \"faqs\": [\n          {\n            \"question\": \"Is the AI Cat Generator free to use?\",\n            \"answer\": \"You can try GlobalGPT's AI Cat Generator for free, but some advanced features, higher-resolution outputs, or additional styles may require credits or a subscription.\"\n          },\n          {\n            \"question\": \"How do I make an AI image of my cat?\",\n            \"answer\": \"Simply upload a photo of your cat, enter a descriptive prompt (like pose, style, or mood), and click Create. The AI will generate a customized cat image based on your instructions within seconds.\"\n          },\n          {\n            \"question\": \"Can I edit a photo of my cat using the AI Cat Image Generator?\",\n            \"answer\": \"Yes! You can upload an existing photo of your cat and use the AI generator to modify it—change styles, poses, or add creative elements—turning your cat into a unique cartoon, fantasy, or realistic image.\"\n          }\n        ]\n      }\n    ]\n  }",
+              "category": "image",
+              "created_at": "2025-11-19T03:30:26",
+              "updated_at": "2025-11-19T03:30:26"
+            },
+            {
+              "id": 21,
+              "name": "ai-animal-image-generator",
+              "path": "ai-animal-image-generator",
+              "desc": "{\n    \"path\": \"ai-animal-image-generator\",\n    \"sections\": [\n      {\n        \"id\": \"hero\",\n        \"type\": \"hero\",\n        \"title\": \"AI Animal Image Generator\",\n        \"images\": [\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_animal_image_1.webp\",\n            \"image_alt\": \"A curious raccoon peeking through a wooden fence at night, soft backlight, natural shadows, high ISO low-light realism.\"\n          },\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_animal_image_2.webp\",\n            \"image_alt\": \"a cute dog generated by glb\"\n          },\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_animal_image_3.webp\",\n            \"image_alt\": \"a cute bird generated by glb\"\n          }\n        ],\n        \"form\": {\n          \"modelSelect\": {\n            \"freeModels\": [\n              {\n                \"value\": \"nano-banana\",\n                \"label\": \"Nano Banana\"\n              }\n            ],\n            \"paidModels\": [\n              {\n                \"value\": \"gpt-image-1\",\n                \"label\": \"GPT Image 1\"\n              },\n              {\n                \"value\": \"sora-image\",\n                \"label\": \"Sora Image\"\n              },\n              {\n                \"value\": \"flux\",\n                \"label\": \"Flux\"\n              },\n              {\n                \"value\": \"unikorn\",\n                \"label\": \"Unikorn (MJ like)\"\n              },\n              {\n                \"value\": \"ideogram\",\n                \"label\": \"Ideogram\"\n              }\n            ],\n            \"paidRedirectUrl\": \"/image\"\n          },\n          \"defaultPrompt\": \"A curious raccoon peeking through a wooden fence at night, soft backlight, natural shadows, high ISO low-light realism.\",\n          \"promptPlaceholder\": \"Describe the animal you want to generate...\",\n          \"buttonText\": \"Create\",\n          \"apiPath\": \"/api/image/generate/simple\"\n        }\n      },\n      {\n        \"id\": \"intro\",\n        \"type\": \"text-center\",\n        \"title\": \"Create Stunning Animal Images With Our AI Animal Image Generator\",\n        \"content\": \"Global GPT lets you design animals of all kinds, from lifelike wildlife to cute cartoon creatures. Whether it’s a majestic lion, a playful puppy, or a mythical beast, the possibilities are endless.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"features\",\n        \"type\": \"features-grid\",\n        \"title\": \"Why GlobalGPT AI Animal Generator Stands Out\",\n        \"features\": [\n          {\n            \"title\": \"All-in-One AI Image Platform\",\n            \"description\": \" Integrates a dozen+ popular AI image generation models.\"\n          },\n          {\n            \"title\": \"Text-to-Image & Image-to-Image\",\n            \"description\": \"Create from prompts or enhance existing images.\"\n          },\n          {\n            \"title\": \"Always Up-to-Date\",\n            \"description\": \"Unlock the latest AI image generation models instantly.\"\n          }\n        ]\n      },\n      {\n        \"id\": \"gallery\",\n        \"type\": \"image-gallery\",\n        \"title\": \"Explore More AI AnimaI Images – Endless Creativity\",\n        \"images\": [\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_animal_image_4.webp\",\n            \"caption\": \"A cute baby panda eating bamboo in a misty bamboo forest, cinematic lighting, soft focus, realistic fur texture.\",\n            \"image_alt\": \"A cute baby panda eating bamboo in a misty bamboo forest, cinematic lighting, soft focus, realistic fur texture.\"\n          },\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_animal_image_5.webp\",\n            \"caption\": \"A majestic tiger resting under a waterfall, surrounded by lush jungle plants, hyper-realistic style, soft sunlight filtering through leaves.\",\n            \"image_alt\": \"A majestic tiger resting under a waterfall, surrounded by lush jungle plants, hyper-realistic style, soft sunlight filtering through leaves.\"\n          },\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_animal_image_6.webp\",\n            \"caption\": \"A playful squirrel rolling on green grass, chibi style, big eyes, soft shading.\",\n            \"image_alt\": \"A playful squirrel rolling on green grass, chibi style, big eyes, soft shading.\"\n          }\n        ]\n      },\n      {\n        \"id\": \"unique-art\",\n        \"type\": \"text-image-right\",\n        \"title\": \"Unique Animal Art That Stands Out\",\n        \"content\": \"Say goodbye to generic animal images. Global GPT’s AI-powered generator produces one-of-a-kind visuals that capture every animal’s character and charm. Perfect for artists, creators, or anyone looking to bring their animal-inspired ideas to life.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_animal_image_7.webp\",\n        \"image_alt\": \"Say goodbye to generic animal images. Global GPT’s AI-powered generator produces one-of-a-kind visuals that capture every animal’s character and charm. Perfect for artists, creators, or anyone looking to bring their animal-inspired ideas to life.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"for-creators\",\n        \"type\": \"text-image-left\",\n        \"title\": \"Built for Animal Lovers and Creators\",\n        \"content\": \"Whether you’re an animal enthusiast, graphic designer, or business owner, the AI Animal Image Generator caters to your needs. Use it for pet portraits, merchandise designs, or create eye-catching visuals for marketing and social media.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_animal_image_8.webp\",\n        \"image_alt\": \"Whether you’re an animal enthusiast, graphic designer, or business owner, the AI Animal Image Generator caters to your needs. Use it for pet portraits, merchandise designs, or create eye-catching visuals for marketing and social media.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"video-section\",\n        \"type\": \"cta\",\n        \"title\": \"Animate Your AI Animals in Videos\",\n        \"content\": \"Bring your AI-generated animal images to life with dynamic videos for stories, social media posts, or brand promotions.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_animal_image_9.webp\",\n        \"image_alt\": \"Bring your AI-generated animal images to life with dynamic videos for stories, social media posts, or brand promotions.\",\n        \"button\": {\n          \"text\": \"Make Video Now\",\n          \"url\": \"/video?inviter=hub_features_video&login=1\"\n        }\n      },\n      {\n        \"id\": \"how-to\",\n        \"type\": \"steps\",\n        \"title\": \"How to Generate Your Animal Image\",\n        \"steps\": [\n          {\n            \"title\": \"Step 1\",\n            \"description\": \"Enter Your Prompt – Describe the animal you want, including details like appearance, pose, and setting.\"\n          },\n          {\n            \"title\": \"Step 2\",\n            \"description\": \"Click Create – Watch as Global GPT instantly generates your custom animal image.\"\n          },\n          {\n            \"title\": \"Step 3\",\n            \"description\": \"Download or Share – Save your creation or share it directly across social platforms and messaging apps.\"\n          }\n        ],\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"unlock-creativity\",\n        \"type\": \"cta\",\n        \"title\": \"Unlock Endless Creativity with 100+ AI Models on Global GPT\",\n        \"content\": \"Explore a world of possibilities with models like Unikorn, Nano Banana, Sora 2, GPT Image1, Ideogram, and Flux — easily turn text into vibrant animal art or enhance existing images.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"faq\",\n        \"type\": \"faq\",\n        \"title\": \"FAQs\",\n        \"faqs\": [\n          {\n            \"question\": \"Is the AI Animal Generator free to use?\",\n            \"answer\": \"Yes! You can try Global GPT’s AI Animal Generator for free, but some premium features, such as higher resolution or extra styles, may require credits or a subscription.\"\n          },\n          {\n            \"question\": \"How do I create an image of my pet or favorite animal?\",\n            \"answer\": \"Upload a photo of your pet or describe the animal you envision, including details like pose and style, and hit “Create.” The AI will generate a custom image based on your input in seconds.\"\n          },\n          {\n            \"question\": \"Can I modify an existing animal image using the AI generator?\",\n            \"answer\": \"Absolutely! Upload a photo of your animal, and use the generator to change its appearance, pose, or add artistic elements — turning it into anything from a cartoon to a fantasy-inspired creature.\"\n          }\n        ]\n      }\n    ]\n  }",
+              "category": "image",
+              "created_at": "2025-11-19T03:31:36",
+              "updated_at": "2025-11-19T03:31:36"
+            },
+            {
+              "id": 22,
+              "name": "3d-character-generator",
+              "path": "3d-character-generator",
+              "desc": "{\n  \"path\": \"3d-character-generator\",\n  \"tdk\": {\n    \"title\": \"3D Character Generator: Design Realistic 3D Characters in Seconds | Global GPT\",\n    \"description\": \"Create lifelike, stylized, or fantasy-inspired 3D characters effortlessly with Global GPT’s AI-powered 3D Character Generator. Build detailed human or creature designs for games, animation, or storytelling — all for free!\"\n  },\n  \"sections\": [\n    {\n      \"id\": \"hero\",\n      \"type\": \"hero\",\n      \"title\": \"3D Character Generator\",\n      \"images\": [\n        {\n          \"image\": \"https://static.futureshareai.com/glb_features/3d_character_1.webp\",\n          \"image_alt\": \"3D female character with realistic facial expression and natural makeup, photographed outdoors with golden hour lighting.\"\n        },\n        {\n          \"image\": \"https://static.futureshareai.com/glb_features/3d_character_2.webp\",\n          \"image_alt\": \"3D robot\"\n        },\n        {\n          \"image\": \"https://static.futureshareai.com/glb_features/3d_character_3.webp\",\n          \"image_alt\": \"3D human\"\n        }\n      ],\n      \"form\": {\n        \"modelSelect\": {\n          \"freeModels\": [\n            {\n              \"value\": \"nano-banana\",\n              \"label\": \"Nano Banana\"\n            }\n          ],\n          \"paidModels\": [\n            {\n              \"value\": \"gpt-image-1\",\n              \"label\": \"GPT Image 1\"\n            },\n            {\n              \"value\": \"sora-image\",\n              \"label\": \"Sora Image\"\n            },\n            {\n              \"value\": \"flux\",\n              \"label\": \"Flux\"\n            },\n            {\n              \"value\": \"unikorn\",\n              \"label\": \"Unikorn (MJ like)\"\n            },\n            {\n              \"value\": \"ideogram\",\n              \"label\": \"Ideogram\"\n            }\n          ],\n          \"paidRedirectUrl\": \"/image\"\n        },\n        \"defaultPrompt\": \"3D female character with realistic facial expression and natural makeup, photographed outdoors with golden hour lighting.\",\n        \"promptPlaceholder\": \"Describe the 3D character you want to generate...\",\n        \"buttonText\": \"Create\",\n        \"apiPath\": \"/api/image/generate/simple\"\n      }\n    },\n    {\n      \"id\": \"intro\",\n      \"type\": \"text-center\",\n      \"title\": \"Create Realistic 3D Characters With AI Precision\",\n      \"content\": \"Global GPT empowers you to design high-quality 3D characters for any purpose — from game avatars and animated heroes to cinematic creatures. Customize every detail, from facial expressions to clothing, in just a few clicks.\",\n      \"button\": {\n        \"text\": \"Try for Free\",\n        \"url\": \"/image?inviter=hub_features_image&login=1\"\n      }\n    },\n    {\n      \"id\": \"features\",\n      \"type\": \"features-grid\",\n      \"title\": \"Why Global GPT’s 3D Character Generator Is Different\",\n      \"features\": [\n        {\n          \"title\": \"Multi-Model Integration\",\n          \"description\": \"Access 100+ advanced 3D and design models in one platform.\"\n        },\n        {\n          \"title\": \"Text-to-3D & Image-to-3D\",\n          \"description\": \"Generate characters from descriptions or transform 2D images into detailed 3D designs.\"\n        },\n        {\n          \"title\": \"Always Cutting-Edge\",\n          \"description\": \"Instantly use the latest AI generation models as they’re released.\"\n        }\n      ]\n    },\n    {\n      \"id\": \"gallery\",\n      \"type\": \"image-gallery\",\n      \"title\": \"Explore More AI 3D Character Images – Endless Creativity\",\n      \"images\": [\n        {\n          \"url\": \"https://static.futureshareai.com/glb_features/3d_character_4.webp\",\n          \"caption\": \"Realistic 3D fantasy warrior character wearing metallic armor, dramatic lighting, photo taken in a dark studio setting.\",\n          \"image_alt\": \"Realistic 3D fantasy warrior character wearing metallic armor, dramatic lighting, photo taken in a dark studio setting.\"\n        },\n        {\n          \"url\": \"https://static.futureshareai.com/glb_features/3d_character_5.webp\",\n          \"caption\": \"3D character designer’s workspace with multiple realistic character renders on screen, cinematic composition, shallow focus.\",\n          \"image_alt\": \"3D character designer’s workspace with multiple realistic character renders on screen, cinematic composition, shallow focus.\"\n        },\n        {\n          \"url\": \"https://static.futureshareai.com/glb_features/3d_character_6.webp\",\n          \"caption\": \"Realistic 3D model of a medieval knight holding a sword, shot in dramatic lighting, fine texture details, photo-real aesthetic.\",\n          \"image_alt\": \"Realistic 3D model of a medieval knight holding a sword, shot in dramatic lighting, fine texture details, photo-real aesthetic.\"\n        }\n      ]\n    },\n    {\n      \"id\": \"unique-art\",\n      \"type\": \"text-image-right\",\n      \"title\": \"Bring Your Imagination to Life in 3D\",\n      \"content\": \"Forget cookie-cutter character designs. Global GPT’s generator crafts unique, high-fidelity 3D figures that match your creative vision — ideal for game developers, digital artists, and storytellers who need originality and depth.\",\n      \"image\": \"https://static.futureshareai.com/glb_features/3d_character_7.webp\",\n      \"image_alt\": \"Forget cookie-cutter character designs. Global GPT’s generator crafts unique, high-fidelity 3D figures that match your creative vision — ideal for game developers, digital artists, and storytellers who need originality and depth.\",\n      \"button\": {\n        \"text\": \"Try for Free\",\n        \"url\": \"/image?inviter=hub_features_image&login=1\"\n      }\n    },\n    {\n      \"id\": \"for-creators\",\n      \"type\": \"text-image-left\",\n      \"title\": \"Designed for Creators, Designers, and Innovators\",\n      \"content\": \"Whether you’re building game assets, animating short films, or creating virtual influencers, the 3D Character Generator adapts to your workflow. Use it for modeling, concept art, or immersive digital storytelling.\",\n      \"image\": \"https://static.futureshareai.com/glb_features/3d_character_8.webp\",\n      \"image_alt\": \"Whether you’re building game assets, animating short films, or creating virtual influencers, the 3D Character Generator adapts to your workflow. Use it for modeling, concept art, or immersive digital storytelling.\",\n      \"button\": {\n        \"text\": \"Try for Free\",\n        \"url\": \"/image?inviter=hub_features_image&login=1\"\n      }\n    },\n    {\n      \"id\": \"video-section\",\n      \"type\": \"cta\",\n      \"title\": \"Animate and Customize Your Characters\",\n      \"content\": \"After generating your 3D model, animate it seamlessly for videos, motion graphics, or game integration — bringing your characters to life with dynamic poses and expressions.\",\n      \"image\": \"https://static.futureshareai.com/glb_features/3d_character_9.webp\",\n      \"image_alt\": \"After generating your 3D model, animate it seamlessly for videos, motion graphics, or game integration — bringing your characters to life with dynamic poses and expressions.\",\n      \"button\": {\n        \"text\": \"Make Video Now\",\n        \"url\": \"/video?inviter=hub_features_video&login=1\"\n      }\n    },\n    {\n      \"id\": \"how-to\",\n      \"type\": \"steps\",\n      \"title\": \"How to Generate Your 3D Character\",\n      \"steps\": [\n        {\n          \"title\": \"Step 1\",\n          \"description\": \"Describe Your Vision – Enter a detailed prompt (e.g., “cyberpunk warrior in armor, realistic lighting”).\"\n        },\n        {\n          \"title\": \"Step 2\",\n          \"description\": \"Generate Instantly – Watch as Global GPT turns your text or image into a 3D character in seconds.\"\n        },\n        {\n          \"title\": \"Step 3\",\n          \"description\": \"Download or Edit – Export your model or enhance it with more details, poses, or accessories.\"\n        }\n      ],\n      \"button\": {\n        \"text\": \"Try for Free\",\n        \"url\": \"/image?inviter=hub_features_image&login=1\"\n      }\n    },\n    {\n      \"id\": \"unlock-creativity\",\n      \"type\": \"cta\",\n      \"title\": \"Unleash 3D Creativity with Global GPT’s Model Library\",\n      \"content\": \"Access industry-leading AI tools like Sora 2, Flux, GPT Image1, Ideogram, and Unikorn — all integrated within Global GPT for faster, smoother, and more detailed 3D generation.\",\n      \"button\": {\n        \"text\": \"Try for Free\",\n        \"url\": \"/image?inviter=hub_features_image&login=1\"\n      }\n    },\n    {\n      \"id\": \"faq\",\n      \"type\": \"faq\",\n      \"title\": \"FAQs\",\n      \"faqs\": [\n        {\n          \"question\": \" Is the 3D Character Generator free to use?\",\n          \"answer\": \"Yes! You can use the 3D Character Generator for free, with optional upgrades for higher resolution and advanced editing tools.\"\n        },\n        {\n          \"question\": \"Can I generate realistic human characters?\",\n          \"answer\": \"Absolutely. Just describe features such as gender, outfit, style, and mood — the AI will render a lifelike or stylized 3D version.\"\n        },\n        {\n          \"question\": \"Can I turn 2D images into 3D models?\",\n          \"answer\": \"Yes. Upload a portrait or artwork, and Global GPT will convert it into a detailed 3D character model ready for animation or design use.\"\n        }\n      ]\n    }\n  ]\n}",
+              "category": "image",
+              "created_at": "2025-11-19T03:32:00",
+              "updated_at": "2025-11-19T03:32:00"
+            },
+            {
+              "id": 23,
+              "name": "ai-cartoon-character-generator",
+              "path": "ai-cartoon-character-generator",
+              "desc": "{\n    \"path\": \"ai-cartoon-character-generator\",\n\"tdk\": {\n      \"title\": \"AI Cartoon Character Generator: Create Unique Cartoon Avatars & Characters Instantly | Global GPT\",\n      \"description\":\n        \"Turn your imagination into colorful cartoon avatars and characters using Global GPT’s AI Cartoon Character Generator. Create stylized, professional, or fantasy-inspired designs in seconds — no drawing required!\"\n    },\n    \"sections\": [\n      {\n        \"id\": \"hero\",\n        \"type\": \"hero\",\n        \"title\": \"AI Cartoon Character Generator\",\n        \"images\": [\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_cartoon_character1.webp\",\n            \"image_alt\": \"Cute cartoon animal-human hybrid character, big eyes, rounded shapes, warm lighting, soft illustrative tone.\"\n          },\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_cartoon_character2.webp\",\n            \"image_alt\": \"ai cartoon girl\"\n          },\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_cartoon_character3.webp\",\n            \"image_alt\": \"ai cartoon man\"\n          }\n        ],\n        \"form\": {\n          \"modelSelect\": {\n            \"freeModels\": [\n              {\n                \"value\": \"nano-banana\",\n                \"label\": \"Nano Banana\"\n              }\n            ],\n            \"paidModels\": [\n              {\n                \"value\": \"gpt-image-1\",\n                \"label\": \"GPT Image 1\"\n              },\n              {\n                \"value\": \"sora-image\",\n                \"label\": \"Sora Image\"\n              },\n              {\n                \"value\": \"flux\",\n                \"label\": \"Flux\"\n              },\n              {\n                \"value\": \"unikorn\",\n                \"label\": \"Unikorn (MJ like)\"\n              },\n              {\n                \"value\": \"ideogram\",\n                \"label\": \"Ideogram\"\n              }\n            ],\n            \"paidRedirectUrl\": \"/image\"\n          },\n          \"defaultPrompt\": \"Cute cartoon animal-human hybrid character, big eyes, rounded shapes, warm lighting, soft illustrative tone.\",\n          \"promptPlaceholder\": \"Describe the ai cartoon character you want to generate...\",\n          \"buttonText\": \"Create\",\n          \"apiPath\": \"/api/image/generate/simple\"\n        }\n      },\n      {\n        \"id\": \"intro\",\n        \"type\": \"text-center\",\n        \"title\": \"Design One-of-a-Kind Cartoon Characters with AI\",\n        \"content\": \"Bring your ideas to life through vivid, expressive cartoon designs. Whether you’re crafting a playful mascot, a comic hero, or a stylish avatar, Global GPT helps you generate characters that perfectly match your vision — fast, fun, and free.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"features\",\n        \"type\": \"features-grid\",\n        \"title\": \"Why Creators Choose Global GPT’s Cartoon Character Generator\",\n        \"features\": [\n          {\n            \"title\": \"All-in-One AI Platform\",\n            \"description\": \"Access dozens of powerful image-generation models in one place.\"\n          },\n          {\n            \"title\": \"Text-to-Image & Photo-to-Cartoon\",\n            \"description\": \"Generate from prompts or instantly cartoonize your photos.\"\n          },\n          {\n            \"title\": \"Constantly Updated\",\n            \"description\": \"Always stay ahead with the newest AI cartoon generation models.\"\n          }\n        ]\n      },\n      {\n        \"id\": \"gallery\",\n        \"type\": \"image-gallery\",\n        \"title\": \"Explore More AI Cartoon Character Images – Endless Creativity\",\n        \"images\": [\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_cartoon_character4.webp\",\n            \"caption\": \"Cartoon-style influencer taking a selfie, trendy outfit, bright background, digital illustration with gradient tones.\",\n            \"image_alt\": \"Cartoon-style influencer taking a selfie, trendy outfit, bright background, digital illustration with gradient tones.\"\n          },\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_cartoon_character5.webp\",\n            \"caption\": \"Cartoon family portrait with exaggerated facial features, cozy indoor scene, warm color tones, 2D animation vibe.\",\n            \"image_alt\": \"Cartoon family portrait with exaggerated facial features, cozy indoor scene, warm color tones, 2D animation vibe.\"\n          },\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_cartoon_character6.webp\",\n            \"caption\": \"Cartoon artist holding a digital tablet, modern flat illustration, soft pastel palette, creative atmosphere.\",\n            \"image_alt\": \"Cartoon artist holding a digital tablet, modern flat illustration, soft pastel palette, creative atmosphere.\"\n          }\n        ]\n      },\n      {\n        \"id\": \"unique-art\",\n        \"type\": \"text-image-right\",\n        \"title\": \"Your Character, Your Style\",\n        \"content\": \"Say goodbye to generic templates. Global GPT’s AI doesn’t just draw — it interprets your concept. Adjust personality, pose, color palette, and mood to craft a character that feels truly yours. Perfect for branding, storytelling, and digital art projects.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_cartoon_character7.webp\",\n        \"image_alt\": \"Say goodbye to generic templates. Global GPT’s AI doesn’t just draw — it interprets your concept. Adjust personality, pose, color palette, and mood to craft a character that feels truly yours. Perfect for branding, storytelling, and digital art projects.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"for-creators\",\n        \"type\": \"text-image-left\",\n        \"title\": \"Made for Designers, Streamers, and Storytellers\",\n        \"content\": \"Whether you’re building a comic universe, designing YouTube avatars, or creating game NPCs, the AI Cartoon Character Generator gives you full creative control. Produce professional-quality designs that fit any narrative or tone.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_cartoon_character8.webp\",\n        \"image_alt\": \"Whether you’re building a comic universe, designing YouTube avatars, or creating game NPCs, the AI Cartoon Character Generator gives you full creative control. Produce professional-quality designs that fit any narrative or tone.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"video-section\",\n        \"type\": \"cta\",\n        \"title\": \"From Static to Dynamic: Animate Instantly\",\n        \"content\": \"Generate not just still images but motion-ready characters. Animate your AI creations for short clips, intros, or branded content — all inside the Global GPT platform.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_cartoon_character9.webp\",\n        \"image_alt\": \"Generate not just still images but motion-ready characters. Animate your AI creations for short clips, intros, or branded content — all inside the Global GPT platform.\",\n        \"button\": {\n          \"text\": \"Make Video Now\",\n          \"url\": \"/video?inviter=hub_features_video&login=1\"\n        }\n      },\n      {\n        \"id\": \"how-to\",\n        \"type\": \"steps\",\n        \"title\": \"How to Create Your Cartoon Character\",\n        \"steps\": [\n          {\n            \"title\": \"Step 1\",\n            \"description\": \"Describe Your Vision – Type what you imagine: personality, outfit, mood, or theme.\"\n          },\n          {\n            \"title\": \"Step 2\",\n            \"description\": \"Generate Instantly – AI transform your text into a detailed cartoon illustration in seconds.\"\n          },\n          {\n            \"title\": \"Step 3\",\n            \"description\": \"Refine or Animate – Edit facial features, colors, or poses, and add movement if you like.\"\n          }\n        ],\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"unlock-creativity\",\n        \"type\": \"cta\",\n        \"title\": \"Create Without Limits — Powered by 100+ AI Models\",\n        \"content\": \"Global GPT integrates the most creative AI tools — including Flux, Sora 2, Ideogram, Unikorn, and GPT Image1 — so you can produce anything from stylized 2D art to semi-realistic 3D cartoons, all in one dashboard.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"faq\",\n        \"type\": \"faq\",\n        \"title\": \"FAQs\",\n        \"faqs\": [\n          {\n            \"question\": \" Is the AI Cartoon Character Generator free?\",\n            \"answer\": \"Yes, you can start designing for free. Premium styles or higher resolutions may require credits or a Pro plan.\"\n          },\n          {\n            \"question\": \"Can I use it to make a mascot or brand avatar?\",\n            \"answer\": \"Absolutely! Just describe your brand’s vibe and tone — the AI will craft a character that fits perfectly.\"\n          },\n          {\n            \"question\": \"What art styles are available?\",\n            \"answer\": \"Choose from anime, comic book, modern flat, hand-drawn, Pixar-style 3D, or minimalist vector designs — all customizable.\"\n          }\n        ]\n      }\n    ]\n  }",
+              "category": "image",
+              "created_at": "2025-11-19T03:32:22",
+              "updated_at": "2025-11-19T03:32:22"
+            },
+            {
+              "id": 24,
+              "name": "ai-giantess-image-generator",
+              "path": "ai-giantess-image-generator",
+              "desc": "{\n    \"path\": \"ai-giantess-image-generator\",\n\"tdk\": {\n      \"title\": \"AI Giantess Image Generator: Create Stunning Giant Woman Art in Seconds | Global GPT\",\n      \"description\":\n        \"Bring your imagination to life with Global GPT’s AI Giantess Image Generator. Design realistic, fantasy, or cinematic giant women in breathtaking scenes — all powered by advanced AI, and completely free to try!\"\n    },\n    \"sections\": [\n      {\n        \"id\": \"hero\",\n        \"type\": \"hero\",\n        \"title\": \"AI Giantess Image Generator\",\n        \"images\": [\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_giantess_image1.webp\",\n            \"image_alt\": \"Anime-style giantess towering above a fantasy city, small people gazing up, colorful sky, epic lighting, detailed background, 2D illustration\"\n          },\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_giantess_image2.webp\",\n            \"image_alt\": \"AI Giantess_2\"\n          },\n          {\n            \"image\": \"https://static.futureshareai.com/glb_features/ai_giantess_image3.webp\",\n            \"image_alt\": \"AI Giantess_3\"\n          }\n        ],\n        \"form\": {\n          \"modelSelect\": {\n            \"freeModels\": [\n              {\n                \"value\": \"nano-banana\",\n                \"label\": \"Nano Banana\"\n              }\n            ],\n            \"paidModels\": [\n              {\n                \"value\": \"gpt-image-1\",\n                \"label\": \"GPT Image 1\"\n              },\n              {\n                \"value\": \"sora-image\",\n                \"label\": \"Sora Image\"\n              },\n              {\n                \"value\": \"flux\",\n                \"label\": \"Flux\"\n              },\n              {\n                \"value\": \"unikorn\",\n                \"label\": \"Unikorn (MJ like)\"\n              },\n              {\n                \"value\": \"ideogram\",\n                \"label\": \"Ideogram\"\n              }\n            ],\n            \"paidRedirectUrl\": \"/image\"\n          },\n          \"defaultPrompt\": \"Anime-style giantess towering above a fantasy city, small people gazing up, colorful sky, epic lighting, detailed background, 2D illustration\",\n          \"promptPlaceholder\": \"Describe the AI Giantess you want to generate...\",\n          \"buttonText\": \"Create\",\n          \"apiPath\": \"/api/image/generate/simple\"\n        }\n      },\n      {\n        \"id\": \"intro\",\n        \"type\": \"text-center\",\n        \"title\": \"Create Epic Giantess Images with Global GPT\",\n        \"content\": \"Step into a world of creativity where you can design awe-inspiring giant women towering over cities, forests, or mountains. Global GPT’s AI Giantess Image Generator brings your fantasy scenes to life — whether you want realism, surreal beauty, or powerful cinematic visuals.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"features\",\n        \"type\": \"features-grid\",\n        \"title\": \"Why Global GPT’s Giantess Generator Stands Out\",\n        \"features\": [\n          {\n            \"title\": \"All-in-One AI Creation Platform\",\n            \"description\": \"Combines multiple top AI image generation models for unmatched quality.\"\n          },\n          {\n            \"title\": \"Text-to-Image & Image Enhancement\",\n            \"description\": \"Create giantess scenes from scratch or enhance existing artwork.\"\n          },\n          {\n            \"title\": \"Constantly Updated\",\n            \"description\": \"Always access the newest and most advanced AI image generation technologies.\"\n          }\n        ]\n      },\n      {\n        \"id\": \"gallery\",\n        \"type\": \"image-gallery\",\n        \"title\": \"Explore More AI Giantess Images – Endless Creativity\",\n        \"images\": [\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_giantess_image4.webp\",\n            \"caption\": \"A kind giantess helping villagers repair a bridge, photorealistic composition, warm color palette\",\n            \"image_alt\": \"A kind giantess helping villagers repair a bridge, photorealistic composition, warm color palette\"\n          },\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_giantess_image5.webp\",\n            \"caption\": \"A 3D fantasy giant woman with glowing eyes protecting a small town, cinematic composition, volumetric fog\",\n            \"image_alt\": \"A 3D fantasy giant woman with glowing eyes protecting a small town, cinematic composition, volumetric fog\"\n          },\n          {\n            \"url\": \"https://static.futureshareai.com/glb_features/ai_giantess_image6.webp\",\n            \"caption\": \"A massive woman standing on a desert plain during sunset, epic perspective, realistic lighting\",\n            \"image_alt\": \"A massive woman standing on a desert plain during sunset, epic perspective, realistic lighting\"\n          }\n        ]\n      },\n      {\n        \"id\": \"unique-art\",\n        \"type\": \"text-image-right\",\n        \"title\": \"Create Unique Giantess Art That Feels Alive\",\n        \"content\": \"Move beyond typical fantasy art. Global GPT’s generator crafts lifelike, emotionally expressive giantess images with cinematic scale and realism — ideal for artists, storytellers, and fantasy creators who want something extraordinary.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_giantess_image7.webp\",\n        \"image_alt\": \"Move beyond typical fantasy art. Global GPT’s generator crafts lifelike, emotionally expressive giantess images with cinematic scale and realism — ideal for artists, storytellers, and fantasy creators who want something extraordinary.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"for-creators\",\n        \"type\": \"text-image-left\",\n        \"title\": \"Perfect for Artists, Designers, and Storytellers\",\n        \"content\": \"Whether you’re building a fantasy world, illustrating a novel, or producing digital art, the AI Giantess Generator helps visualize grand-scale concepts effortlessly. Generate artwork for posters, concept art, or social media that captivates instantly.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_giantess_image8.webp\",\n        \"image_alt\": \"Whether you’re building a fantasy world, illustrating a novel, or producing digital art, the AI Giantess Generator helps visualize grand-scale concepts effortlessly. Generate artwork for posters, concept art, or social media that captivates instantly.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"video-section\",\n        \"type\": \"cta\",\n        \"title\": \"Animate Your Giantess Creations\",\n        \"content\": \"Want to go further? Transform your giantess images into moving cinematic moments using AI video generation tools. Bring colossal characters to life with realistic motion and depth.\",\n        \"image\": \"https://static.futureshareai.com/glb_features/ai_giantess_image9.webp\",\n        \"image_alt\": \"Want to go further? Transform your giantess images into moving cinematic moments using AI video generation tools. Bring colossal characters to life with realistic motion and depth.\",\n        \"button\": {\n          \"text\": \"Make Video Now\",\n          \"url\": \"/video?inviter=hub_features_video&login=1\"\n        }\n      },\n      {\n        \"id\": \"how-to\",\n        \"type\": \"steps\",\n        \"title\": \"How to Generate Your Giantess Image\",\n        \"steps\": [\n          {\n            \"title\": \"Step 1\",\n            \"description\": \"Enter Your Prompt – Describe your vision: the giantess’s pose, scale, expression, and environment.\"\n          },\n          {\n            \"title\": \"Step 2\",\n            \"description\": \"Click Create – Let Global GPT instantly generate a stunning, customized giantess image.\"\n          },\n          {\n            \"title\": \"Step 3\",\n            \"description\": \"Download or Share – Save your artwork or share it directly to your favorite platforms.\"\n          }\n        ],\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"unlock-creativity\",\n        \"type\": \"cta\",\n        \"title\": \"Unlock Limitless Creativity with 100+ AI Models\",\n        \"content\": \"Global GPT connects you to over a hundred image-generation models like Unikorn, Sora 2, Ideogram, Nano Banana, and Flux — empowering you to create hyper-realistic or fantasy-inspired giantess imagery from text or photos.\",\n        \"button\": {\n          \"text\": \"Try for Free\",\n          \"url\": \"/image?inviter=hub_features_image&login=1\"\n        }\n      },\n      {\n        \"id\": \"faq\",\n        \"type\": \"faq\",\n        \"title\": \"FAQs\",\n        \"faqs\": [\n          {\n            \"question\": \"Is the AI Giantess Generator free to use?\",\n            \"answer\": \"Yes! You can use Global GPT’s AI Giantess Generator for free. Premium options like higher resolution or cinematic effects may require credits or a subscription.\"\n          },\n          {\n            \"question\": \"Can I make realistic or fantasy-style giantess images?\",\n            \"answer\": \"Absolutely. You can create everything from photorealistic giant women to imaginative fantasy scenes — just describe your idea, and AI will bring it to life.\"\n          },\n          {\n            \"question\": \"Can I enhance my existing artwork using this tool?\",\n            \"answer\": \"Yes. Upload an image and modify it to add size, detail, or stylistic transformations — perfect for refining your fantasy or cinematic art.\"\n          }\n        ]\n      }\n    ]\n  }",
+              "category": "image",
+              "created_at": "2025-11-19T03:32:52",
+              "updated_at": "2025-11-19T03:32:52"
             }
           ],
           "note": "前 5 行样例数据（快速采样，无排序）"
@@ -9564,387 +9677,6 @@
           "note": "前 5 行样例数据（快速采样，无排序）"
         }
       },
-      "platform_ai_agent_20250625bak": {
-        "name": "platform_ai_agent_20250625bak",
-        "columns": [
-          {
-            "name": "id",
-            "type": "bigint",
-            "nullable": false,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "name",
-            "type": "varchar",
-            "nullable": false,
-            "default": null,
-            "comment": "app name"
-          },
-          {
-            "name": "sort",
-            "type": "int",
-            "nullable": true,
-            "default": "0",
-            "comment": "排序 asc"
-          },
-          {
-            "name": "agent_source",
-            "type": "varchar",
-            "nullable": false,
-            "default": "dify",
-            "comment": "agent来源：dify | dify-with-file"
-          },
-          {
-            "name": "agent_type",
-            "type": "varchar",
-            "nullable": false,
-            "default": "conversation",
-            "comment": "agent类型（用来区分app点击后不同的agent交互）: conversation|OCR|file|image|link|youtubelink"
-          },
-          {
-            "name": "agent_api_key",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "openai key | dify API-Key"
-          },
-          {
-            "name": "agent_api_base_url",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "desc",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "描述"
-          },
-          {
-            "name": "icon",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "图标文件地址"
-          },
-          {
-            "name": "prompt_type",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "提示词类型(引导文案|代入文本框提示词（不提交）｜代入文本框提示词（直接提交）) ：guide_prompt|input_prompt|submit_prompt"
-          },
-          {
-            "name": "prompt",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "初始化的prompt提示词"
-          },
-          {
-            "name": "i18n_config",
-            "type": "text",
-            "nullable": true,
-            "default": null,
-            "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }",
-            "enum_mapping": {
-              "en_US": "{ \"key\" : \"value\" }",
-              "zh_CN": "{ \"key\" : \"value\" } }"
-            }
-          },
-          {
-            "name": "model",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "模型名称"
-          },
-          {
-            "name": "create_at",
-            "type": "bigint",
-            "nullable": true,
-            "default": null,
-            "comment": "创建时间"
-          },
-          {
-            "name": "is_del",
-            "type": "tinyint",
-            "nullable": true,
-            "default": "0",
-            "comment": "是否删除 0否 1是"
-          },
-          {
-            "name": "create_name",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "创建人名"
-          },
-          {
-            "name": "update_at",
-            "type": "bigint",
-            "nullable": true,
-            "default": null,
-            "comment": "更新时间"
-          },
-          {
-            "name": "update_by",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "更新人id"
-          },
-          {
-            "name": "update_name",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "更新人名"
-          },
-          {
-            "name": "create_by",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "创建人id"
-          },
-          {
-            "name": "product_no",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "for_free",
-            "type": "smallint",
-            "nullable": false,
-            "default": "0",
-            "comment": "是否免费：0付费 1免费"
-          },
-          {
-            "name": "bg_pic",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "背景图标地址"
-          },
-          {
-            "name": "enhancement_agent_id",
-            "type": "bigint",
-            "nullable": true,
-            "default": null,
-            "comment": "关联 增强型 AgentId"
-          },
-          {
-            "name": "display_type",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "显示类型：root｜relation"
-          },
-          {
-            "name": "scheme_url",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "跳转路由"
-          },
-          {
-            "name": "lowest_version",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "最低版本要求，默认空，不区分版本"
-          },
-          {
-            "name": "tag_ids",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "标签列表，逗号分隔"
-          },
-          {
-            "name": "scores",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": "模型6个纬度评分，逗号分隔：Context Length,Math & Reasoning\n,Multilingual Translation,Response Speed\n,Coding,Text Writing"
-          }
-        ],
-        "foreign_keys": [],
-        "primary_key": {
-          "name": "PRIMARY",
-          "columns": [
-            "id"
-          ]
-        },
-        "column_count": 29,
-        "sample_data": {
-          "row_count": 5,
-          "rows": [
-            {
-              "id": 1,
-              "name": "万物扫描王",
-              "sort": 1,
-              "agent_source": "dify",
-              "agent_type": "image",
-              "agent_api_key": "Bearer app-zePpJEPLUvl2O9pZigifv8tG",
-              "agent_api_base_url": "https://dify.glbgpt.com",
-              "desc": "图片解读助手",
-              "icon": "",
-              "prompt_type": "submit_prompt",
-              "prompt": "开始",
-              "i18n_config": "{\"en_US\":{\"name\":\"Image Scan Summary  \",\"desc\":\"Picture Interpretation Assistant\",\"prompt\":\"go\"},\"es\":{\"name\":\"Análisis de Imágenes\",\"desc\":\"Asistente de Interpretación de Imágenes\",\"prompt\":\"Empezar\"},\"zh_CN\":{\"name\":\"万物扫描王\",\"desc\":\"图片解读助手\",\"prompt\":\"开始\"}}",
-              "model": "gpt-4o-mini",
-              "create_at": 1724316964492,
-              "is_del": 0,
-              "create_name": null,
-              "update_at": null,
-              "update_by": null,
-              "update_name": null,
-              "create_by": null,
-              "product_no": "chatpal",
-              "for_free": 0,
-              "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/1.png",
-              "enhancement_agent_id": 1001,
-              "display_type": "root",
-              "scheme_url": null,
-              "lowest_version": null,
-              "tag_ids": null,
-              "scores": null
-            },
-            {
-              "id": 2,
-              "name": "文件内容提取",
-              "sort": 2,
-              "agent_source": "dify-with-file",
-              "agent_type": "file",
-              "agent_api_key": "Bearer app-P9l429iQGMeBdWW2YmFUOOyc",
-              "agent_api_base_url": "https://dify.glbgpt.com",
-              "desc": "解读 .doc .docx .xls .xlsx .pdf ...",
-              "icon": "",
-              "prompt_type": "submit_prompt",
-              "prompt": "帮我总结一下这篇文档的核心内容",
-              "i18n_config": "{\"en_US\":{\"name\":\"Document Summary  \",\"desc\":\"Interpret .doc .docx .xls .xlsx .pdf ...\",\"prompt\":\"Help me summarize the core content of this document\"},\"es\":{\"name\":\"Resumen de Documentos\",\"desc\":\"Interpretar .doc .docx .xls .xlsx .pdf ...\",\"prompt\":\"Ayúdame a resumir el contenido principal de este documento.\"},\"zh_CN\":{\"name\":\"文件内容提取\",\"desc\":\"解读 .doc .docx .xls .xlsx .pdf ...\",\"prompt\":\"帮我总结一下这篇文档的核心内容\"}}",
-              "model": "gpt-4o-mini",
-              "create_at": 1724316964496,
-              "is_del": 0,
-              "create_name": null,
-              "update_at": null,
-              "update_by": null,
-              "update_name": null,
-              "create_by": null,
-              "product_no": "chatpal",
-              "for_free": 0,
-              "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/2.png",
-              "enhancement_agent_id": null,
-              "display_type": "root",
-              "scheme_url": null,
-              "lowest_version": null,
-              "tag_ids": null,
-              "scores": null
-            },
-            {
-              "id": 3,
-              "name": "链接内容提要",
-              "sort": 3,
-              "agent_source": "dify",
-              "agent_type": "link",
-              "agent_api_key": "Bearer app-LXa2VQWRCKl6hVZjWZCfWvZm",
-              "agent_api_base_url": "https://dify.glbgpt.com",
-              "desc": "全面解读你输入的Url",
-              "icon": "",
-              "prompt_type": "submit_prompt",
-              "prompt": "开始",
-              "i18n_config": "{\"en_US\":{\"name\":\"Link Content Summary\",\"desc\":\"Fully interpret the URL you entered\",\"prompt\":\"go\"},\"es\":{\"name\":\"Resumen de Enlaces\",\"desc\":\"Interprete de manera integral la URL que ingresó\",\"prompt\":\"Empezar\"},\"zh_CN\":{\"name\":\"链接内容提要\",\"desc\":\"全面解读你输入的Url\",\"prompt\":\"开始\"}}",
-              "model": "gpt-4o-mini",
-              "create_at": 1724316964500,
-              "is_del": 0,
-              "create_name": null,
-              "update_at": null,
-              "update_by": null,
-              "update_name": null,
-              "create_by": null,
-              "product_no": "chatpal",
-              "for_free": 0,
-              "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/3.png",
-              "enhancement_agent_id": null,
-              "display_type": "root",
-              "scheme_url": null,
-              "lowest_version": null,
-              "tag_ids": null,
-              "scores": null
-            },
-            {
-              "id": 4,
-              "name": "图像实验室",
-              "sort": 4,
-              "agent_source": "dify",
-              "agent_type": "conversation",
-              "agent_api_key": "Bearer app-Va2dhnaLrs6YpPT2cLStFSe9",
-              "agent_api_base_url": "https://dify.glbgpt.com",
-              "desc": "用文字生成所有图片",
-              "icon": "",
-              "prompt_type": "guide_prompt",
-              "prompt": "请详细描述你想生成的图片内容",
-              "i18n_config": "{\"en_US\":{\"name\":\"Text to Image \",\"desc\":\"Please describe in detail the image content you want to generate\",\"prompt\":\"Please describe in detail the image content you want to generate\"},\"es\":{\"name\":\"Texto a Imagen\",\"desc\":\"Generar todas las imágenes con texto.\",\"prompt\":\"Describe en detalle el contenido de la imagen que deseas generar.\"},\"zh_CN\":{\"name\":\"图像实验室\",\"desc\":\"用文字生成所有图片\",\"prompt\":\"请详细描述你想生成的图片内容\"}}",
-              "model": "gpt-4o-mini",
-              "create_at": 1724316964501,
-              "is_del": 0,
-              "create_name": null,
-              "update_at": null,
-              "update_by": null,
-              "update_name": null,
-              "create_by": null,
-              "product_no": "chatpal",
-              "for_free": 0,
-              "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/4.png",
-              "enhancement_agent_id": null,
-              "display_type": "root",
-              "scheme_url": null,
-              "lowest_version": null,
-              "tag_ids": null,
-              "scores": null
-            },
-            {
-              "id": 5,
-              "name": "联网助手",
-              "sort": 5,
-              "agent_source": "dify",
-              "agent_type": "conversation",
-              "agent_api_key": "Bearer app-WM6xyRpxruFXWKa6p7RYHrJi",
-              "agent_api_base_url": "https://dify.glbgpt.com",
-              "desc": "网上最新的信息",
-              "icon": "",
-              "prompt_type": "guide_prompt",
-              "prompt": "尝试向我询问最新资讯，我会给你最实时的解答",
-              "i18n_config": "{\"en_US\":{\"name\":\"Online Assistant  \",\"desc\":\"The latest information on the Internet\",\"prompt\":\"Try to ask me the latest information, I will give you the most real-time answer\"},\"es\":{\"name\":\"Asistente Conectado\",\"desc\":\"La última información en Internet.\",\"prompt\":\"Intente preguntarme la información más reciente, le daré la respuesta más en tiempo real.\"},\"zh_CN\":{\"name\":\"联网助手\",\"desc\":\"网上最新的信息\",\"prompt\":\"尝试向我询问最新资讯，我会给你最实时的解答\"}}",
-              "model": "gpt-4o-mini",
-              "create_at": 1724316964501,
-              "is_del": 0,
-              "create_name": null,
-              "update_at": null,
-              "update_by": null,
-              "update_name": null,
-              "create_by": null,
-              "product_no": "chatpal",
-              "for_free": 0,
-              "bg_pic": "https://yanfa.s3.ap-southeast-1.amazonaws.com/yanfa/chatpal/logo/5.png",
-              "enhancement_agent_id": null,
-              "display_type": "root",
-              "scheme_url": null,
-              "lowest_version": null,
-              "tag_ids": null,
-              "scores": null
-            }
-          ],
-          "note": "前 5 行样例数据（快速采样，无排序）"
-        }
-      },
       "platform_ai_agent_categray": {
         "name": "platform_ai_agent_categray",
         "columns": [
@@ -11104,6 +10836,22 @@
           "row_count": 5,
           "rows": [
             {
+              "id": " ",
+              "user_id": 451909809403335680,
+              "agent_id": 3106,
+              "model": "gpt-4o-mini",
+              "product_no": "glbgpt",
+              "name": "Palma de M",
+              "create_at": 1746820007279,
+              "is_del": 0,
+              "create_name": null,
+              "update_at": null,
+              "update_by": null,
+              "update_name": null,
+              "create_by": null,
+              "device_type": "pc"
+            },
+            {
               "id": "000029d6-eded-4728-a330-36890f0052f1",
               "user_id": 514418030214648832,
               "agent_id": 4115,
@@ -11166,22 +10914,6 @@
               "update_name": null,
               "create_by": null,
               "device_type": "mobile"
-            },
-            {
-              "id": "00007839-7c61-4af2-82aa-c64a2dc71894",
-              "user_id": 515614359884403712,
-              "agent_id": 4341,
-              "model": "deep-research",
-              "product_no": "glbgpt",
-              "name": "I am now w",
-              "create_at": 1752053795646,
-              "is_del": 1,
-              "create_name": null,
-              "update_at": null,
-              "update_by": null,
-              "update_name": null,
-              "create_by": null,
-              "device_type": "pc"
             }
           ],
           "note": "前 5 行样例数据（快速采样，无排序）"
@@ -20619,7 +20351,7 @@
               "name": null,
               "email": "richardlegalnow@gmail.com",
               "password": "8186f37f028ba5967babfb8fb03e8ce2",
-              "balance": "87.358845",
+              "balance": "81.747330",
               "block_amount": "0.000000",
               "chain_account": null,
               "source": "Email",
@@ -20810,6 +20542,6 @@
       }
     },
     "relationships": [],
-    "extraction_time": "2025-11-18T13:52:41.501773"
+    "extraction_time": "2025-11-20T13:32:05.015591"
   }
 }

@@ -12,6 +12,7 @@ from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
 from kode.utils.logger import setup_logger
 from kode.exceptions import UserInputRequired
+from kode.utils.path_utils import get_safe_connection_path
 
 logger = setup_logger(__name__)
 
@@ -25,23 +26,19 @@ class UncertaintyQAManagerInput(BaseModel):
     )
     uncertainty_id: Optional[str] = Field(
         default=None,
-        description="Uncertainty ID to answer/skip (required for 'answer'/'skip' action)"
+        description="Uncertainty ID to answer/skip (required for 'answer'/'skip' action)",
     )
     answer: Optional[str] = Field(
-        default=None,
-        description="User's answer to the uncertainty (required for 'answer' action)"
+        default=None, description="User's answer to the uncertainty (required for 'answer' action)"
     )
     batch_answers: Optional[Dict[str, str]] = Field(
-        default=None,
-        description="Dict of {uncertainty_id: answer} for batch_answer action"
+        default=None, description="Dict of {uncertainty_id: answer} for batch_answer action"
     )
     group_by: Optional[str] = Field(
-        default="domain",
-        description="Group questions by: 'domain' (default) or 'priority'"
+        default="domain", description="Group questions by: 'domain' (default) or 'priority'"
     )
     limit: Optional[int] = Field(
-        default=None,
-        description="Limit number of questions to load (for batch_load)"
+        default=None, description="Limit number of questions to load (for batch_load)"
     )
 
 
@@ -55,6 +52,7 @@ class UncertaintyQAManager(KodeTool):
     3. 追踪问答进度，判断是否可以继续构建本体
 
     工作流程：
+    - action='load' → 返回问题列表（包含ID）供 AI 查看
     - action='batch_load' → 抛出 UserInputRequired 异常，暂停 Agent，前端渲染表单
     - action='status' → 检查当前进度，判断是否所有 high 问题已解决
     """
@@ -63,13 +61,13 @@ class UncertaintyQAManager(KodeTool):
     description: str = """Manage uncertainty Q&A process for ontology building.
 
     Actions:
-    - 'batch_load': Load questions and request user input (will pause agent execution)
-    - 'status': Check progress (how many high-priority questions remain)
+    - 'load': View all unresolved high-priority questions (READ-ONLY). Use this to understand what needs to be answered.
+    - 'batch_load': Request the USER to answer questions via an interactive form (INTERACTIVE). Use this when you want the user to provide answers.
+    - 'status': Check progress.
 
-    Use this tool to:
-    1. Present high-priority questions to user via frontend form
-    2. Automatically resume after user submits answers
-    3. Verify all critical questions are answered before proceeding
+    CRITICAL DISTINCTION:
+    - Use 'load' when YOU (the AI) need to see the questions.
+    - Use 'batch_load' when you want the USER to answer them.
     """
 
     args_schema: Type[BaseModel] = UncertaintyQAManagerInput
@@ -89,7 +87,9 @@ class UncertaintyQAManager(KodeTool):
         Args:
             response_data: {"answers": {uncertainty_id: answer, ...}}
         """
-        logger.info(f"[UncertaintyQAManager] Received batch answers: {len(response_data.get('answers', {}))} items")
+        logger.info(
+            f"[UncertaintyQAManager] Received batch answers: {len(response_data.get('answers', {}))} items"
+        )
         self._batch_response_data = response_data
         if self._batch_response_event:
             self._batch_response_event.set()
@@ -121,7 +121,7 @@ class UncertaintyQAManager(KodeTool):
         answer: Optional[str] = None,
         batch_answers: Optional[Dict[str, str]] = None,
         group_by: str = "domain",
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> str:
         """
         Execute Q&A management action.
@@ -151,45 +151,65 @@ class UncertaintyQAManager(KodeTool):
                 return self._batch_load_uncertainties(domains_dir, group_by, limit)
             elif action == "answer":
                 if not uncertainty_id or not answer:
-                    return json.dumps({
-                        "status": "error",
-                        "message": "uncertainty_id and answer are required for 'answer' action"
-                    }, indent=2, ensure_ascii=False)
+                    return json.dumps(
+                        {
+                            "status": "error",
+                            "message": "uncertainty_id and answer are required for 'answer' action",
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    )
                 return self._record_answer(domains_dir, uncertainty_id, answer)
             elif action == "batch_answer":
                 if not batch_answers:
-                    return json.dumps({
-                        "status": "error",
-                        "message": "batch_answers dict is required for 'batch_answer' action"
-                    }, indent=2, ensure_ascii=False)
+                    return json.dumps(
+                        {
+                            "status": "error",
+                            "message": "batch_answers dict is required for 'batch_answer' action",
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    )
                 return self._batch_record_answers(domains_dir, batch_answers)
             elif action == "skip":
                 if not uncertainty_id:
-                    return json.dumps({
-                        "status": "error",
-                        "message": "uncertainty_id is required for 'skip' action"
-                    }, indent=2, ensure_ascii=False)
+                    return json.dumps(
+                        {
+                            "status": "error",
+                            "message": "uncertainty_id is required for 'skip' action",
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    )
                 return self._skip_uncertainty(domains_dir, uncertainty_id)
             elif action == "status":
                 return self._check_status(domains_dir)
             else:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Unknown action: {action}. Valid actions: load, batch_load, answer, batch_answer, skip, status"
-                }, indent=2, ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Unknown action: {action}. Valid actions: load, batch_load, answer, batch_answer, skip, status",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
 
+        except UserInputRequired:
+            raise
         except Exception as e:
             logger.error(f"UncertaintyQAManager failed: {str(e)}")
-            return json.dumps({
-                "status": "error",
-                "message": f"Failed to manage uncertainties: {str(e)}"
-            }, indent=2, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": f"Failed to manage uncertainties: {str(e)}"},
+                indent=2,
+                ensure_ascii=False,
+            )
 
     def _get_domains_dir(self, connection_name: str) -> Path:
         """获取领域文件所在目录"""
         config = ConfigManager()
         schema_path = config.get("storage.schema_path", "./schema_store")
-        return Path(schema_path) / connection_name / "domains"
+        safe_conn_name = get_safe_connection_path(connection_name)
+        return Path(schema_path) / safe_conn_name / "domains"
 
     def _load_all_domain_files(self, domains_dir: Path) -> List[Dict[str, Any]]:
         """加载所有领域文件的数据"""
@@ -209,12 +229,16 @@ class UncertaintyQAManager(KodeTool):
             json.dump(data_to_save, f, indent=2, ensure_ascii=False)
 
     def _load_uncertainties(self, domains_dir: Path) -> str:
-        """从各个领域文件加载所有待解决的不确定性"""
+        """从各个领域文件加载所有待解决的不确定性（只读模式，不返回完整结构以避免前端误渲染）"""
         if not domains_dir.exists():
-            return json.dumps({
-                "status": "error",
-                "message": f"Domains directory not found. Run DomainUncertaintyAnalyzer first."
-            }, indent=2, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Domains directory not found. Run DomainUncertaintyAnalyzer first.",
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
 
         # 遍历所有领域文件，收集未解决的高优先级问题
         high_uncertainties = []
@@ -230,30 +254,34 @@ class UncertaintyQAManager(KodeTool):
             # 筛选未解决的高优先级问题
             for u in uncertainties:
                 if u.get("priority", "medium").lower() == "high" and u.get("status") != "resolved":
-                    # 添加领域信息
-                    u["domain"] = domain_name
                     # 生成唯一 ID（如果没有）
                     if "id" not in u:
-                        u["id"] = f"{domain_name}_{u.get('entity', 'unknown')}_{len(high_uncertainties)}"
-                    high_uncertainties.append(u)
+                        u["id"] = (
+                            f"{domain_name}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                        )
 
-        return json.dumps({
-            "status": "success",
-            "total_high_priority": len(high_uncertainties),
-            "unresolved_count": len(high_uncertainties),
-            "questions": high_uncertainties,
-            "message": (
-                f"找到 {len(high_uncertainties)} 个高优先级未解决问题。"
-                "必须全部回答后才能构建本体。"
-            )
-        }, indent=2, ensure_ascii=False)
+                    # 格式化为文本摘要，包含 ID
+                    summary = f"ID: {u['id']} | Domain: {domain_name} | Question: {u.get('question')} | Entity: {u.get('entity')}"
+                    high_uncertainties.append(summary)
 
-    def _record_answer(
-        self,
-        domains_dir: Path,
-        uncertainty_id: str,
-        answer: str
-    ) -> str:
+        return json.dumps(
+            {
+                "status": "success",
+                "total_high_priority": len(high_uncertainties),
+                "unresolved_count": len(high_uncertainties),
+                "questions_summary": high_uncertainties,
+                "message": (
+                    f"找到 {len(high_uncertainties)} 个高优先级未解决问题。\n"
+                    "您可以：\n"
+                    "1. 使用 action='answer' 和 ID 来回答单个问题\n"
+                    "2. 使用 action='batch_load' 来请求用户批量回答"
+                ),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+
+    def _record_answer(self, domains_dir: Path, uncertainty_id: str, answer: str) -> str:
         """
         记录用户对某个不确定性的回答。
 
@@ -262,10 +290,11 @@ class UncertaintyQAManager(KodeTool):
         2. 将答案添加到领域文件的 business_rules 字段
         """
         if not domains_dir.exists():
-            return json.dumps({
-                "status": "error",
-                "message": "Domains directory not found"
-            }, indent=2, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": "Domains directory not found"},
+                indent=2,
+                ensure_ascii=False,
+            )
 
         # 遍历所有领域文件，查找对应的 uncertainty
         domain_files = list(domains_dir.glob("*.json"))
@@ -281,7 +310,9 @@ class UncertaintyQAManager(KodeTool):
             for u in uncertainties:
                 # 生成 ID（如果没有）
                 if "id" not in u:
-                    u["id"] = f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                    u["id"] = (
+                        f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                    )
 
                 if u["id"] == uncertainty_id:
                     # 标记为已解决
@@ -298,7 +329,7 @@ class UncertaintyQAManager(KodeTool):
                         "category": u.get("category", ""),
                         "question": u.get("question", ""),
                         "answer": answer,
-                        "added_at": datetime.now().isoformat()
+                        "added_at": datetime.now().isoformat(),
                     }
                     domain_data["business_rules"].append(business_rule)
 
@@ -314,10 +345,14 @@ class UncertaintyQAManager(KodeTool):
                 break
 
         if not found:
-            return json.dumps({
-                "status": "error",
-                "message": f"Uncertainty with ID '{uncertainty_id}' not found in any domain"
-            }, indent=2, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Uncertainty with ID '{uncertainty_id}' not found in any domain",
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
 
         # 统计所有领域中剩余的高优先级问题
         remaining_high = 0
@@ -329,19 +364,23 @@ class UncertaintyQAManager(KodeTool):
                 if u.get("priority", "medium").lower() == "high" and u.get("status") != "resolved":
                     remaining_high += 1
 
-        return json.dumps({
-            "status": "success",
-            "resolved_id": uncertainty_id,
-            "updated_domain": updated_domain,
-            "answer": answer,
-            "remaining_high_priority": remaining_high,
-            "can_build_ontology": remaining_high == 0,
-            "message": (
-                f"已记录回答到领域 {updated_domain}。剩余 {remaining_high} 个高优先级问题。"
-                if remaining_high > 0
-                else f"已记录回答到领域 {updated_domain}。所有高优先级问题已解决！可以开始构建本体。"
-            )
-        }, indent=2, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "resolved_id": uncertainty_id,
+                "updated_domain": updated_domain,
+                "answer": answer,
+                "remaining_high_priority": remaining_high,
+                "can_build_ontology": remaining_high == 0,
+                "message": (
+                    f"已记录回答到领域 {updated_domain}。剩余 {remaining_high} 个高优先级问题。"
+                    if remaining_high > 0
+                    else f"已记录回答到领域 {updated_domain}。所有高优先级问题已解决！可以开始构建本体。"
+                ),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
 
     # 🔥 已删除：_preprocess_domain_rules 和 _compress_domain_uncertainties
     # 原因：规则现在直接存储在各领域 JSON 文件的 business_rules 字段，不再生成独立的 *_rules.txt 文件
@@ -355,15 +394,21 @@ class UncertaintyQAManager(KodeTool):
     def _check_status(self, domains_dir: Path) -> str:
         """检查当前进度（新架构：从领域文件读取）"""
         if not domains_dir.exists():
-            return json.dumps({
-                "status": "error",
-                "message": "Domains directory not found. Run DomainUncertaintyAnalyzer first."
-            }, indent=2, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": "Domains directory not found. Run DomainUncertaintyAnalyzer first.",
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
 
         # 统计各优先级的解决情况
-        summary = {"high": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
-                   "medium": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
-                   "low": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0}}
+        summary = {
+            "high": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
+            "medium": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
+            "low": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
+        }
 
         domain_files = list(domains_dir.glob("*.json"))
 
@@ -386,22 +431,23 @@ class UncertaintyQAManager(KodeTool):
 
         can_build = summary["high"]["remaining"] == 0
 
-        return json.dumps({
-            "status": "success",
-            "summary": summary,
-            "can_build_ontology": can_build,
-            "message": (
-                "所有高优先级问题已解决，可以构建本体！"
-                if can_build
-                else f"还有 {summary['high']['remaining']} 个高优先级问题待解决，必须先回答这些问题。"
-            )
-        }, indent=2, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "summary": summary,
+                "can_build_ontology": can_build,
+                "message": (
+                    "所有高优先级问题已解决，可以构建本体！"
+                    if can_build
+                    else f"还有 {summary['high']['remaining']} 个高优先级问题待解决，必须先回答这些问题。"
+                ),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
 
     def _batch_load_uncertainties(
-        self,
-        domains_dir: Path,
-        group_by: str = "domain",
-        limit: Optional[int] = None
+        self, domains_dir: Path, group_by: str = "domain", limit: Optional[int] = None
     ) -> str:
         """
         批量加载不确定性问题，抛出 UserInputRequired 异常暂停 Agent。
@@ -409,10 +455,14 @@ class UncertaintyQAManager(KodeTool):
         ⭐ 核心变化：不返回 JSON，而是抛出异常，让前端渲染表单
         """
         if not domains_dir.exists():
-            return json.dumps({
-                "status": "error",
-                "message": "Domains directory not found. Run DomainUncertaintyAnalyzer first."
-            }, indent=2, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": "Domains directory not found. Run DomainUncertaintyAnalyzer first.",
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
 
         # 收集所有未解决的高优先级问题
         high_uncertainties = []
@@ -426,12 +476,17 @@ class UncertaintyQAManager(KodeTool):
             uncertainties = domain_data.get("uncertainties", [])
 
             for u in uncertainties:
-                if u.get("priority", "medium").lower() == "high" and u.get("status") not in ["resolved", "skipped"]:
+                if u.get("priority", "medium").lower() == "high" and u.get("status") not in [
+                    "resolved",
+                    "skipped",
+                ]:
                     # 添加领域信息
                     u["domain"] = domain_name
                     # 生成唯一 ID（如果没有）
                     if "id" not in u:
-                        u["id"] = f"{domain_name}_{u.get('entity', 'unknown')}_{len(high_uncertainties)}"
+                        u["id"] = (
+                            f"{domain_name}_{u.get('entity', 'unknown')}_{len(high_uncertainties)}"
+                        )
                     high_uncertainties.append(u)
 
         # 应用 limit
@@ -448,19 +503,17 @@ class UncertaintyQAManager(KodeTool):
                 groups[domain].append(u)
 
             grouped_result = [
-                {
-                    "domain": domain,
-                    "question_count": len(questions),
-                    "questions": questions
-                }
+                {"domain": domain, "question_count": len(questions), "questions": questions}
                 for domain, questions in groups.items()
             ]
         elif group_by == "priority":
-            grouped_result = [{
-                "priority": "high",
-                "question_count": len(high_uncertainties),
-                "questions": high_uncertainties
-            }]
+            grouped_result = [
+                {
+                    "priority": "high",
+                    "question_count": len(high_uncertainties),
+                    "questions": high_uncertainties,
+                }
+            ]
         else:
             grouped_result = high_uncertainties
 
@@ -474,20 +527,17 @@ class UncertaintyQAManager(KodeTool):
             question_type="batch_form",  # 特殊类型，表示批量表单
             options=grouped_result,  # 将分组后的问题列表传递给前端
             context=f"共 {len(high_uncertainties)} 个高优先级问题需要回答",
-            tool_instance=self  # 传递工具实例引用
+            tool_instance=self,  # 传递工具实例引用
         )
 
-    def _batch_record_answers(
-        self,
-        domains_dir: Path,
-        batch_answers: Dict[str, str]
-    ) -> str:
+    def _batch_record_answers(self, domains_dir: Path, batch_answers: Dict[str, str]) -> str:
         """批量记录多个问题的回答（新架构：更新领域文件）"""
         if not domains_dir.exists():
-            return json.dumps({
-                "status": "error",
-                "message": "Domains directory not found"
-            }, indent=2, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": "Domains directory not found"},
+                indent=2,
+                ensure_ascii=False,
+            )
 
         resolved_count = 0
         not_found = []
@@ -506,7 +556,9 @@ class UncertaintyQAManager(KodeTool):
                 for u in uncertainties:
                     # 生成 ID（如果没有）
                     if "id" not in u:
-                        u["id"] = f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                        u["id"] = (
+                            f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                        )
 
                     if u["id"] == uncertainty_id:
                         u["status"] = "resolved"
@@ -522,7 +574,7 @@ class UncertaintyQAManager(KodeTool):
                             "category": u.get("category", ""),
                             "question": u.get("question", ""),
                             "answer": answer,
-                            "added_at": datetime.now().isoformat()
+                            "added_at": datetime.now().isoformat(),
                         }
                         domain_data["business_rules"].append(business_rule)
 
@@ -547,29 +599,37 @@ class UncertaintyQAManager(KodeTool):
                 domain_data = json.load(f)
 
             for u in domain_data.get("uncertainties", []):
-                if u.get("priority", "medium").lower() == "high" and u.get("status") not in ["resolved", "skipped"]:
+                if u.get("priority", "medium").lower() == "high" and u.get("status") not in [
+                    "resolved",
+                    "skipped",
+                ]:
                     remaining_high += 1
 
-        return json.dumps({
-            "status": "success",
-            "resolved_count": resolved_count,
-            "not_found": not_found,
-            "remaining_high_priority": remaining_high,
-            "can_build_ontology": remaining_high == 0,
-            "message": (
-                f"已批量记录 {resolved_count} 个回答。剩余 {remaining_high} 个高优先级问题。"
-                if remaining_high > 0
-                else f"已批量记录 {resolved_count} 个回答。所有高优先级问题已解决！可以开始构建本体。"
-            )
-        }, indent=2, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "resolved_count": resolved_count,
+                "not_found": not_found,
+                "remaining_high_priority": remaining_high,
+                "can_build_ontology": remaining_high == 0,
+                "message": (
+                    f"已批量记录 {resolved_count} 个回答。剩余 {remaining_high} 个高优先级问题。"
+                    if remaining_high > 0
+                    else f"已批量记录 {resolved_count} 个回答。所有高优先级问题已解决！可以开始构建本体。"
+                ),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
 
     def _skip_uncertainty(self, domains_dir: Path, uncertainty_id: str) -> str:
         """标记某个问题为跳过（仅允许 medium/low 优先级，新架构：更新领域文件）"""
         if not domains_dir.exists():
-            return json.dumps({
-                "status": "error",
-                "message": "Domains directory not found"
-            }, indent=2, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": "Domains directory not found"},
+                indent=2,
+                ensure_ascii=False,
+            )
 
         found = False
         found_priority = None
@@ -583,15 +643,21 @@ class UncertaintyQAManager(KodeTool):
 
             for u in uncertainties:
                 if "id" not in u:
-                    u["id"] = f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                    u["id"] = (
+                        f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                    )
 
                 if u["id"] == uncertainty_id:
                     found_priority = u.get("priority", "medium")
                     if found_priority == "high":
-                        return json.dumps({
-                            "status": "error",
-                            "message": "不能跳过高优先级问题！必须回答所有 high 优先级问题才能构建本体。"
-                        }, indent=2, ensure_ascii=False)
+                        return json.dumps(
+                            {
+                                "status": "error",
+                                "message": "不能跳过高优先级问题！必须回答所有 high 优先级问题才能构建本体。",
+                            },
+                            indent=2,
+                            ensure_ascii=False,
+                        )
 
                     u["status"] = "skipped"
                     u["skipped_at"] = datetime.now().isoformat()
@@ -607,14 +673,19 @@ class UncertaintyQAManager(KodeTool):
                 break
 
         if not found:
-            return json.dumps({
-                "status": "error",
-                "message": f"Uncertainty with ID '{uncertainty_id}' not found"
-            }, indent=2, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": f"Uncertainty with ID '{uncertainty_id}' not found"},
+                indent=2,
+                ensure_ascii=False,
+            )
 
-        return json.dumps({
-            "status": "success",
-            "skipped_id": uncertainty_id,
-            "priority": found_priority,
-            "message": f"已跳过 {found_priority} 优先级问题。"
-        }, indent=2, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "skipped_id": uncertainty_id,
+                "priority": found_priority,
+                "message": f"已跳过 {found_priority} 优先级问题。",
+            },
+            indent=2,
+            ensure_ascii=False,
+        )

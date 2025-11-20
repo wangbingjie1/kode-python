@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from kode.core.model_manager import ModelManager
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
+from kode.utils.path_utils import get_safe_connection_path
 
 
 class DatabaseSchemaClustererInput(BaseModel):
@@ -403,7 +404,8 @@ IMPORTANT: Ensure ALL {len(table_features)} tables are assigned to exactly one d
             config = ConfigManager()
             storage_path = config.get("storage.schema_path", "./schema_store")
 
-            base_dir = Path(storage_path) / connection_name
+            safe_conn_name = get_safe_connection_path(connection_name)
+            base_dir = Path(storage_path) / safe_conn_name
             domains_dir = base_dir / "domains"
             domains_dir.mkdir(parents=True, exist_ok=True)
 

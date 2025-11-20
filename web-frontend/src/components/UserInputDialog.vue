@@ -1,5 +1,5 @@
 <template>
-  <div v-if="question" class="user-input-dialog-overlay" @click.self="handleCancel">
+  <div v-if="question && question.question_type !== 'batch_form'" class="user-input-dialog-overlay" @click.self="handleCancel">
     <div class="user-input-dialog">
       <!-- 问题标题 -->
       <div class="dialog-header">

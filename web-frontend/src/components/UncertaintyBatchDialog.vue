@@ -112,6 +112,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { notification } from '@/composables/useNotification'
+import { useChatStore } from '@/stores/chat'
+
+const chatStore = useChatStore()
 
 interface UncertaintyData {
   connection_name?: string
@@ -206,38 +209,27 @@ async function handleSubmit() {
   })
 
   const unansweredCount = allQuestions.filter(q => !answers.value[q.id]?.trim()).length
-
-  if (unansweredCount > 0) {
-    if (!confirm(`还有 ${unansweredCount} 个问题未填写答案，确定要提交吗？`)) {
-      return
-    }
-  }
-
+  
+  // 移除 confirm 确认框，直接提交
+  // 用户点击提交按钮即表示确认提交当前已填写的内容
+  
   isSubmitting.value = true
 
   try {
-    const response = await fetch('/api/uncertainty/batch-answer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        connection_name: connectionName,
-        answers: answers.value
-      })
+    console.log('[UncertaintyBatchDialog] Submitting answers:', answers.value)
+    
+    // 使用 chatStore 的 submitUserResponse 方法
+    // 传递 connection_name 和 answers
+    await chatStore.submitUserResponse({
+      connection_name: connectionName,
+      answers: answers.value
     })
 
-    const result = await response.json()
+    notification.success('提交成功', '所有问题已记录，AI 正在继续处理...')
+    emit('update:visible', false)
+    emit('submit', answers.value)
 
-    if (result.status === 'success') {
-      notification.success('提交成功', result.message || '所有问题已记录')
-      emit('update:visible', false)
-      emit('submit', answers.value)
-
-      // TODO: 通知后端继续 Agent 循环
-      // 这需要调用一个新的API端点来恢复对话流程
-      console.log('[UncertaintyBatchDialog] Answers submitted, Agent should continue now')
-    } else {
-      notification.error('提交失败', result.message || '未知错误')
-    }
+    console.log('[UncertaintyBatchDialog] Answers submitted, Agent should continue now')
   } catch (error: any) {
     console.error('[UncertaintyBatchDialog] Submission error:', error)
     notification.error('提交失败', error.message || '网络错误')

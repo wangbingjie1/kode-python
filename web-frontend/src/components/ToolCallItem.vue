@@ -196,6 +196,8 @@ const statusText = computed(() => {
   if (hasError.value || props.status === 'error') return '执行失败'
   if (props.status === 'completed') return '执行成功'
   if (props.status === 'started') return '执行中...'
+  // 如果有 toolResult，即使没有 status，也认为是已完成
+  if (props.toolResult && !props.status) return '执行成功'
   return '已完成'
 })
 
@@ -432,8 +434,7 @@ function openBatchDialog() {
 
 function handleDialogSubmit(answers: Record<string, string>) {
   console.log('[ToolCallItem] Batch answers submitted:', answers)
-  // 对话框组件已经处理提交逻辑，这里只做通知
-  notification.success('已提交', '问题答案已成功提交')
+  // 对话框组件已经处理提交逻辑并显示了通知，这里不需要重复显示
 }
 </script>
 
