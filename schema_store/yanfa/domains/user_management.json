@@ -2170,7 +2170,10 @@
         "如果是历史遗留表，建议标注是否仍在使用"
       ],
       "domain": "user_management",
-      "id": "user_management_backup_disabled_blacklist_accounts_39"
+      "id": "user_management_backup_disabled_blacklist_accounts_39",
+      "status": "resolved",
+      "answer": "我不知道",
+      "answered_at": "2025-11-21T10:04:04.795433"
     },
     {
       "type": "business_logic_unclear",
@@ -2186,7 +2189,10 @@
         "统一用户标识的命名规范"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user, user_40"
+      "id": "user_management_platform_user, user_40",
+      "status": "resolved",
+      "answer": "我不知道",
+      "answered_at": "2025-11-21T10:04:04.967875"
     },
     {
       "type": "naming_confusion",
@@ -2202,7 +2208,10 @@
         "考虑使用更明确的字段名如device_id"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_account.id, platform_user_device.id_41"
+      "id": "user_management_platform_user_account.id, platform_user_device.id_41",
+      "status": "resolved",
+      "answer": "我不知道",
+      "answered_at": "2025-11-21T10:04:05.145170"
     },
     {
       "type": "business_logic_unclear",
@@ -2234,7 +2243,10 @@
         "添加字段注释说明加密方式"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_wallet.private_key, user.private_key_43"
+      "id": "user_management_platform_user_wallet.private_key, user.private_key_43",
+      "status": "resolved",
+      "answer": "我不知道",
+      "answered_at": "2025-11-21T10:04:05.328609"
     },
     {
       "type": "naming_confusion",
@@ -2318,5 +2330,35 @@
     }
   ],
   "uncertainty_count": 10,
-  "uncertainty_analyzed_at": "2025-11-20T13:34:53.941552"
+  "uncertainty_analyzed_at": "2025-11-20T13:34:53.941552",
+  "business_rules": [
+    {
+      "entity": "backup_disabled_blacklist_accounts",
+      "category": "表职责",
+      "question": "表名包含'backup'、'disabled'、'blacklist'三个概念，无法确定该表的实际用途：是备份表？禁用账号表？黑名单表？还是三者的组合？",
+      "answer": "我不知道",
+      "added_at": "2025-11-21T10:04:04.795433"
+    },
+    {
+      "entity": "platform_user, user",
+      "category": "数据关系",
+      "question": "存在两个用户主表（platform_user和user），无法确定它们的关系：是否服务不同业务？是否存在数据同步？用户唯一标识如何关联？",
+      "answer": "我不知道",
+      "added_at": "2025-11-21T10:04:04.967875"
+    },
+    {
+      "entity": "platform_user_account.id, platform_user_device.id",
+      "category": "字段命名",
+      "question": "多个表的id字段注释不一致：platform_user_account.id注释为'账号ID'，platform_user_device.id也注释为'账号ID'，但实际应该是设备ID",
+      "answer": "我不知道",
+      "added_at": "2025-11-21T10:04:05.145170"
+    },
+    {
+      "entity": "platform_user_wallet.private_key, user.private_key",
+      "category": "安全性",
+      "question": "私钥以明文形式存储在数据库中（text/varchar类型），无法确定是否已加密，存在严重安全隐患",
+      "answer": "我不知道",
+      "added_at": "2025-11-21T10:04:05.328609"
+    }
+  ]
 }

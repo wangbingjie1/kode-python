@@ -2,6 +2,7 @@
 
 import json
 import asyncio
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
@@ -15,6 +16,17 @@ from kode.exceptions import UserInputRequired
 from kode.utils.path_utils import get_safe_connection_path
 
 logger = setup_logger(__name__)
+
+
+def _generate_uncertainty_id(domain_name: str, entity: str, category: str, question: str) -> str:
+    """
+    生成稳定的不确定性问题ID。
+
+    使用 domain + entity + category + question 的 hash 值，确保同一个问题每次生成的ID相同。
+    """
+    id_source = f"{domain_name}_{entity}_{category}_{question}"
+    hash_digest = hashlib.md5(id_source.encode("utf-8")).hexdigest()[:8]
+    return f"{domain_name}_{entity}_{hash_digest}"
 
 
 class UncertaintyQAManagerInput(BaseModel):
@@ -99,19 +111,56 @@ class UncertaintyQAManager(KodeTool):
         等待用户提交批量答案，然后自动保存到领域文件。
 
         Returns:
-            处理结果的 JSON 字符串
+            处理结果的 JSON 字符串（包含用户回答的详细内容）
         """
         logger.info("[UncertaintyQAManager] Waiting for user to submit batch answers...")
         await self._batch_response_event.wait()
 
-        answers = self._batch_response_data.get("answers", {})
+        # 🔥 修复：从 response_data 中正确提取 answers
+        # response_data 格式: {"answer": {"connection_name": "...", "answers": {...}}, "question_type": "batch_form"}
+        answer_data = self._batch_response_data.get("answer", {})
+        if isinstance(answer_data, dict):
+            answers = answer_data.get("answers", {})
+        else:
+            # 兼容旧格式（直接传递 answers）
+            answers = self._batch_response_data.get("answers", {})
+
         logger.info(f"[UncertaintyQAManager] User submitted {len(answers)} answers")
+        logger.info(f"[UncertaintyQAManager] Received response_data structure: {list(self._batch_response_data.keys())}")
+        logger.info(f"[UncertaintyQAManager] Extracted answers: {list(answers.keys())[:5]}")
 
         # 自动调用 batch_record_answers 保存答案
         domains_dir = self._get_domains_dir(self._connection_name)
-        result = self._batch_record_answers(domains_dir, answers)
+        result_json = self._batch_record_answers(domains_dir, answers)
 
-        return result
+        # 🔥 解析结果并添加用户实际回答的内容
+        result_dict = json.loads(result_json)
+
+        # 添加用户答案详情，让模型能看到实际内容
+        if result_dict.get("status") == "success":
+            # 提取每个问题的 ID、问题和答案
+            answered_details = []
+            for uncertainty_id, answer in answers.items():
+                # 从领域文件中查找对应问题的详细信息
+                domain_files = list(domains_dir.glob("*.json"))
+                for domain_file in domain_files:
+                    with open(domain_file, "r", encoding="utf-8") as f:
+                        domain_data = json.load(f)
+
+                    for u in domain_data.get("uncertainties", []):
+                        if u.get("id") == uncertainty_id:
+                            answered_details.append({
+                                "id": uncertainty_id,
+                                "question": u.get("question", ""),
+                                "answer": answer,
+                                "entity": u.get("entity", ""),
+                                "domain": domain_data.get("domain_name", domain_file.stem)
+                            })
+                            break
+
+            result_dict["answered_questions"] = answered_details
+
+        return json.dumps(result_dict, indent=2, ensure_ascii=False)
 
     def _run(
         self,
@@ -254,10 +303,13 @@ class UncertaintyQAManager(KodeTool):
             # 筛选未解决的高优先级问题
             for u in uncertainties:
                 if u.get("priority", "medium").lower() == "high" and u.get("status") != "resolved":
-                    # 生成唯一 ID（如果没有）
+                    # 生成唯一 ID（使用稳定的hash方式）
                     if "id" not in u:
-                        u["id"] = (
-                            f"{domain_name}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                        u["id"] = _generate_uncertainty_id(
+                            domain_name=domain_name,
+                            entity=u.get("entity", "unknown"),
+                            category=u.get("category", ""),
+                            question=u.get("question", "")
                         )
 
                     # 格式化为文本摘要，包含 ID
@@ -308,10 +360,14 @@ class UncertaintyQAManager(KodeTool):
             uncertainties = domain_data.get("uncertainties", [])
 
             for u in uncertainties:
-                # 生成 ID（如果没有）
+                # 生成 ID（使用稳定的hash方式）
                 if "id" not in u:
-                    u["id"] = (
-                        f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                    domain_name = domain_data.get('domain_name', domain_file.stem)
+                    u["id"] = _generate_uncertainty_id(
+                        domain_name=domain_name,
+                        entity=u.get("entity", "unknown"),
+                        category=u.get("category", ""),
+                        question=u.get("question", "")
                     )
 
                 if u["id"] == uncertainty_id:
@@ -482,10 +538,13 @@ class UncertaintyQAManager(KodeTool):
                 ]:
                     # 添加领域信息
                     u["domain"] = domain_name
-                    # 生成唯一 ID（如果没有）
+                    # 生成唯一 ID（使用稳定的hash方式）
                     if "id" not in u:
-                        u["id"] = (
-                            f"{domain_name}_{u.get('entity', 'unknown')}_{len(high_uncertainties)}"
+                        u["id"] = _generate_uncertainty_id(
+                            domain_name=domain_name,
+                            entity=u.get("entity", "unknown"),
+                            category=u.get("category", ""),
+                            question=u.get("question", "")
                         )
                     high_uncertainties.append(u)
 
@@ -543,6 +602,9 @@ class UncertaintyQAManager(KodeTool):
         not_found = []
         domain_files = list(domains_dir.glob("*.json"))
 
+        logger.info(f"[_batch_record_answers] 收到 {len(batch_answers)} 个答案")
+        logger.info(f"[_batch_record_answers] 答案ID列表: {list(batch_answers.keys())[:5]}")
+
         # 批量更新
         for uncertainty_id, answer in batch_answers.items():
             found = False
@@ -554,12 +616,17 @@ class UncertaintyQAManager(KodeTool):
                 uncertainties = domain_data.get("uncertainties", [])
 
                 for u in uncertainties:
-                    # 生成 ID（如果没有）
+                    # 生成 ID（使用相同的稳定hash方式）
                     if "id" not in u:
-                        u["id"] = (
-                            f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                        domain_name = domain_data.get('domain_name', domain_file.stem)
+                        u["id"] = _generate_uncertainty_id(
+                            domain_name=domain_name,
+                            entity=u.get("entity", "unknown"),
+                            category=u.get("category", ""),
+                            question=u.get("question", "")
                         )
 
+                    logger.debug(f"[_batch_record_answers] 对比 {u['id']} vs {uncertainty_id}")
                     if u["id"] == uncertainty_id:
                         u["status"] = "resolved"
                         u["answer"] = answer
@@ -643,8 +710,12 @@ class UncertaintyQAManager(KodeTool):
 
             for u in uncertainties:
                 if "id" not in u:
-                    u["id"] = (
-                        f"{domain_data.get('domain_name', domain_file.stem)}_{u.get('entity', 'unknown')}_{uncertainties.index(u)}"
+                    domain_name = domain_data.get('domain_name', domain_file.stem)
+                    u["id"] = _generate_uncertainty_id(
+                        domain_name=domain_name,
+                        entity=u.get("entity", "unknown"),
+                        category=u.get("category", ""),
+                        question=u.get("question", "")
                     )
 
                 if u["id"] == uncertainty_id:
