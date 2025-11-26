@@ -126,6 +126,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   send: [message: string, databaseName?: string]
   stop: []
+  'database-change': [databaseName: string]
 }>()
 
 const message = ref('')
@@ -207,6 +208,7 @@ function toggleDatabaseDropdown() {
 function selectDatabase(dbName: string) {
   selectedDatabase.value = dbName
   showDatabaseDropdown.value = false
+  emit('database-change', dbName)
   nextTick(() => textareaRef.value?.focus())
 }
 

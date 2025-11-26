@@ -58,7 +58,7 @@
             class="header-btn"
             @click="handleContextPanelToggle"
           >
-            <span>上下文</span>
+            <span>不确定性</span>
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
             </svg>
@@ -129,18 +129,17 @@
             :is-sending="chatStore.isTyping"
             @send="handleSendMessage"
             @stop="handleStopGeneration"
+            @database-change="handleDatabaseChange"
           />
         </div>
       </footer>
     </main>
 
-    <!-- Context Panel (Desktop) -->
-    <ContextPanel
+    <!-- Uncertainty Sidebar (Desktop) -->
+    <UncertaintySidebar
       v-if="contextPanelOpen && isDesktopViewport"
       class="context-panel"
-      :conversation="chatStore.currentConversation"
-      :is-connected="isConnected"
-      :message-count="chatStore.messages.length"
+      :connection-name="currentDatabaseName"
       @close="handleContextPanelClose"
     />
 
@@ -151,18 +150,16 @@
       @cancel="handleUserInputCancel"
     />
 
-    <!-- Context Panel (Mobile Sheet) -->
+    <!-- Uncertainty Sidebar (Mobile Sheet) -->
     <div
       v-if="contextPanelSheet && !isDesktopViewport"
       class="mobile-overlay"
       @click="handleContextPanelClose"
     >
       <div class="mobile-sheet" @click.stop>
-        <ContextPanel
+        <UncertaintySidebar
           modal
-          :conversation="chatStore.currentConversation"
-          :is-connected="isConnected"
-          :message-count="chatStore.messages.length"
+          :connection-name="currentDatabaseName"
           @close="handleContextPanelClose"
         />
       </div>
@@ -175,7 +172,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppSidebar from '@/components/AppSidebar.vue'
 import ChatInput from '@/components/ChatInput.vue'
-import ContextPanel from '@/components/ContextPanel.vue'
+import UncertaintySidebar from '@/components/UncertaintySidebar.vue'
 import MessageItem from '@/components/MessageItem.vue'
 import RealTokenCostCard from '@/components/RealTokenCostCard.vue'
 import UserInputDialog from '@/components/UserInputDialog.vue'
@@ -205,6 +202,7 @@ const isDesktopViewport = ref(false)
 const showScrollToLatest = ref(false)
 const messageContainer = ref<HTMLElement | null>(null)
 const currentProjectId = ref<string | null>(null)
+const currentDatabaseName = ref<string>('')
 
 const isConnected = computed(() => chatStore.isConnected)
 const isTyping = computed(() => chatStore.isTyping)
@@ -361,8 +359,17 @@ function handleContextPanelClose() {
   }
 }
 
+function handleDatabaseChange(databaseName: string) {
+  currentDatabaseName.value = databaseName
+}
+
 async function handleSendMessage(message: string, databaseName?: string) {
   if (!isConnected.value) return
+
+  // 保存当前选择的数据库名，用于问卷侧边栏
+  if (databaseName) {
+    currentDatabaseName.value = databaseName
+  }
 
   try {
     await chatStore.sendMessage(message, databaseName)

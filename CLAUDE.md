@@ -527,11 +527,11 @@ kode-python/
 Kode now supports connecting to databases and building business ontologies for intelligent data analysis.
 
 ### Supported Databases
-- **PostgreSQL** (asyncpg driver)
-- **MySQL** (aiomysql driver)
-- **SQL Server** (pyodbc driver)
-- **Oracle** (cx_oracle driver)
-- **SQLite** (aiosqlite driver)
+- **PostgreSQL** (asyncpg driver) - ✅ 完整支持（异步）
+- **MySQL** (aiomysql driver) - ✅ 完整支持（异步）
+- **SQL Server** (pyodbc driver) - ✅ 完整支持（同步）**[2025-11-21 新增]**
+- **SQLite** (aiosqlite driver) - ✅ 基础支持（异步）
+- **Oracle** (cx_oracle driver) - ⚠️ 部分支持（驱动未安装）
 
 ### Available Tools
 
@@ -675,4 +675,71 @@ stripe listen --forward-to localhost:8001/api/billing/webhook
 - `test_run.py`: 快速组件验证（无 API 调用）
 - `test_real_api.py`: 完整集成测试（需要 API key）
 - `tests/test_database_tools.py`: 数据库和本体工具测试
+- `test/test_sqlserver_simple.py`: SQL Server 简单连接测试（检查驱动）
+- `test/test_sqlserver_connection.py`: SQL Server 完整功能测试
 - `scripts/`: 辅助脚本（数据初始化、迁移等）
+
+## SQL Server Support Details **[2025-11-21 新增]**
+
+### 完整支持清单
+
+✅ **驱动和连接**
+- 已安装 `pyodbc 5.3.0`
+- 检测到 `ODBC Driver 17 for SQL Server`
+- 支持同步连接池
+
+✅ **Schema 批量提取**
+- 表结构（sys.tables）
+- 列信息（sys.columns + sys.types）
+- 列注释（sys.extended_properties / MS_Description）
+- 主键（sys.indexes）
+- 外键（sys.foreign_keys）
+
+✅ **数据提取**
+- 使用 SQL Server 特有的 TOP 语法
+- 支持样例数据提取（倒数 N 行）
+
+✅ **本体构建**
+- 完整的 schema 到本体映射
+- 自动解析列注释中的枚举映射
+- 支持中文字段名和注释
+
+### 关键实现位置
+
+- 连接管理: [kode/services/database_manager.py:94-101](kode/services/database_manager.py)
+- Schema 提取: [kode/tools/database_tools.py:851-1039](kode/tools/database_tools.py)
+- 样例数据: [kode/tools/database_tools.py:491-494](kode/tools/database_tools.py)
+
+### 使用要求
+
+**Windows 系统**：
+1. 安装 [ODBC Driver 17 for SQL Server](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server)
+2. 确保 SQL Server 允许远程连接（TCP/IP 协议）
+3. 开放防火墙端口 1433
+
+**连接字符串格式**：
+```
+mssql+pyodbc://username:password@host:port/database?driver=ODBC+Driver+17+for+SQL+Server
+```
+
+### 测试方法
+
+```bash
+# 1. 检查驱动和基本连接（推荐先运行）
+python test/test_sqlserver_simple.py
+
+# 2. 完整功能测试（需要实际数据库）
+python test/test_sqlserver_connection.py
+```
+
+### 功能对比
+
+| 功能 | PostgreSQL | MySQL | SQL Server |
+|------|-----------|-------|-----------|
+| Schema 批量提取 | ✅ | ✅ | ✅ |
+| 列注释提取 | ✅ | ✅ | ✅ |
+| 样例数据 | ✅ | ✅ | ✅ |
+| 异步支持 | ✅ | ✅ | ❌ |
+| 本体构建 | ✅ | ✅ | ✅ |
+
+详细文档: [doc/SQLSERVER_SUPPORT.md](doc/SQLSERVER_SUPPORT.md)

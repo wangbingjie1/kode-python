@@ -537,4 +537,124 @@ export async function cancelStreaming(
   return response.data
 }
 
+// ============== Uncertainty Sidebar API ==============
+
+export interface UncertaintyItem {
+  id: string
+  domain: string
+  type: string
+  category: string
+  priority: 'high' | 'medium' | 'low'
+  entity: string
+  question: string
+  context?: string
+  impact?: string
+  suggestions: string[]
+  status?: string
+  answer?: string
+  answered_at?: string
+}
+
+export interface UncertaintyGroup {
+  domain: string
+  question_count: number
+  questions: UncertaintyItem[]
+}
+
+export interface SidebarLoadRequest {
+  connection_name: string
+  priority_filter?: string[]
+  status_filter?: string[]
+  group_by?: 'domain' | 'priority' | 'none'
+  limit?: number
+}
+
+export interface SidebarLoadResponse {
+  status: 'success' | 'no_analysis'
+  connection_name: string
+  total_count: number
+  filtered_count: number
+  groups: UncertaintyGroup[]
+  summary: Record<string, { total: number; resolved: number; skipped: number; remaining: number }>
+  can_build_ontology: boolean
+  message: string
+}
+
+export interface SingleAnswerRequest {
+  connection_name: string
+  uncertainty_id: string
+  answer: string
+}
+
+export interface SingleAnswerResponse {
+  status: string
+  uncertainty_id: string
+  message: string
+  remaining_high_priority: number
+  can_build_ontology: boolean
+}
+
+export interface SkipQuestionRequest {
+  connection_name: string
+  uncertainty_id: string
+  reason?: string
+}
+
+export interface SkipQuestionResponse {
+  status: string
+  uncertainty_id: string
+  skipped_priority: string
+  message: string
+  remaining_high_priority: number
+  can_build_ontology: boolean
+}
+
+export interface UncertaintyStatusResponse {
+  status: string
+  connection_name: string
+  summary: Record<string, { total: number; resolved: number; skipped: number; remaining: number }>
+  can_build_ontology: boolean
+  message: string
+}
+
+/**
+ * Load uncertainties for sidebar questionnaire
+ */
+export async function sidebarLoadUncertainties(
+  request: SidebarLoadRequest
+): Promise<SidebarLoadResponse> {
+  const response = await apiClient.post<SidebarLoadResponse>('/uncertainty/sidebar/load', request)
+  return response.data
+}
+
+/**
+ * Answer a single uncertainty question
+ */
+export async function sidebarAnswerSingle(
+  request: SingleAnswerRequest
+): Promise<SingleAnswerResponse> {
+  const response = await apiClient.post<SingleAnswerResponse>('/uncertainty/sidebar/answer', request)
+  return response.data
+}
+
+/**
+ * Skip a non-high-priority question
+ */
+export async function sidebarSkipQuestion(
+  request: SkipQuestionRequest
+): Promise<SkipQuestionResponse> {
+  const response = await apiClient.post<SkipQuestionResponse>('/uncertainty/sidebar/skip', request)
+  return response.data
+}
+
+/**
+ * Get uncertainty status for a connection
+ */
+export async function getUncertaintyStatus(
+  connectionName: string
+): Promise<UncertaintyStatusResponse> {
+  const response = await apiClient.get<UncertaintyStatusResponse>(`/uncertainty/status/${connectionName}`)
+  return response.data
+}
+
 export default apiClient

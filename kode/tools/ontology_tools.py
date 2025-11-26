@@ -43,6 +43,12 @@ class OntologyBuilderInput(BaseModel):
         default=False,
         description="Force rebuild even if ontology exists. Set to True only after user explicitly confirms to rebuild."
     )
+    skip_uncertainty_check: bool = Field(
+        default=False,
+        description="跳过不确定性问题检查，直接构建本体。"
+                    "仅在用户明确表示'不回答问卷直接构建'时使用。"
+                    "注意：跳过检查可能导致本体质量下降。"
+    )
 
 
 class OntologySearchInput(BaseModel):
@@ -102,6 +108,7 @@ class OntologyBuilderTool(KodeTool):
         auto_save: bool = True,
         version: str = "auto",
         force_rebuild: bool = False,
+        skip_uncertainty_check: bool = False,
     ) -> str:
         """
         Build ontology from database schema using AI.
@@ -115,6 +122,7 @@ class OntologyBuilderTool(KodeTool):
             auto_save: Automatically save ontology to file
             version: Version identifier
             force_rebuild: Force rebuild even if ontology exists (requires user confirmation)
+            skip_uncertainty_check: 跳过不确定性检查，直接构建（需用户明确确认）
 
         Returns:
             Ontology as JSON
@@ -227,26 +235,51 @@ class OntologyBuilderTool(KodeTool):
                     for i, u in enumerate(unresolved_high[:5])
                 ])
 
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "gate_check_failed": True,
-                        "reason": "unresolved_high_priority_uncertainties",
-                        "message": f"❌ 不能构建本体！发现 {len(unresolved_high)} 个未解决的高优先级问题。",
-                        "unresolved_count": len(unresolved_high),
-                        "total_high_count": len(high_uncertainties),
-                        "sample_questions": question_list,
-                        "suggestion": "必须先回答所有 high 优先级问题（这些问题严重影响本体质量）。",
-                        "action_required": f"运行 UncertaintyQAManager(connection_name='{connection_name}', action='batch_load') 查看所有问题",
-                        "note": "不要重复运行 DomainUncertaintyAnalyzer，uncertainties.json 已存在。"
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
+                # 【重构】改为软提示模式：如果用户选择跳过检查，继续构建
+                if skip_uncertainty_check:
+                    logger.warning(
+                        f"⚠️ 用户选择跳过不确定性检查，继续构建本体。"
+                        f"未解决的高优先级问题数: {len(unresolved_high)}"
+                    )
+                else:
+                    # 返回软提示，而非硬阻止
+                    return json.dumps(
+                        {
+                            "status": "warning",
+                            "gate_check_failed": False,  # 改为 False，表示不是硬性失败
+                            "reason": "unresolved_high_priority_uncertainties",
+                            "message": f"⚠️ 发现 {len(unresolved_high)} 个未解决的高优先级问题。",
+                            "unresolved_count": len(unresolved_high),
+                            "total_high_count": len(high_uncertainties),
+                            "sample_questions": question_list,
+                            # 【关键改动】引导用户去侧边栏填写问卷
+                            "suggestion": (
+                                "建议先回答高优先级问题以提高本体质量。\n"
+                                "用户可以：\n"
+                                "1. 点击界面右上角的「上下文」按钮，在侧边栏中填写问卷\n"
+                                "2. 或者告诉我「跳过问卷，直接构建本体」（会影响本体质量）"
+                            ),
+                            # 保留旧的 action_required 给 Agent 使用
+                            "action_required": (
+                                f"如果用户选择跳过，使用 OntologyBuilder(connection_name='{connection_name}', skip_uncertainty_check=True)"
+                            ),
+                            "sidebar_action": {
+                                "type": "open_questionnaire",
+                                "connection_name": connection_name,
+                                "unresolved_count": len(unresolved_high)
+                            },
+                            "note": "用户可在侧边栏随时填写问卷，无需阻塞对话流程。"
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    )
 
-            # ✅ 情况3: 所有 high 问题已解决
+            # ✅ 情况3: 所有 high 问题已解决（或用户选择跳过）
             resolved_count = len([u for u in high_uncertainties if u.get("status") in ["resolved", "skipped"]])
-            logger.info(f"✅ 门禁检查通过：所有 {len(high_uncertainties)} 个高优先级问题已解决（resolved: {resolved_count}）")
+            if skip_uncertainty_check and unresolved_high:
+                logger.info(f"⚠️ 用户跳过检查，继续构建。未解决: {len(unresolved_high)}，已解决: {resolved_count}")
+            else:
+                logger.info(f"✅ 门禁检查通过：所有 {len(high_uncertainties)} 个高优先级问题已解决（resolved: {resolved_count}）")
 
             # Load schema data
             with open(schema_file, "r", encoding="utf-8") as f:
@@ -453,19 +486,38 @@ Schema: {db_schema or "默认"}
    - business_scenario: 业务场景描述
    - architecture_pattern: 架构模式（单体/微服务/领域驱动）
 
-6. **Business Rules（业务规则）**: 从 schema 推断的业务规则
-   - 唯一性约束
-   - 必填字段的业务含义
-   - 数据完整性规则
+6. **Axioms（业务公理与规则）**: 从 schema 推断出的可验证业务约束
+   - id: 唯一标识（如 "AX001"）
+   - name: 公理名称
+   - type: 类型
+     * invariant: 恒定约束（数据必须始终满足，如"金额非负"）
+     * constraint: 状态约束（特定状态下的限制，如"已发货不可取消"）
+     * derivation: 派生规则（可计算的值，如"订单总额=明细金额之和"）
+     * validation: 校验规则（输入验证，如"手机号格式"）
+   - scope: 作用范围（entity/relationship/cross_entity）
+   - entities: 涉及的实体列表
+   - expression: 伪代码/逻辑表达式
+   - natural_language: 自然语言描述
+   - priority: 重要性（critical/high/medium/low）
+   - source: 推断来源（constraint/comment/naming/pattern）
+   - confidence: 置信度（high/medium/low，基于推断依据的充分性）
 
 7. **Uncertainties（不确定性列表）**: 基于 schema 分析得出的困扰点和不利于分析的因素
-   - type: 不确定性类型（schema_ambiguity/missing_constraint/naming_confusion/business_logic_unclear/data_quality_concern）
-   - category: 分类（数据模型/业务逻辑/命名规范/数据质量/关系推断）
+   - type: 不确定性类型
+     * schema_ambiguity: 表/字段命名或结构不清晰
+     * missing_constraint: 缺少必要的约束
+     * naming_confusion: 命名不规范或含义不明
+     * business_logic_unclear: 业务逻辑不明确
+     * data_quality_concern: 数据质量问题
+     * axiom_unconfirmed: 推断的公理需要确认（对应 confidence=low 的公理）
+     * axiom_conflict: 公理之间可能存在冲突
+   - category: 分类（数据模型/业务逻辑/命名规范/数据质量/关系推断/业务规则）
    - priority: 优先级（high/medium/low）
    - entity: 相关实体（表名或 "整体"）
    - question: 具体的疑问或困扰描述
    - context: 产生困扰的上下文信息
    - impact: 影响范围描述
+   - related_axiom_id: 关联的公理ID（仅 axiom_unconfirmed/axiom_conflict 类型需要）
 
 # 输出格式
 
@@ -533,6 +585,44 @@ Schema: {db_schema or "默认"}
     "business_scenario": "B2C电商平台，支持用户注册、商品浏览、下单购买",
     "architecture_pattern": "单体应用"
   }},
+  "axioms": [
+    {{
+      "id": "AX001",
+      "name": "订单金额非负",
+      "type": "invariant",
+      "scope": "entity",
+      "entities": ["orders"],
+      "expression": "orders.total_amount >= 0",
+      "natural_language": "订单总金额必须大于等于零",
+      "priority": "critical",
+      "source": "constraint",
+      "confidence": "high"
+    }},
+    {{
+      "id": "AX002",
+      "name": "订单总额等于明细之和",
+      "type": "derivation",
+      "scope": "cross_entity",
+      "entities": ["orders", "order_items"],
+      "expression": "orders.total_amount = SUM(order_items.subtotal) WHERE order_items.order_id = orders.id",
+      "natural_language": "订单总金额应等于所有订单明细小计之和",
+      "priority": "high",
+      "source": "pattern",
+      "confidence": "medium"
+    }},
+    {{
+      "id": "AX003",
+      "name": "用户手机号格式",
+      "type": "validation",
+      "scope": "entity",
+      "entities": ["users"],
+      "expression": "users.phone MATCHES '^1[3-9]\\d{{9}}$'",
+      "natural_language": "用户手机号必须是有效的11位中国大陆手机号",
+      "priority": "medium",
+      "source": "naming",
+      "confidence": "medium"
+    }}
+  ],
   "uncertainties": [
     {{
       "type": "missing_constraint",
@@ -544,13 +634,14 @@ Schema: {db_schema or "默认"}
       "impact": "影响订单状态管理、订单查询、业务分析等核心功能"
     }},
     {{
-      "type": "schema_ambiguity",
-      "category": "业务逻辑",
+      "type": "axiom_unconfirmed",
+      "category": "业务规则",
       "priority": "medium",
-      "entity": "整体",
-      "question": "缺少用户行为日志表，无法进行用户行为分析",
-      "context": "当前 schema 仅有业务实体表（用户、订单、商品），缺少日志/事件表",
-      "impact": "限制了用户行为分析、推荐系统、安全审计等高级功能"
+      "entity": "orders",
+      "question": "订单总额=明细之和的规则是否正确？是否存在运费、折扣等其他因素？",
+      "context": "公理 AX002 推断订单总额等于明细小计之和，但可能存在额外费用",
+      "impact": "影响财务对账、订单金额计算的准确性",
+      "related_axiom_id": "AX002"
     }}
   ]
 }}
@@ -563,11 +654,19 @@ Schema: {db_schema or "默认"}
 - 推断隐式关系（如字段名包含 _id 后缀）
 - 识别常见的业务模式（用户-订单、分类-商品等）
 - 描述要准确、专业，体现对业务的深入理解
+- **重点关注业务公理（axioms）**：
+  * 从数据库约束推断：NOT NULL、UNIQUE、CHECK、DEFAULT 值
+  * 从字段命名推断：amount/price/qty 通常非负，status 有有限状态集
+  * 从表关系推断：主表-明细表的汇总关系，父子表的完整性
+  * 从注释推断：字段注释中的枚举值、取值范围、业务规则
+  * 从常见模式推断：订单状态流转、库存扣减、金额计算等
+  * confidence 标注：有明确约束支撑的为 high，仅从命名/模式推断的为 medium/low
 - **重点关注不确定性（uncertainties）**：
   * 仔细分析 schema 中的模糊点、缺失约束、命名不清晰等问题
   * 从数据分析师/架构师的角度思考：哪些地方会让你困惑？哪些信息缺失会阻碍业务分析？
   * 每个不确定性必须包含具体的 question（疑问）、context（上下文）、suggestions（解决建议）
   * 优先级判断：high（严重影响数据分析和业务理解）、medium（有一定影响）、low（轻微影响）
+  * 对于置信度为 low 的公理，应生成对应的不确定性问题让用户确认
 """
 
     def _extract_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
@@ -709,7 +808,7 @@ Schema: {db_schema or "默认"}
                          global_context: Dict[str, Any], schema_metadata: Dict[str, Any],
                          connection_name: str, model_manager) -> Dict[str, Any]:
         """合并所有域的本体+跨域洞察。"""
-        all_concepts, all_properties, all_relationships, all_hierarchies, all_uncertainties = {}, {}, [], [], []
+        all_concepts, all_properties, all_relationships, all_hierarchies, all_uncertainties, all_axioms = {}, {}, [], [], [], []
 
         for ont in domain_ontologies.values():
             all_concepts.update(ont.get("concepts", {}))
@@ -717,6 +816,7 @@ Schema: {db_schema or "默认"}
             all_relationships.extend(ont.get("relationships", []))
             all_hierarchies.extend(ont.get("hierarchies", []))
             all_uncertainties.extend(ont.get("uncertainties", []))
+            all_axioms.extend(ont.get("axioms", []))
 
         all_relationships.extend(cross_domain_insights.get("relationships", []))
         all_hierarchies.extend(cross_domain_insights.get("global_hierarchies", []))
@@ -729,6 +829,9 @@ Schema: {db_schema or "默认"}
                 "business_scenario": global_context.get("insights", ""),
                 "architecture_pattern": global_context.get("architecture_pattern", "未知")
             }
+
+        # 跨域公理（如跨表的派生规则）
+        all_axioms.extend(cross_domain_insights.get("axioms", []))
 
         return {
             "metadata": {
@@ -748,6 +851,7 @@ Schema: {db_schema or "默认"}
             "relationships": all_relationships,
             "hierarchies": all_hierarchies,
             "domain_insights": domain_insights,
+            "axioms": all_axioms,
             "uncertainties": all_uncertainties,
             "recommendations": [],
             "statistics": {
@@ -755,6 +859,7 @@ Schema: {db_schema or "默认"}
                 "property_count": len(all_properties),
                 "relationship_count": len(all_relationships),
                 "hierarchy_count": len(all_hierarchies),
+                "axiom_count": len(all_axioms),
                 "uncertainty_count": len(all_uncertainties),
             },
         }
@@ -978,6 +1083,7 @@ Schema: {db_schema or "默认"}
                 "relationships": [],
                 "hierarchies": [],
                 "domain_insights": {},
+                "axioms": [],
                 "uncertainties": []
             }
 
@@ -990,6 +1096,7 @@ Schema: {db_schema or "默认"}
             "relationships": ontology_data.get("relationships", []),
             "hierarchies": ontology_data.get("hierarchies", []),
             "domain_insights": ontology_data.get("domain_insights", {}),
+            "axioms": ontology_data.get("axioms", []),
             "uncertainties": uncertainties
         }
 
@@ -1125,6 +1232,7 @@ Schema: {db_schema or "默认"}
         all_hierarchies = []
         all_domain_insights = []
         all_uncertainties = []
+        all_axioms = []
 
         for domain_name, ont in domain_ontologies.items():
             all_concepts.update(ont.get("concepts", {}))
@@ -1136,6 +1244,8 @@ Schema: {db_schema or "默认"}
 
             # 收集不确定性数据
             all_uncertainties.extend(ont.get("uncertainties", []))
+            # 收集公理数据
+            all_axioms.extend(ont.get("axioms", []))
 
         # 合并 domain insights
         primary_domains = [d.get("primary_domain") for d in all_domain_insights if d.get("primary_domain")]
@@ -1161,12 +1271,14 @@ Schema: {db_schema or "默认"}
                 "business_scenario": " | ".join(business_scenarios[:3]),  # 前3个
                 "architecture_pattern": "Multi-Domain ERP"
             },
+            "axioms": all_axioms,
             "uncertainties": all_uncertainties,
             "statistics": {
                 "concept_count": len(all_concepts),
                 "property_count": len(all_properties),
                 "relationship_count": len(all_relationships),
                 "hierarchy_count": len(all_hierarchies),
+                "axiom_count": len(all_axioms),
                 "uncertainty_count": len(all_uncertainties)
             }
         }

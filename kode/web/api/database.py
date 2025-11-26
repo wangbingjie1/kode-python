@@ -522,6 +522,7 @@ async def list_ontologies():
                             "concept_count": len(ontology.get("concepts", {})),
                             "property_count": len(ontology.get("properties", {})),
                             "relationship_count": len(ontology.get("relationships", [])),
+                            "axiom_count": len(ontology.get("axioms", [])),
                             "uncertainty_count": len(ontology.get("uncertainties", [])),
                             "has_domain_insights": "domain_insights" in ontology,
                         })

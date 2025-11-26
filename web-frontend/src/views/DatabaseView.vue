@@ -19,7 +19,7 @@
         </div>
         <button
           v-if="currentView === 'connections'"
-          @click="showConnectionForm = true"
+          @click="openCreateConnectionForm"
           class="btn-primary"
           type="button"
         >
@@ -206,11 +206,15 @@
       </section>
     </div>
 
-    <div v-if="showConnectionForm" class="modal-overlay" @click="closeConnectionForm">
+    <div
+      v-if="showConnectionForm"
+      class="modal-overlay"
+      @click.self="requestCloseConnectionForm"
+    >
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h2>{{ isEditMode ? '编辑数据库连接' : '新建数据库连接' }}</h2>
-          <button @click="closeConnectionForm" class="btn-icon" type="button">×</button>
+          <button @click="requestCloseConnectionForm" class="btn-icon" type="button">×</button>
         </div>
         <form @submit.prevent="saveConnection" class="connection-form">
           <div class="form-group">
@@ -258,7 +262,7 @@
             </label>
           </div>
           <div class="form-actions">
-            <button type="button" @click="closeConnectionForm" class="btn-secondary">
+            <button type="button" @click="requestCloseConnectionForm" class="btn-secondary">
               取消
             </button>
             <button type="submit" class="btn-primary" :disabled="creating">
@@ -274,7 +278,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import api, {
+import {
   listDatabaseConnections,
   createDatabaseConnection,
   updateDatabaseConnection,
@@ -306,17 +310,8 @@ const expandedTables = ref<Set<string>>(new Set())
 
 const currentConversationId = computed(() => route.params.conversationId as string | undefined)
 
-const formData = ref<CreateDatabaseConnectionRequest>({
-  name: '',
-  db_type: 'postgresql',
-  host: 'localhost',
-  port: 5432,
-  database: '',
-  username: '',
-  password: '',
-  db_schema: '',
-  ssl: false
-})
+const formData = ref<CreateDatabaseConnectionRequest>(getDefaultFormState())
+const initialFormState = ref<CreateDatabaseConnectionRequest>(getDefaultFormState())
 
 onMounted(async () => {
   await loadConnections()
@@ -336,12 +331,19 @@ async function selectConnection(connection: DatabaseConnection) {
   expandedTables.value.clear()
 }
 
+function openCreateConnectionForm() {
+  isEditMode.value = false
+  editingConnectionName.value = null
+  setFormState(getDefaultFormState())
+  showConnectionForm.value = true
+}
+
 function editConnection() {
   if (!selectedConnection.value) return
 
   isEditMode.value = true
   editingConnectionName.value = selectedConnection.value.name
-  formData.value = {
+  const prefilled: CreateDatabaseConnectionRequest = {
     name: selectedConnection.value.name,
     db_type: selectedConnection.value.db_type,
     host: selectedConnection.value.host,
@@ -352,6 +354,7 @@ function editConnection() {
     db_schema: selectedConnection.value.schema || '',
     ssl: selectedConnection.value.ssl
   }
+  setFormState(prefilled)
   showConnectionForm.value = true
 }
 
@@ -377,7 +380,7 @@ async function saveConnection() {
       notification.success('创建成功', `连接 ${formData.value.name} 已创建`)
     }
     await loadConnections()
-    closeConnectionForm()
+    closeConnectionForm(true)
   } catch (error: any) {
     const operation = isEditMode.value ? '更新' : '创建'
     notification.error(`${operation}失败`, error.response?.data?.detail || error.message)
@@ -444,11 +447,37 @@ function toggleTable(tableName: string) {
   }
 }
 
-function closeConnectionForm() {
+function requestCloseConnectionForm() {
+  closeConnectionForm(false)
+}
+
+function closeConnectionForm(force = false) {
+  if (!force && hasUnsavedChanges()) {
+    const shouldClose = confirm(
+      '\u8868\u5355\u5185\u5bb9\u672a\u4fdd\u5b58\uff0c\u786e\u5b9a\u8981\u5173\u95ed\u5417\uff1f'
+    )
+    if (!shouldClose) return
+  }
+
   showConnectionForm.value = false
   isEditMode.value = false
   editingConnectionName.value = null
-  formData.value = {
+  setFormState(getDefaultFormState())
+}
+
+function getDatabaseIcon(dbType: string): string {
+  const icons: Record<string, string> = {
+    postgresql: '🐘',
+    mysql: '🐬',
+    sqlite: '📁',
+    sqlserver: '🔷',
+    oracle: '🔴'
+  }
+  return icons[dbType] || '💾'
+}
+
+function getDefaultFormState(): CreateDatabaseConnectionRequest {
+  return {
     name: '',
     db_type: 'postgresql',
     host: 'localhost',
@@ -461,15 +490,26 @@ function closeConnectionForm() {
   }
 }
 
-function getDatabaseIcon(dbType: string): string {
-  const icons: Record<string, string> = {
-    postgresql: '🐘',
-    mysql: '🐬',
-    sqlite: '📁',
-    sqlserver: '🔷',
-    oracle: '🔴'
-  }
-  return icons[dbType] || '💾'
+function setFormState(nextState: CreateDatabaseConnectionRequest) {
+  formData.value = { ...nextState }
+  initialFormState.value = { ...nextState }
+}
+
+function hasUnsavedChanges(): boolean {
+  const current = formData.value
+  const baseline = initialFormState.value
+
+  return (
+    current.name !== baseline.name ||
+    current.db_type !== baseline.db_type ||
+    current.host !== baseline.host ||
+    current.port !== baseline.port ||
+    current.database !== baseline.database ||
+    current.username !== baseline.username ||
+    (current.password || '') !== (baseline.password || '') ||
+    (current.db_schema || '') !== (baseline.db_schema || '') ||
+    !!current.ssl !== !!baseline.ssl
+  )
 }
 </script>
 

@@ -848,6 +848,26 @@ class DatabaseSchemaExtractorTool(KodeTool):
                         WHERE TABLE_NAME IN ('{table_list}')
                         ORDER BY TABLE_NAME, ORDINAL_POSITION
                     """
+                elif db_type == "sqlserver":
+                    columns_query = f"""
+                        SELECT
+                            t.name as table_name,
+                            c.name as column_name,
+                            ty.name as data_type,
+                            CASE WHEN c.is_nullable = 1 THEN 'YES' ELSE 'NO' END as is_nullable,
+                            dc.definition as column_default,
+                            CAST(ep.value AS NVARCHAR(MAX)) as comment
+                        FROM sys.tables t
+                        INNER JOIN sys.columns c ON t.object_id = c.object_id
+                        INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+                        LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+                        LEFT JOIN sys.extended_properties ep
+                            ON ep.major_id = c.object_id
+                            AND ep.minor_id = c.column_id
+                            AND ep.name = 'MS_Description'
+                        WHERE t.name IN ('{table_list}')
+                        ORDER BY t.name, c.column_id
+                    """
                 elif db_type == "sqlite":
                     # SQLite 不支持 information_schema，fallback 到并发模式
                     return None
@@ -860,6 +880,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
                     if table_name in results:
                         # MySQL: table_name, column_name, data_type, column_type, is_nullable, column_default, comment
                         # PostgreSQL: table_name, column_name, data_type, is_nullable, column_default, comment
+                        # SQL Server: table_name, column_name, data_type, is_nullable, column_default, comment
                         if db_type == "mysql":
                             col_comment = row[6] if len(row) > 6 else None
                             col_info = {
@@ -880,6 +901,21 @@ class DatabaseSchemaExtractorTool(KodeTool):
                                     col_info["enum_values"] = enum_values
 
                             # 2. 从 comment 中解析枚举映射
+                            enum_mapping = self._parse_enum_from_comment(col_comment)
+                            if enum_mapping:
+                                col_info["enum_mapping"] = enum_mapping
+                        elif db_type == "sqlserver":
+                            # SQL Server: table_name, column_name, data_type, is_nullable, column_default, comment
+                            col_comment = row[5] if len(row) > 5 else None
+                            col_info = {
+                                "name": row[1],
+                                "type": row[2],
+                                "nullable": row[3] == "YES",
+                                "default": row[4] if len(row) > 4 else None,
+                                "comment": col_comment
+                            }
+
+                            # 从 comment 中解析枚举映射
                             enum_mapping = self._parse_enum_from_comment(col_comment)
                             if enum_mapping:
                                 col_info["enum_mapping"] = enum_mapping
@@ -923,6 +959,19 @@ class DatabaseSchemaExtractorTool(KodeTool):
                         WHERE CONSTRAINT_NAME = 'PRIMARY'
                             AND TABLE_NAME IN ('{table_list}')
                         ORDER BY TABLE_NAME, ORDINAL_POSITION
+                    """
+                elif db_type == "sqlserver":
+                    pk_query = f"""
+                        SELECT
+                            t.name as table_name,
+                            c.name as column_name
+                        FROM sys.tables t
+                        INNER JOIN sys.indexes i ON t.object_id = i.object_id
+                        INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+                        INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+                        WHERE i.is_primary_key = 1
+                            AND t.name IN ('{table_list}')
+                        ORDER BY t.name, ic.key_ordinal
                     """
                 else:
                     pk_query = None
@@ -971,6 +1020,22 @@ class DatabaseSchemaExtractorTool(KodeTool):
                         FROM information_schema.KEY_COLUMN_USAGE
                         WHERE REFERENCED_TABLE_NAME IS NOT NULL
                             AND TABLE_NAME IN ('{table_list}')
+                    """
+                elif db_type == "sqlserver":
+                    fk_query = f"""
+                        SELECT
+                            t.name as table_name,
+                            fk.name as constraint_name,
+                            c.name as column_name,
+                            rt.name as foreign_table_name,
+                            rc.name as foreign_column_name
+                        FROM sys.foreign_keys fk
+                        INNER JOIN sys.tables t ON fk.parent_object_id = t.object_id
+                        INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+                        INNER JOIN sys.columns c ON fkc.parent_object_id = c.object_id AND fkc.parent_column_id = c.column_id
+                        INNER JOIN sys.tables rt ON fk.referenced_object_id = rt.object_id
+                        INNER JOIN sys.columns rc ON fkc.referenced_object_id = rc.object_id AND fkc.referenced_column_id = rc.column_id
+                        WHERE t.name IN ('{table_list}')
                     """
                 else:
                     fk_query = None

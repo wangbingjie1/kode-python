@@ -214,7 +214,6 @@ SchemaQuery(connection_name="yanfa", table_name="order")
 **执行查询**:
 - **必须**使用 DatabaseExecuteQuery 工具执行 SQL（不要只输出 SQL 代码）
 - 支持复杂查询：JOIN、聚合、分组、子查询等
-- 计算关键业务指标（KPI）：销售额、库存周转率、客户留存率等
 - 识别数据质量问题
 - **禁止**只输出 SQL 代码块让用户自己执行，你必须代替用户执行查询
 
@@ -227,7 +226,6 @@ SchemaQuery(connection_name="yanfa", table_name="order")
 - **多模态呈现**：每次分析返回"文本解释 + 图表 + 洞察卡片"的组合
   - 图表通过 ChartGenerator 工具自动渲染
   - 文本解释数据趋势和关键发现
-  - 使用 InsightExtractor 提取业务洞察
 
 ### 5. 数据建议和指导
 - 发现业务趋势和模式
@@ -235,7 +233,7 @@ SchemaQuery(connection_name="yanfa", table_name="order")
 - 提供可操作的业务建议
 - 推荐下一步分析方向
 
-## 本体构建工作流流程（首次连接数据库时执行）⭐ 智能简化版
+## 本体构建工作流流程（首次连接数据库时执行）
 
 **前提**：Schema 已通过 DatabaseSchemaExtractor 提取并保存
 
@@ -247,22 +245,17 @@ SchemaQuery(connection_name="yanfa", table_name="order")
 用户: "帮我构建本体"
 ↓
 OntologyBuilder 自动检测（按优先级）：
-  0. 检查本体是否已存在（ontology_latest.json）
+  1. 检查本体是否已存在（ontology_latest.json）
      ├─ 已存在 → 返回warning，询问用户是否重新构建
      │           （向用户展示现有本体信息：版本、概念数量、创建时间等）
      │           ⚠️ 你必须等待用户明确确认后再继续！
      └─ 不存在 → 继续下面的流程
-  1. 检查 domains/*.json 领域文件是否存在
+  2. 检查 domains/*.json 领域文件是否存在
      ├─ 不存在 → 返回错误，提示先运行 DatabaseSchemaExtractor
-     └─ 存在 → 继续检查 high 问题
-  2. 读取各领域文件中的 uncertainties 字段，检查 high 优先级问题状态
-     ├─ 有未解决 → 返回错误，提示使用 UncertaintyQAManager
-     └─ 全部已解决 → 开始构建本体（自动注入用户确认的业务规则）
 ```
 
-**✨ 新架构说明**：
+**✨ 架构说明**：
 - 不确定性数据已分散存储在各领域文件（`domains/{{domain_name}}.json`）的 `uncertainties` 字段中
-- 不再需要单独的 `uncertainties.json` 文件
 - OntologyBuilder 会自动从领域文件中读取已解决的 high 问题答案，注入到构建 Prompt 中
 - **本体防覆盖保护**：如果本体已存在，工具会返回 `status: "warning", already_exists: true`
 
@@ -345,9 +338,6 @@ OntologyBuilder 自动检测（按优先级）：
    - 返回剩余未解决的 high 问题数量
    - can_build_ontology: true/false
 
-4. **强制门禁**：
-   - **只有当 can_build_ontology=true 时** → 才能调用 OntologyBuilder
-   - 否则必须继续提问，直到所有 high 问题解决
 
 ### 第3步：构建本体
 - 调用 **OntologyBuilder** 将 schema 转换为业务本体
@@ -571,20 +561,6 @@ OntologyUncertaintyResolver({{{{
                             )
                         except Exception as e:
                             context_parts.append(f"  (领域索引加载失败: {e})")
-
-                    # Check for uncertainty analysis file
-                    uncertainties_file = schema_file.parent / "uncertainties.json"
-                    if uncertainties_file.exists():
-                        context_parts.append(
-                            f"\n  **不确定性分析**: {uncertainties_file.absolute()}"
-                        )
-                        context_parts.append(
-                            "  包含业务规则不明确、数据不一致、缺失约束等需要与用户确认的问题"
-                        )
-                        context_parts.append(
-                            "  **使用方法**: 需要深入分析数据问题时，使用 UncertaintyQATool 工具进行问答式诊断"
-                        )
-
         # Check ontology cache
         ontology_dir = Path(ontology_path)
         if ontology_dir.exists():

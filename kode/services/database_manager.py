@@ -96,9 +96,10 @@ class DatabaseConnection:
             url = (
                 f"mssql+{driver}://{self.username}:{encoded_password}"
                 f"@{self.host}:{self.port}/{self.database}"
+                f"?driver=ODBC+Driver+17+for+SQL+Server"
             )
             if self.ssl:
-                url += "?encrypt=yes"
+                url += "&encrypt=yes"
 
         elif self.db_type == "oracle":
             driver = "cx_oracle"
