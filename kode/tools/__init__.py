@@ -14,7 +14,6 @@ from .database_tools import (
     DatabaseExecuteQueryTool,
 )
 from .ontology_tools import (
-    OntologyBuilderTool,
     OntologySearchTool,
 )
 from .interaction_tools import AskUserTool
@@ -42,7 +41,6 @@ __all__ = [
     "DatabaseSchemaExtractorTool",
     "DatabaseExecuteQueryTool",
     # Ontology
-    "OntologyBuilderTool",
     "OntologySearchTool",
     # Interaction
     "AskUserTool",

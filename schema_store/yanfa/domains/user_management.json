@@ -1,9 +1,9 @@
 {
   "domain_name": "user_management",
   "display_name": "User Management",
-  "description": "Core user account management including authentication, profiles, devices, and user-related configurations.",
+  "description": "Core user identity, authentication, profile management, and device tracking across the platform.",
   "table_count": 10,
-  "created_at": "2025-11-20T13:32:49.939858",
+  "created_at": "2025-11-27T16:46:41.599580",
   "connection": {
     "name": "yanfa",
     "db_type": "mysql",
@@ -1504,7 +1504,7 @@
             "name": null,
             "email": "richardlegalnow@gmail.com",
             "password": "8186f37f028ba5967babfb8fb03e8ce2",
-            "balance": "81.747330",
+            "balance": "40.897589",
             "block_amount": "0.000000",
             "chain_account": null,
             "source": "Email",
@@ -1596,101 +1596,6 @@
         "table": "user_option",
         "schema_file": "schema_store\\yanfa\\schema_raw.json",
         "json_path": "schema.tables.user_option"
-      }
-    },
-    "pre_signup": {
-      "name": "pre_signup",
-      "columns": [
-        {
-          "name": "id",
-          "type": "bigint",
-          "nullable": false,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "email",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "用户email"
-        },
-        {
-          "name": "source",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "用户来源"
-        },
-        {
-          "name": "created_at",
-          "type": "timestamp",
-          "nullable": false,
-          "default": "CURRENT_TIMESTAMP",
-          "comment": "创建时间"
-        },
-        {
-          "name": "updated_at",
-          "type": "timestamp",
-          "nullable": false,
-          "default": "CURRENT_TIMESTAMP",
-          "comment": "更新时间"
-        }
-      ],
-      "foreign_keys": [],
-      "primary_key": {
-        "name": "PRIMARY",
-        "columns": [
-          "id"
-        ]
-      },
-      "column_count": 5,
-      "sample_data": {
-        "row_count": 5,
-        "rows": [
-          {
-            "id": 11,
-            "email": "1178377059@qq.com",
-            "source": null,
-            "created_at": "2025-10-21T12:14:32",
-            "updated_at": "2025-10-21T12:14:32"
-          },
-          {
-            "id": 12,
-            "email": "rRooBet9001@protonmail.com",
-            "source": null,
-            "created_at": "2025-10-21T12:15:12",
-            "updated_at": "2025-10-21T12:15:12"
-          },
-          {
-            "id": 19,
-            "email": "antoine.becotte2@qolab.ca",
-            "source": null,
-            "created_at": "2025-10-21T12:18:51",
-            "updated_at": "2025-10-21T12:18:51"
-          },
-          {
-            "id": 27,
-            "email": "v9bg4@8mtz.com",
-            "source": null,
-            "created_at": "2025-10-21T12:32:49",
-            "updated_at": "2025-10-21T12:32:49"
-          },
-          {
-            "id": 28,
-            "email": "eugenianguyen1914@tubermail.com",
-            "source": null,
-            "created_at": "2025-10-21T12:34:09",
-            "updated_at": "2025-10-21T12:34:09"
-          }
-        ],
-        "note": "前 5 行样例数据（快速采样，无排序）"
-      },
-      "schema_ref": {
-        "connection": "yanfa",
-        "table": "pre_signup",
-        "schema_file": "schema_store\\yanfa\\schema_raw.json",
-        "json_path": "schema.tables.pre_signup"
       }
     },
     "backup_disabled_blacklist_accounts": {
@@ -2058,6 +1963,100 @@
         "json_path": "schema.tables.backup_disabled_blacklist_accounts"
       }
     },
+    "personal_access_tokens": {
+      "name": "personal_access_tokens",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "tokenable_type",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "tokenable_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "token",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "abilities",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "last_used_at",
+          "type": "timestamp",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamp",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "nullable": true,
+          "default": null,
+          "comment": ""
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 10,
+      "sample_data": {
+        "row_count": 0,
+        "rows": [],
+        "note": "前 0 行样例数据（快速采样，无排序）"
+      },
+      "schema_ref": {
+        "connection": "yanfa",
+        "table": "personal_access_tokens",
+        "schema_file": "schema_store\\yanfa\\schema_raw.json",
+        "json_path": "schema.tables.personal_access_tokens"
+      }
+    },
     "platform_email_domain_blacklist": {
       "name": "platform_email_domain_blacklist",
       "columns": [
@@ -2158,207 +2157,181 @@
   "uncertainties": [
     {
       "type": "schema_ambiguity",
-      "category": "表职责",
+      "category": "表关系",
       "priority": "high",
       "entity": "backup_disabled_blacklist_accounts",
-      "question": "表名包含'backup'、'disabled'、'blacklist'三个概念，无法确定该表的实际用途：是备份表？禁用账号表？黑名单表？还是三者的组合？",
-      "context": "该表结构与platform_user_account完全相同，但表名暗示多重用途",
-      "impact": "无法确定该表在用户管理流程中的作用，影响账号状态管理、黑名单机制的理解",
+      "question": "该表与 platform_user_account 结构完全相同，但表名暗示是备份或黑名单账号，其业务用途和与主表的关系不明确",
+      "context": "两表字段完全一致，但 backup_disabled_blacklist_accounts 缺少主键定义，且表名包含 backup、disabled、blacklist 三个概念",
+      "impact": "无法确定账号数据的主数据源，可能导致数据同步、查询和统计错误",
       "suggestions": [
-        "明确表的主要用途，建议拆分为独立的backup、disabled、blacklist表",
-        "添加表注释说明该表的业务场景和数据来源",
-        "如果是历史遗留表，建议标注是否仍在使用"
+        "明确该表是历史备份表、禁用账号表还是黑名单表",
+        "定义与 platform_user_account 的数据流转关系",
+        "添加主键约束和时间戳字段"
       ],
       "domain": "user_management",
-      "id": "user_management_backup_disabled_blacklist_accounts_39",
-      "status": "resolved",
-      "answer": "我不知道",
-      "answered_at": "2025-11-21T10:04:04.795433"
-    },
-    {
-      "type": "business_logic_unclear",
-      "category": "数据关系",
-      "priority": "high",
-      "entity": "platform_user, user",
-      "question": "存在两个用户主表（platform_user和user），无法确定它们的关系：是否服务不同业务？是否存在数据同步？用户唯一标识如何关联？",
-      "context": "platform_user使用id作为user_id，user表也有独立的id；两表字段差异大（user包含钱包、余额等金融属性）",
-      "impact": "影响用户数据的统一视图构建、跨表查询逻辑、用户身份识别",
-      "suggestions": [
-        "明确两表的业务边界（如platform_user管理基础信息，user管理交易相关）",
-        "建立明确的关联关系或说明两者独立的原因",
-        "统一用户标识的命名规范"
-      ],
-      "domain": "user_management",
-      "id": "user_management_platform_user, user_40",
-      "status": "resolved",
-      "answer": "我不知道",
-      "answered_at": "2025-11-21T10:04:04.967875"
+      "id": "user_management_backup_disabled_blacklist_accounts_27"
     },
     {
       "type": "naming_confusion",
       "category": "字段命名",
       "priority": "high",
-      "entity": "platform_user_account.id, platform_user_device.id",
-      "question": "多个表的id字段注释不一致：platform_user_account.id注释为'账号ID'，platform_user_device.id也注释为'账号ID'，但实际应该是设备ID",
-      "context": "platform_user_device表中同时存在id、user_id、account_id三个ID字段",
-      "impact": "导致主键含义混淆，影响表关联逻辑的理解",
+      "entity": "platform_user.id vs platform_user_account.user_id",
+      "question": "platform_user.id 注释为 'user_id'，但 platform_user_account.user_id 没有外键约束，两者关联关系不明确",
+      "context": "用户主表和账号表之间应该是一对多关系，但缺少明确的外键定义",
+      "impact": "无法确定用户与账号的关联逻辑，影响用户身份识别和多账号管理",
       "suggestions": [
-        "修正platform_user_device.id的注释为'设备ID'",
-        "统一ID字段的注释规范",
-        "考虑使用更明确的字段名如device_id"
+        "添加外键约束明确关联关系",
+        "统一命名规范：主表用 id，关联表用 user_id",
+        "补充文档说明一个用户可以有多少个账号"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_account.id, platform_user_device.id_41",
-      "status": "resolved",
-      "answer": "我不知道",
-      "answered_at": "2025-11-21T10:04:05.145170"
+      "id": "user_management_platform_user.id vs platform_user_account.user_id_28"
     },
     {
       "type": "business_logic_unclear",
-      "category": "账号类型",
-      "priority": "medium",
+      "category": "业务规则",
+      "priority": "high",
       "entity": "platform_user_account.type",
-      "question": "type字段注释为'账号类型 appleid、googleid'，但同时存在main_partner_id和second_partner_id，无法确定：为何需要主次两个第三方ID？type是否还有其他值（如手机号、邮箱登录）？",
-      "context": "表中同时有mobile、login_name、第三方账号等多种登录方式相关字段",
-      "impact": "影响账号类型枚举的完整性理解、多账号绑定逻辑的分析",
+      "question": "账号类型字段注释仅列举 'appleid、googleid'，但未说明是否支持手机号、邮箱等其他登录方式",
+      "context": "表中同时存在 mobile、login_name 字段，暗示支持多种登录方式，但 type 字段的完整枚举值不明确",
+      "impact": "无法完整理解账号体系，可能遗漏某些登录方式的处理逻辑",
       "suggestions": [
-        "补充完整的type枚举值列表",
-        "说明main_partner_id和second_partner_id的业务场景（如账号合并、迁移）",
-        "明确一个user_id可以关联多少个account"
+        "补充完整的账号类型枚举值（如 mobile、email、username 等）",
+        "说明不同类型账号的必填字段规则",
+        "明确第三方账号与平台账号的绑定逻辑"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_account.type_42"
+      "id": "user_management_platform_user_account.type_29"
     },
     {
       "type": "schema_ambiguity",
-      "category": "安全性",
-      "priority": "high",
-      "entity": "platform_user_wallet.private_key, user.private_key",
-      "question": "私钥以明文形式存储在数据库中（text/varchar类型），无法确定是否已加密，存在严重安全隐患",
-      "context": "两个表都存储钱包私钥，这是区块链资产的核心凭证",
-      "impact": "如果未加密，存在资产安全风险；影响数据安全合规性评估",
+      "category": "数据冗余",
+      "priority": "medium",
+      "entity": "user vs platform_user",
+      "question": "存在两个用户主表，字段部分重叠但结构不同，不清楚哪个是主表或两者的使用场景",
+      "context": "user 表包含钱包、余额等金融字段；platform_user 包含详细个人信息。两表都有 email 字段但没有明确关联",
+      "impact": "可能导致用户数据分散，查询时不知道应该使用哪个表",
       "suggestions": [
-        "明确说明私钥是否已加密存储",
-        "如未加密，建议使用加密存储或密钥管理服务",
-        "添加字段注释说明加密方式"
+        "明确两表的业务边界：如 user 用于交易系统，platform_user 用于用户中心",
+        "建立明确的关联关系或合并为一个表",
+        "添加文档说明数据同步策略"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_wallet.private_key, user.private_key_43",
-      "status": "resolved",
-      "answer": "我不知道",
-      "answered_at": "2025-11-21T10:04:05.328609"
+      "id": "user_management_user vs platform_user_30"
     },
     {
       "type": "naming_confusion",
-      "category": "时间字段",
+      "category": "字段命名",
       "priority": "medium",
-      "entity": "create_at, created_at",
-      "question": "时间字段命名不一致：部分表使用create_at（bigint），部分使用created_at（timestamp），无法确定命名标准",
-      "context": "platform_*系列表使用create_at，user/pre_signup等表使用created_at",
-      "impact": "影响时间字段的统一处理、数据迁移和ETL逻辑",
+      "entity": "时间字段命名不一致",
+      "question": "时间字段命名混乱：create_at、created_at、blacklist_at 等多种格式并存",
+      "context": "platform_user 使用 create_at (bigint)，user 使用 created_at (timestamp)，缺少统一规范",
+      "impact": "增加开发和维护成本，容易出现字段使用错误",
       "suggestions": [
-        "统一时间字段命名规范（建议使用created_at）",
-        "统一时间类型（timestamp更标准）",
-        "制定数据建模规范文档"
+        "统一时间字段命名规范：建议使用 created_at/updated_at",
+        "统一时间字段类型：建议使用 timestamp 或 bigint",
+        "为所有主表添加 updated_at 字段"
       ],
       "domain": "user_management",
-      "id": "user_management_create_at, created_at_44"
+      "id": "user_management_时间字段命名不一致_31"
+    },
+    {
+      "type": "business_logic_unclear",
+      "category": "安全性",
+      "priority": "high",
+      "entity": "platform_user_wallet.private_key & user.private_key",
+      "question": "私钥以明文形式存储在数据库中，存在严重安全隐患",
+      "context": "两个表都存储了区块链钱包私钥，字段类型为 text/varchar，未说明是否加密",
+      "impact": "私钥泄露将导致用户资产损失，存在重大安全风险",
+      "suggestions": [
+        "明确私钥是否已加密存储，如未加密需立即整改",
+        "考虑使用密钥管理服务（KMS）而非数据库存储",
+        "添加访问审计和权限控制"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user_wallet.private_key & user.private_key_32"
+    },
+    {
+      "type": "schema_ambiguity",
+      "category": "字段用途",
+      "priority": "medium",
+      "entity": "platform_user_account.main_partner_id vs second_partner_id",
+      "question": "第三方账号存在主次之分（main/second），但未说明业务含义和使用场景",
+      "context": "同时存储主次两个第三方账号 ID，但没有说明为什么需要两个，以及如何使用",
+      "impact": "无法理解第三方账号绑定逻辑，可能导致账号关联错误",
+      "suggestions": [
+        "说明主次账号的业务场景（如主账号用于登录，次账号用于备份）",
+        "明确是否允许绑定多个同类型第三方账号",
+        "考虑使用独立的账号绑定表支持多账号绑定"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user_account.main_partner_id vs second_partner_id_33"
     },
     {
       "type": "business_logic_unclear",
       "category": "状态管理",
       "priority": "medium",
-      "entity": "platform_user_account.status, platform_user_blacklist.status",
-      "question": "status字段在不同表中含义不同：platform_user_account中0=不可用/1=可用，platform_user_blacklist中1=已拉黑/0=已解除，缺乏统一的状态管理逻辑",
-      "context": "账号禁用和用户拉黑是两个独立的状态维度",
-      "impact": "影响用户可用性判断逻辑、状态变更流程的理解",
+      "entity": "platform_user_blacklist.status",
+      "question": "黑名单表的 status 字段（1=已拉黑，0=已解除）与账号表的 status（0=不可用，1=可用）语义相反",
+      "context": "不同表的 status 字段使用相反的 0/1 含义，容易造成混淆",
+      "impact": "开发时容易出错，可能导致误封或误解封账号",
       "suggestions": [
-        "明确账号禁用与用户拉黑的业务区别和优先级",
-        "统一status字段的值含义（建议1=启用/正常）",
-        "说明两种状态的组合逻辑"
+        "统一 status 字段的语义：建议 1 表示正常/启用，0 表示异常/禁用",
+        "黑名单表考虑使用更明确的字段名如 is_blacklisted",
+        "添加枚举值文档说明"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_account.status, platform_user_blacklist.status_45"
+      "id": "user_management_platform_user_blacklist.status_34"
     },
     {
       "type": "schema_ambiguity",
       "category": "字段用途",
       "priority": "low",
-      "entity": "platform_user_device.adid",
-      "question": "adid字段注释提到'有助于识别iOS端缺失IDFA信息的LAT用户'，但LAT（Limit Ad Tracking）概念未在schema中说明，业务含义不清晰",
-      "context": "该表收集多种设备标识符（android_id、idfv、imei、idfa等）",
-      "impact": "影响设备追踪策略的理解、广告归因逻辑的分析",
+      "entity": "platform_user_device.adid vs gps_adid vs idfa",
+      "question": "设备表中存在三个广告标识符字段，其区别和使用场景不明确",
+      "context": "adid（Adjust 标识符）、gps_adid（安卓广告标识符）、idfa（iOS 广告标识符）同时存在",
+      "impact": "可能导致设备识别逻辑混乱，影响用户行为分析",
       "suggestions": [
-        "补充LAT相关业务背景说明",
-        "说明各设备标识符的优先级和使用场景",
-        "明确adid与idfa的关系"
+        "明确说明每个标识符的用途和优先级",
+        "补充设备唯一性识别的业务规则",
+        "说明不同平台应该使用哪个字段"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_device.adid_46"
+      "id": "user_management_platform_user_device.adid vs gps_adid vs idfa_35"
+    },
+    {
+      "type": "naming_confusion",
+      "category": "字段命名",
+      "priority": "low",
+      "entity": "user.nal_protocol_wallet_address",
+      "question": "字段名 'nal_protocol_wallet_address' 含义不明，缺少注释说明",
+      "context": "该字段与 chain_account、assign_chain_account 并存，但没有说明其特殊用途",
+      "impact": "无法理解该字段的业务含义，可能导致使用错误",
+      "suggestions": [
+        "添加详细注释说明 nal_protocol 是什么协议",
+        "说明与其他钱包地址字段的区别",
+        "考虑使用更清晰的命名"
+      ],
+      "domain": "user_management",
+      "id": "user_management_user.nal_protocol_wallet_address_36"
     },
     {
       "type": "business_logic_unclear",
-      "category": "数据一致性",
+      "category": "数据完整性",
       "priority": "medium",
-      "entity": "user.chain_account, user.assign_chain_account",
-      "question": "同时存在chain_account（用户链上地址）和assign_chain_account（分配给用户的地址），无法确定两者的区别和使用场景",
-      "context": "两个字段都是varchar类型，都与区块链地址相关",
-      "impact": "影响钱包地址管理逻辑、资产归属判断",
+      "entity": "personal_access_tokens",
+      "question": "该表似乎是 Laravel 框架的标准 token 表，但与业务域其他表缺少关联",
+      "context": "tokenable_type 和 tokenable_id 应该关联到用户表，但没有明确说明关联到 user 还是 platform_user",
+      "impact": "无法确定 token 与用户的关联关系，影响认证授权逻辑",
       "suggestions": [
-        "明确两个地址的业务含义（如用户自有地址 vs 平台托管地址）",
-        "说明两者的关联关系和使用优先级",
-        "补充地址生成和分配的业务流程"
+        "明确 tokenable_type 的可能值（如 App\\Models\\User）",
+        "说明该表与哪个用户表关联",
+        "补充 token 生命周期管理规则"
       ],
       "domain": "user_management",
-      "id": "user_management_user.chain_account, user.assign_chain_account_47"
-    },
-    {
-      "type": "schema_ambiguity",
-      "category": "软删除",
-      "priority": "low",
-      "entity": "platform_user_wallet.is_del",
-      "question": "只有platform_user_wallet表有is_del字段，其他表没有软删除标记，无法确定删除策略是否一致",
-      "context": "用户相关的敏感数据（账号、设备、黑名单等）可能需要保留历史记录",
-      "impact": "影响数据删除策略的理解、历史数据查询逻辑",
-      "suggestions": [
-        "明确各表的删除策略（物理删除 vs 软删除）",
-        "统一软删除字段命名（建议使用deleted_at）",
-        "说明钱包数据需要软删除的业务原因"
-      ],
-      "domain": "user_management",
-      "id": "user_management_platform_user_wallet.is_del_48"
+      "id": "user_management_personal_access_tokens_37"
     }
   ],
-  "uncertainty_count": 10,
-  "uncertainty_analyzed_at": "2025-11-20T13:34:53.941552",
-  "business_rules": [
-    {
-      "entity": "backup_disabled_blacklist_accounts",
-      "category": "表职责",
-      "question": "表名包含'backup'、'disabled'、'blacklist'三个概念，无法确定该表的实际用途：是备份表？禁用账号表？黑名单表？还是三者的组合？",
-      "answer": "我不知道",
-      "added_at": "2025-11-21T10:04:04.795433"
-    },
-    {
-      "entity": "platform_user, user",
-      "category": "数据关系",
-      "question": "存在两个用户主表（platform_user和user），无法确定它们的关系：是否服务不同业务？是否存在数据同步？用户唯一标识如何关联？",
-      "answer": "我不知道",
-      "added_at": "2025-11-21T10:04:04.967875"
-    },
-    {
-      "entity": "platform_user_account.id, platform_user_device.id",
-      "category": "字段命名",
-      "question": "多个表的id字段注释不一致：platform_user_account.id注释为'账号ID'，platform_user_device.id也注释为'账号ID'，但实际应该是设备ID",
-      "answer": "我不知道",
-      "added_at": "2025-11-21T10:04:05.145170"
-    },
-    {
-      "entity": "platform_user_wallet.private_key, user.private_key",
-      "category": "安全性",
-      "question": "私钥以明文形式存储在数据库中（text/varchar类型），无法确定是否已加密，存在严重安全隐患",
-      "answer": "我不知道",
-      "added_at": "2025-11-21T10:04:05.328609"
-    }
-  ]
+  "uncertainty_count": 11,
+  "uncertainty_analyzed_at": "2025-11-27T16:48:23.412587"
 }

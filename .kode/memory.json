@@ -1,3 +1,4 @@
 {
-  "test_key": "test_value"
+  "test_key": "test_value",
+  "yanfa_business_context": "{\"product_name\": \"SaaS\u8f6f\u4ef6\", \"business_model\": \"\u8ba2\u9605\u5236\", \"revenue_formula\": \"\u6d3b\u8dc3\u8ba2\u9605\u7528\u6237\u6570 \u00d7 \u6708\u5747\u8ba2\u9605\u4ef7\u683c\", \"conversion_path\": \"\u6ce8\u518c\u8bd5\u7528 \u2192 \u6fc0\u6d3b\u4f7f\u7528 \u2192 \u4ed8\u8d39\u8ba2\u9605 \u2192 \u7eed\u8d39\", \"key_metrics\": \"\u6708\u5ea6\u7ecf\u5e38\u6027\u6536\u5165\uff08MRR\uff09\"}"
 }

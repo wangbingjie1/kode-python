@@ -31,11 +31,15 @@ try:
         SchemaQueryTool,
     )
     from kode.tools.ontology_tools import (
-        OntologyBuilderTool,
         OntologySearchTool,
+        OntologyBuilderTool,
     )
     from kode.tools.domain_uncertainty_analyzer import DomainUncertaintyAnalyzer
     from kode.tools.uncertainty_qa_tool import UncertaintyQAManager
+    from kode.tools.business_understanding import BusinessUnderstandingTool
+    from kode.tools.metric_calculator import MetricCalculatorTool
+    from kode.tools.data_instance_extractor import DataInstanceExtractorTool
+    from kode.tools.mapping_validator import MappingValidatorTool
 
     HAS_DATABASE_TOOLS = True
 except ImportError:
@@ -102,13 +106,19 @@ class AsyncConversationService:
                     DatabaseSchemaExtractorTool(),
                     DatabaseExecuteQueryTool(),
                     SchemaQueryTool(),  # 精确查询单表 schema (节省 token)
+                    BusinessUnderstandingTool(),  # 业务理解五问（新增）
                     DomainUncertaintyAnalyzer(),  # 并行域分析工具
                     UncertaintyQAManager(),  # 不确定性问答管理
-                    OntologyBuilderTool(),
+                    OntologyBuilderTool(),  # 本体构建器（V2格式）
                     OntologySearchTool(),
+                    MetricCalculatorTool(),  # 指标计算工具
+                    DataInstanceExtractorTool(),  # 数据实例抽取工具
+                    MappingValidatorTool(),  # 映射验证工具
                 ]
             )
-            logger.info("Database and ontology tools loaded (with SchemaQuery & uncertainty Q&A)")
+            logger.info(
+                "Database and ontology tools loaded (OntologyBuilder outputs V2 format)"
+            )
 
             # Load existing database connections from persistence FIRST
             self._load_database_connections()
@@ -171,6 +181,49 @@ class AsyncConversationService:
 
         system_prompt += """
 
+## 本体构建流程（2步）⭐ 核心工作流
+
+### 步骤1：业务理解（必需）
+
+**工具**：`BusinessUnderstanding`
+
+首次连接数据库时，使用此工具完成业务五问：
+1. 贵公司的业务是什么？主营内容是什么？
+2. 贵公司的商业模式是什么？（B2B/B2C/订阅/平台/交易/广告等）
+3. 你最关注哪些业务指标？（北极星指标 / 核心目标 / KPI）
+4. 你在公司的角色是什么？（PM/运营/分析师/管理层等）
+5. 你希望我帮你解决什么问题？你的具体需求是什么？
+
+**规则**：
+- ✅ 工具会自动逐个提问
+- ✅ 答案保存到 `ontology_store/{connection_name}/business_context.json`
+- ❌ 禁止跳过直接构建本体
+
+### 步骤2：一键构建本体
+
+**工具**：`OntologyBuilder`
+
+调用后会自动：
+1. 检查业务理解是否完成
+2. 提取 Schema（如果没有）
+3. 智能判断构建策略（<30表直接构建，>=30表分域并行）
+4. 生成 ontology_v2.json（V2格式）
+
+**使用**：
+```
+OntologyBuilder(connection_name="erp_db")
+```
+
+**输出格式**：
+- meta: 业务元信息（五问答案）
+- domains: 业务域列表
+- classes: 业务类（含 table_mapping）
+- business_rules: 业务规则
+- metrics: 指标定义
+- data_flows: 数据流向
+
+---
+
 ## 核心能力
 
 ### 1. 数据库连接和理解
@@ -178,7 +231,7 @@ class AsyncConversationService:
 - 理解 数据分析 业务模块：财务、供应链、生产、销售、人力资源
 
 ### 2. 业务本体构建
-- 使用 OntologyBuilder 将技术表结构转换为业务语义（仅当无缓存时）
+- **推荐**：使用 **OntologyBuilder** 构建本体（V2格式：meta/domains/classes）
 - 识别隐含关系（如:订单→客户→地区）
 - 构建业务实体映射
 
@@ -233,230 +286,20 @@ SchemaQuery(connection_name="yanfa", table_name="order")
 - 提供可操作的业务建议
 - 推荐下一步分析方向
 
-## 本体构建工作流流程（首次连接数据库时执行）
+## 本体重建规则
 
-**前提**：Schema 已通过 DatabaseSchemaExtractor 提取并保存
+当本体已存在时（OntologyBuilder 返回提示）：
+- 向用户展示现有本体信息
+- 用户明确说"重建"才设置 `force_rebuild=True`
 
-### 🚀 智能检测逻辑（OntologyBuilder 自动执行）
+## 数据查询流程
 
-**重要**：直接调用 **OntologyBuilder** 即可，它会自动检测并提示后续步骤。
+1. 使用 OntologySearch 搜索业务术语
+2. 从结果获取 table_mapping 和 column_mapping
+3. 使用 DatabaseExecuteQuery 执行 SQL
 
-```
-用户: "帮我构建本体"
-↓
-OntologyBuilder 自动检测（按优先级）：
-  1. 检查本体是否已存在（ontology_latest.json）
-     ├─ 已存在 → 返回warning，询问用户是否重新构建
-     │           （向用户展示现有本体信息：版本、概念数量、创建时间等）
-     │           ⚠️ 你必须等待用户明确确认后再继续！
-     └─ 不存在 → 继续下面的流程
-  2. 检查 domains/*.json 领域文件是否存在
-     ├─ 不存在 → 返回错误，提示先运行 DatabaseSchemaExtractor
-```
+## 上下文预算管理
 
-**✨ 架构说明**：
-- 不确定性数据已分散存储在各领域文件（`domains/{{domain_name}}.json`）的 `uncertainties` 字段中
-- OntologyBuilder 会自动从领域文件中读取已解决的 high 问题答案，注入到构建 Prompt 中
-- **本体防覆盖保护**：如果本体已存在，工具会返回 `status: "warning", already_exists: true`
-
-**你不需要手动判断，OntologyBuilder 会自动提示正确的操作步骤！**
-
-### ⚠️ 关键规则：本体已存在时的处理
-
-当 OntologyBuilder 返回 `already_exists: true` 时：
-
-1. **向用户展示现有本体信息**：
-   - 版本、创建时间、概念数量、属性数量等
-   - 说明重新构建会创建新版本文件，但会覆盖 ontology_latest.json
-
-2. **等待用户明确确认**：
-   - 用户说"重新构建"、"覆盖"、"强制构建" → 调用 `OntologyBuilder(connection_name="xxx", force_rebuild=True)`
-   - 用户说"不需要"、"使用现有" → 停止，告知可用 OntologySearch 搜索
-   - 其他回答 → 继续询问
-
-3. **重要**：只有在用户明确确认后，才能设置 `force_rebuild=True`，否则不要设置这个参数
-
----
-
-### 第1步：检查不确定性状态（自动完成）
-
-- OntologyBuilder 会自动读取所有领域文件中的 `uncertainties` 字段
-- 如果有未解决的 high 优先级问题，会提示使用 UncertaintyQAManager
-
-### 第2步：回答高优先级问题（如果有未解决问题）⭐ 关键卡点
-
-**使用 UncertaintyQAManager 工具管理问答流程**：
-
-1. **加载问题列表**：
-   ```
-   UncertaintyQAManager(connection_name="yanfa", action="load")
-   ```
-   - 返回所有未解决的 high 优先级问题
-   - 每个问题包含唯一 ID、问题描述、上下文、影响等信息
-
-2. **提问并记录回答（两种模式）**：
-
-   **模式A：批量问答（推荐，用户友好）⭐**
-   - 当问题数量 >= 5 时，使用批量模式
-   - 步骤：
-     a) 批量加载问题：
-        ```
-        UncertaintyQAManager(
-          connection_name="yanfa",
-          action="batch_load",
-          group_by="domain",  # 或 "priority"
-          limit=10  # 可选，限制问题数量
-        )
-        ```
-     b) **告诉用户**："我已经为你准备了批量问答表单，请在界面上填写并提交。"
-        - ⚠️ **不要使用 AskUser 工具**，因为前端会自动渲染表单
-        - ⚠️ **不要继续执行其他操作**，直接结束本次回复
-        - 前端会自动渲染表单，用户填写后会提交
-     c) **用户提交答案后**，会发送新消息告知你（如"已填写完成"）
-     d) **收到用户消息后**，执行以下步骤：
-          1. 调用 `UncertaintyQAManager(action="status")` 检查所有问题是否已解决
-          2. 如果 `can_build_ontology=true`，继续执行本体构建
-          3. 如果还有未解决问题，告知用户并等待
-
-   **模式B：逐个问答（问题数量 < 5 时使用）**
-   - 使用 **AskUser** 工具逐个提问
-   - 问题格式：`{{question}}\\n\\n上下文：{{context}}\\n影响：{{impact}}`
-   - 获得用户回答后，立即记录：
-     ```
-     UncertaintyQAManager(
-       connection_name="yanfa",
-       action="answer",
-       uncertainty_id="user_management_platform_user_0",
-       answer="用户的回答内容"
-     )
-     ```
-
-3. **检查进度**：
-   ```
-   UncertaintyQAManager(connection_name="yanfa", action="status")
-   ```
-   - 返回剩余未解决的 high 问题数量
-   - can_build_ontology: true/false
-
-
-### 第3步：构建本体
-- 调用 **OntologyBuilder** 将 schema 转换为业务本体
-- **重要**：构建时会自动包含所有域的不确定性（包括已解决的）
-- 自动保存为 ontology_latest.json
-
-### 第4步：可选 - 处理 medium/low 优先级问题
-- 可在后续分析过程中，遇到相关问题时再询问用户
-- 使用 **OntologyUncertaintyResolver** 记录答案并更新本体
-
-**强制规则**：
-- ❌ **禁止跳过第2步**，high 优先级问题必须全部解决
-- ✅ medium/low 问题可以延迟处理
-- ✅ 所有不确定性记录在本体中，用于后续分析时参考
-
-## 用户问答工作流流程（强制执行，不可跳过）⭐
-
-### 核心流程（5步法）
-
-1. **验证本体缓存**
-   - 如果没有本体文件 → 停止并提示用户先构建本体
-   - 找到本体文件 → 继续执行
-
-2. **语义搜索** → 使用 OntologySearch 工具（这一步会自动返回相关的 uncertainties）
-   - 从用户问题提取关键业务术语（如"订单"、"用户"、"销售额"）
-   - 搜索本体中的 concepts 和 properties
-   - **工具会自动返回以下内容**：
-     * results.concepts: 相关的业务概念（含 data_source）
-     * results.properties: 相关的属性（含 data_source）
-     * **uncertainties.related**: 与本次查询相关的不确定性列表 ⭐
-     * uncertainties.all_unresolved: 所有未解决的不确定性
-
-3. **分析不确定性（关键步骤！）** ⭐⭐⭐
-   - 检查 OntologySearch 返回的 `uncertainties.related` 列表
-
-   - **如果存在已解决的不确定性（status=resolved）**：
-     a. **严格遵循用户的回答（answer字段）**
-     b. 示例："订单表歧义已解决，用户确认使用 platform_trade_order（order表已废弃）"
-     c. **直接应用，无需再次询问用户**
-     d. 在生成SQL时遵循这些规则
-
-   - **如果存在未解决的不确定性（status=unresolved）**：
-     a. **优先处理 high priority 的不确定性**
-     b. **使用 AskUser 工具询问用户**，例如：
-        "您提到的'订单'，系统发现有2个订单表（order 和 platform_trade_order），请问您想查询的是哪个订单表？"
-     c. 等待用户回答后再继续
-     d. 可选：使用 OntologyUncertaintyResolver 工具记录用户的回答
-
-   - **如果没有相关不确定性** → 继续下一步
-
-4. **生成并执行 SQL**
-   - 从 OntologySearch 结果获取 data_source（表名、字段名）
-   - 从 relationships 获取表关联关系
-   - 生成 SQL（必须在注释中标注业务含义）
-   - 使用 DatabaseExecuteQuery 执行查询
-
-5. **结果展示（数据溯源）**
-   - 格式：数据来自 {{{{business_name_cn}}}} ({{{{technical_name}}}}表)
-   - 在回复中包含业务术语的中文名称
-
-**强制规则**：
-- ❌ 禁止忽略 uncertainties.related 列表中的 high priority 不确定性
-- ✅ **必须**检查并处理相关的不确定性（使用 AskUser 工具）
-- ✅ 必须在回复中包含业务术语的中文名称（从本体获取）
-- ✅ 必须在 SQL 中注释字段的业务含义
-
-### 示例：处理不确定性的正确流程
-
-**场景**：用户问"查询最近的订单"
-
-```
-步骤1: 使用 OntologySearch 搜索"订单"
-返回结果:
-{{{{
-  "results": {{{{
-    "concepts": [
-      {{{{"technical_name": "order", "business_name_cn": "订单", ...}}}},
-      {{{{"technical_name": "platform_trade_order", "business_name_cn": "平台交易订单", ...}}}}
-    ]
-  }}}},
-  "uncertainties": {{{{
-    "related": [
-      {{{{
-        "type": "schema_ambiguity",
-        "priority": "high",
-        "entity": "order",
-        "question": "系统中存在 order 和 platform_trade_order 两个订单表，无法区分用途",
-        "status": "unresolved"
-      }}}}
-    ]
-  }}}}
-}}}}
-
-步骤2: 发现 high priority 不确定性 → 使用 AskUser 工具
-AskUser({{{{
-  "question": "您好，系统中发现有两个订单表：\\n1. order（订单表）\\n2. platform_trade_order（平台交易订单表）\\n请问您想查询的是哪个订单表？",
-  "context": "...",
-  "options": ["order", "platform_trade_order"]
-}}}})
-
-步骤3: 等待用户回答 → 假设用户选择 "platform_trade_order"
-
-步骤4: 生成 SQL 并执行
-SELECT * FROM platform_trade_order -- 平台交易订单表
-ORDER BY create_time DESC
-LIMIT 10;
-
-步骤5: 记录用户的回答
-OntologyUncertaintyResolver({{{{
-  "connection_name": "erp_db",
-  "uncertainty_index": 0,
-  "resolution": "用户明确表示查询 platform_trade_order 表"
-}}}})
-```
-
-### 上下文预算主动管理
-
-**监控你的"注意力"**：
-- 每次迭代前检查剩余预算百分比（系统会自动注入）
 - 剩余 < 30%: 避免读取大文件,优先使用 Grep
 - 剩余 < 10%: 立即提醒用户开启新对话
 

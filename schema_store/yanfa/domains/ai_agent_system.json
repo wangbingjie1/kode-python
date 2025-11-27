@@ -1,9 +1,9 @@
 {
   "domain_name": "ai_agent_system",
   "display_name": "AI Agent System",
-  "description": "AI agent configurations, categories, templates, and role-based agent mappings for intelligent interactions.",
-  "table_count": 11,
-  "created_at": "2025-11-20T13:32:50.342456",
+  "description": "AI agent configuration, categorization, role management, and template definitions for various AI-powered features.",
+  "table_count": 12,
+  "created_at": "2025-11-27T16:46:41.607276",
   "connection": {
     "name": "yanfa",
     "db_type": "mysql",
@@ -1417,6 +1417,185 @@
         "json_path": "schema.tables.platform_ai_role_agent_mapping"
       }
     },
+    "platform_ai_role_guide": {
+      "name": "platform_ai_role_guide",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": "用户 id"
+        },
+        {
+          "name": "role_id",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "用户 引导选择的角色id"
+        },
+        {
+          "name": "discover",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "discover GlobalGPT"
+        },
+        {
+          "name": "is_del",
+          "type": "tinyint",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除 0否 1是"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人名"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人名"
+        },
+        {
+          "name": "product_no",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "业务线"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 1,
+            "user_id": 238292083067065344,
+            "role_id": 1,
+            "discover": "X (Twitter)",
+            "is_del": 0,
+            "create_at": 1734086126905,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 2,
+            "user_id": 239816930020561920,
+            "role_id": 2,
+            "discover": "X (Twitter)",
+            "is_del": 0,
+            "create_at": 1734086221654,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 3,
+            "user_id": 239628342653883392,
+            "role_id": 1,
+            "discover": "Google",
+            "is_del": 0,
+            "create_at": 1734086498064,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 4,
+            "user_id": 198999466898887680,
+            "role_id": null,
+            "discover": "Other",
+            "is_del": 0,
+            "create_at": 1734086500590,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          },
+          {
+            "id": 5,
+            "user_id": 176037413972349952,
+            "role_id": null,
+            "discover": "Other",
+            "is_del": 0,
+            "create_at": 1734086502971,
+            "create_by": null,
+            "create_name": null,
+            "update_at": null,
+            "update_by": null,
+            "update_name": null,
+            "product_no": "glbgpt"
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      },
+      "schema_ref": {
+        "connection": "yanfa",
+        "table": "platform_ai_role_guide",
+        "schema_file": "schema_store\\yanfa\\schema_raw.json",
+        "json_path": "schema.tables.platform_ai_role_guide"
+      }
+    },
     "platform_ai_role_user": {
       "name": "platform_ai_role_user",
       "columns": [
@@ -1902,8 +2081,8 @@
         "json_path": "schema.tables.platform_ai_role_user_default_agent"
       }
     },
-    "platform_ai_role_guide": {
-      "name": "platform_ai_role_guide",
+    "robot": {
+      "name": "robot",
       "columns": [
         {
           "name": "id",
@@ -1913,81 +2092,169 @@
           "comment": ""
         },
         {
-          "name": "user_id",
-          "type": "bigint",
+          "name": "model",
+          "type": "varchar",
           "nullable": false,
           "default": null,
-          "comment": "用户 id"
+          "comment": "使用的模型"
         },
         {
-          "name": "role_id",
-          "type": "bigint",
-          "nullable": true,
+          "name": "is_enable",
+          "type": "tinyint",
+          "nullable": false,
+          "default": "1",
+          "comment": "是否启用：1，启用；0，未启用"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "nullable": false,
           "default": null,
-          "comment": "用户 引导选择的角色id"
+          "comment": "case id"
         },
         {
-          "name": "discover",
+          "name": "desc",
+          "type": "varchar",
+          "nullable": false,
+          "default": null,
+          "comment": "描述"
+        },
+        {
+          "name": "icon",
           "type": "varchar",
           "nullable": true,
           "default": null,
-          "comment": "discover GlobalGPT"
+          "comment": "图标文件地址"
+        },
+        {
+          "name": "owner_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": "0",
+          "comment": "0表示平台所有"
+        },
+        {
+          "name": "sort",
+          "type": "int",
+          "nullable": false,
+          "default": "0",
+          "comment": "排序"
         },
         {
           "name": "is_del",
-          "type": "tinyint",
+          "type": "int",
           "nullable": true,
           "default": "0",
-          "comment": "是否删除 0否 1是"
+          "comment": ""
         },
         {
-          "name": "create_at",
-          "type": "bigint",
+          "name": "catalog",
+          "type": "tinyint",
           "nullable": true,
           "default": null,
+          "comment": "分类信息（取字典表配置 robot-catalog）"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
           "comment": "创建时间"
         },
         {
-          "name": "create_by",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "创建人id"
-        },
-        {
-          "name": "create_name",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "创建人名"
-        },
-        {
-          "name": "update_at",
-          "type": "bigint",
-          "nullable": true,
-          "default": null,
+          "name": "updated_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
           "comment": "更新时间"
         },
         {
-          "name": "update_by",
+          "name": "available_plan_package",
           "type": "varchar",
           "nullable": true,
           "default": null,
-          "comment": "更新人id"
+          "comment": "可用套餐 basic,pro,unlimited"
         },
         {
-          "name": "update_name",
-          "type": "varchar",
+          "name": "include_share_free_times",
+          "type": "smallint",
           "nullable": true,
-          "default": null,
-          "comment": "更新人名"
+          "default": "0",
+          "comment": "参与共享免费使用次数（一共3次）"
         },
         {
-          "name": "product_no",
+          "name": "free_times",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "单模型免费使用次数"
+        },
+        {
+          "name": "price",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "价格 json"
+        },
+        {
+          "name": "unlimited_plan_limited",
+          "type": "smallint",
+          "nullable": true,
+          "default": "0",
+          "comment": "Unlimited套餐是否限量 1限量 0是不限量"
+        },
+        {
+          "name": "lifetime_plan_unlimited",
+          "type": "smallint",
+          "nullable": true,
+          "default": "0",
+          "comment": "lifetime 套餐是否不限量，不受余额为0限制 1不限量 0限量"
+        },
+        {
+          "name": "type",
           "type": "varchar",
           "nullable": true,
           "default": null,
-          "comment": "业务线"
+          "comment": ""
+        },
+        {
+          "name": "brand",
+          "type": "tinyint",
+          "nullable": true,
+          "default": null,
+          "comment": "分类信息（取字典表配置 robot-brand）"
+        },
+        {
+          "name": "file_type",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "可上传文件类型（取字典表配置 robot-filetype）"
+        },
+        {
+          "name": "tag_ids",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "标签列表，逗号分隔"
+        },
+        {
+          "name": "i18n_config",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "多语言 JSON 配置 ： { \"en_US\" : { \"key\" : \"value\" }, \"zh_CN\" : { \"key\" : \"value\" } }",
+          "enum_mapping": {
+            "en_US": "{ \"key\" : \"value\" }",
+            "zh_CN": "{ \"key\" : \"value\" } }"
+          }
+        },
+        {
+          "name": "scores",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "'模型6个纬度评分，逗号分隔：Context Length,Math & Reasoning"
         }
       ],
       "foreign_keys": [],
@@ -1997,88 +2264,148 @@
           "id"
         ]
       },
-      "column_count": 12,
+      "column_count": 24,
       "sample_data": {
         "row_count": 5,
         "rows": [
           {
             "id": 1,
-            "user_id": 238292083067065344,
-            "role_id": 1,
-            "discover": "X (Twitter)",
+            "model": "gpt-3.5-turbo-1106",
+            "is_enable": 1,
+            "name": "GPT-3.5",
+            "desc": "OpenAI's second-best LLM",
+            "icon": null,
+            "owner_id": 0,
+            "sort": 3,
             "is_del": 0,
-            "create_at": 1734086126905,
-            "create_by": null,
-            "create_name": null,
-            "update_at": null,
-            "update_by": null,
-            "update_name": null,
-            "product_no": "glbgpt"
+            "catalog": null,
+            "created_at": "2024-02-27T06:36:49",
+            "updated_at": "2025-10-13T13:13:18",
+            "available_plan_package": "old,basic,pro,unlimited-max,lifetime_basic,lifetime_pro,lifetime_unlimited,unlimited",
+            "include_share_free_times": 0,
+            "free_times": 0,
+            "price": "{\"type\":\"tokens\", \"input\" : 0.000, \"output\":0.000}",
+            "unlimited_plan_limited": 1,
+            "lifetime_plan_unlimited": 0,
+            "type": "chat",
+            "brand": null,
+            "file_type": null,
+            "tag_ids": null,
+            "i18n_config": null,
+            "scores": null
           },
           {
             "id": 2,
-            "user_id": 239816930020561920,
-            "role_id": 2,
-            "discover": "X (Twitter)",
+            "model": "gpt-4-1106-preview",
+            "is_enable": 1,
+            "name": "GPT-4",
+            "desc": "OpenAI's finest LLM\n",
+            "icon": null,
+            "owner_id": 0,
+            "sort": 2,
             "is_del": 0,
-            "create_at": 1734086221654,
-            "create_by": null,
-            "create_name": null,
-            "update_at": null,
-            "update_by": null,
-            "update_name": null,
-            "product_no": "glbgpt"
+            "catalog": null,
+            "created_at": "2024-02-27T06:37:24",
+            "updated_at": "2025-10-13T13:12:52",
+            "available_plan_package": "old,basic,pro,unlimited-max,lifetime_basic,lifetime_pro,lifetime_unlimited,unlimited",
+            "include_share_free_times": 1,
+            "free_times": 0,
+            "price": "{\"type\":\"tokens\", \"input\" : 0.02, \"output\":0.08}",
+            "unlimited_plan_limited": 1,
+            "lifetime_plan_unlimited": 0,
+            "type": "chat",
+            "brand": null,
+            "file_type": null,
+            "tag_ids": null,
+            "i18n_config": null,
+            "scores": null
           },
           {
             "id": 3,
-            "user_id": 239628342653883392,
-            "role_id": 1,
-            "discover": "Google",
+            "model": "claude-3-opus-20240229",
+            "is_enable": 1,
+            "name": "Claude3 Opus",
+            "desc": "Anthropic's finest LLM",
+            "icon": null,
+            "owner_id": 0,
+            "sort": 4,
             "is_del": 0,
-            "create_at": 1734086498064,
-            "create_by": null,
-            "create_name": null,
-            "update_at": null,
-            "update_by": null,
-            "update_name": null,
-            "product_no": "glbgpt"
+            "catalog": null,
+            "created_at": "2024-03-19T11:38:51",
+            "updated_at": "2025-10-13T13:12:56",
+            "available_plan_package": "old,basic,pro,unlimited-max,lifetime_basic,lifetime_pro,lifetime_unlimited,unlimited",
+            "include_share_free_times": 1,
+            "free_times": 0,
+            "price": "{\"type\":\"tokens\", \"input\" : 0.05, \"output\":0.4}",
+            "unlimited_plan_limited": 1,
+            "lifetime_plan_unlimited": 0,
+            "type": "chat",
+            "brand": null,
+            "file_type": null,
+            "tag_ids": null,
+            "i18n_config": null,
+            "scores": null
           },
           {
             "id": 4,
-            "user_id": 198999466898887680,
-            "role_id": null,
-            "discover": "Other",
+            "model": "claude-3-sonnet-20240229",
+            "is_enable": 1,
+            "name": "Claude3 Sonnet",
+            "desc": "Anthropic's second-best LLM",
+            "icon": null,
+            "owner_id": 0,
+            "sort": 5,
             "is_del": 0,
-            "create_at": 1734086500590,
-            "create_by": null,
-            "create_name": null,
-            "update_at": null,
-            "update_by": null,
-            "update_name": null,
-            "product_no": "glbgpt"
+            "catalog": null,
+            "created_at": "2024-03-18T08:13:29",
+            "updated_at": "2025-10-13T13:13:14",
+            "available_plan_package": "old,basic,pro,unlimited-max,lifetime_basic,lifetime_pro,lifetime_unlimited,unlimited",
+            "include_share_free_times": 0,
+            "free_times": 0,
+            "price": "{\"type\":\"tokens\", \"input\" : 0.01, \"output\":0.05}",
+            "unlimited_plan_limited": 1,
+            "lifetime_plan_unlimited": 0,
+            "type": "chat",
+            "brand": null,
+            "file_type": null,
+            "tag_ids": null,
+            "i18n_config": null,
+            "scores": null
           },
           {
             "id": 5,
-            "user_id": 176037413972349952,
-            "role_id": null,
-            "discover": "Other",
+            "model": "dall-e-3",
+            "is_enable": 1,
+            "name": "DALL·E-3",
+            "desc": "Create images from descriptions using text prompts",
+            "icon": null,
+            "owner_id": 0,
+            "sort": 6,
             "is_del": 0,
-            "create_at": 1734086502971,
-            "create_by": null,
-            "create_name": null,
-            "update_at": null,
-            "update_by": null,
-            "update_name": null,
-            "product_no": "glbgpt"
+            "catalog": null,
+            "created_at": "2024-03-27T12:38:40",
+            "updated_at": "2025-07-29T11:09:25",
+            "available_plan_package": "old,basic,pro,unlimited-max,lifetime_basic,lifetime_pro,lifetime_unlimited,unlimited",
+            "include_share_free_times": 0,
+            "free_times": 0,
+            "price": "{\"type\":\"once\", \"s-s\" : 0.1, \"s-r\" : 0.12, \"h-s\" : 0.12, \"h-r\" : 0.18}",
+            "unlimited_plan_limited": 1,
+            "lifetime_plan_unlimited": 0,
+            "type": "chat",
+            "brand": null,
+            "file_type": null,
+            "tag_ids": null,
+            "i18n_config": null,
+            "scores": null
           }
         ],
         "note": "前 5 行样例数据（快速采样，无排序）"
       },
       "schema_ref": {
         "connection": "yanfa",
-        "table": "platform_ai_role_guide",
+        "table": "robot",
         "schema_file": "schema_store\\yanfa\\schema_raw.json",
-        "json_path": "schema.tables.platform_ai_role_guide"
+        "json_path": "schema.tables.robot"
       }
     },
     "chatpal_agent_ad": {
@@ -2293,191 +2620,161 @@
       "priority": "high",
       "entity": "platform_ai_agent_categray",
       "question": "表名和字段名中 'categray' 拼写错误，正确应为 'category'",
-      "context": "表名 platform_ai_agent_categray、字段 categray_id 在 platform_ai_agent_categray_mapping 表中出现",
+      "context": "表名 platform_ai_agent_categray、字段 categray_id 在多个表中使用，但正确拼写应为 category",
       "impact": "影响代码可读性和维护性，可能导致开发人员混淆",
       "suggestions": [
-        "统一修正为 'category' 拼写",
-        "如无法修改表名，至少在文档中明确说明"
+        "重命名表为 platform_ai_agent_category",
+        "重命名所有相关字段 categray_id 为 category_id",
+        "如无法修改，需在文档中明确说明这是历史遗留问题"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_platform_ai_agent_categray_0",
-      "status": "resolved",
-      "answer": "的确是拼写错误",
-      "answered_at": "2025-11-21T09:59:54.921153"
+      "id": "ai_agent_system_platform_ai_agent_categray_9"
     },
     {
       "type": "schema_ambiguity",
-      "category": "字段含义不明",
+      "category": "字段含义不清",
       "priority": "high",
       "entity": "platform_ai_agent.upload_type",
-      "question": "upload_type 字段注释过于冗长且混杂了业务说明，字段值与实际含义的映射关系不清晰",
-      "context": "注释中提到 'image_file：原both字段（可上传图片和文件）更名'，说明存在历史演变，但当前值域定义不够清晰",
-      "impact": "开发人员难以快速理解每个枚举值的准确含义，可能导致错误使用",
+      "question": "upload_type 字段注释中提到 'both字段' 但未说明 both 的原始含义",
+      "context": "注释：'image_file：原both字段（可上传图片和文件）更名'，both 的历史含义不明确",
+      "impact": "无法理解字段演变历史，可能存在遗留数据需要迁移",
       "suggestions": [
-        "将注释简化为枚举值列表：image_file/file/image/one_image/none",
-        "将详细说明移至设计文档",
-        "考虑使用更直观的命名如 'both' 而非 'image_file'"
+        "明确说明 both 字段的原始定义和取值",
+        "说明是否存在历史数据需要从 both 迁移到 image_file",
+        "补充字段值的完整枚举和使用场景"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_platform_ai_agent.upload_type_1",
-      "status": "resolved",
-      "answer": "我不知道",
-      "answered_at": "2025-11-21T10:03:58.000922"
+      "id": "ai_agent_system_platform_ai_agent.upload_type_10"
     },
     {
       "type": "business_logic_unclear",
-      "category": "业务关系",
+      "category": "业务关系不明",
       "priority": "high",
-      "entity": "platform_ai_role_user_agent_mapping",
-      "question": "role_id 字段允许为空，但不清楚在什么业务场景下用户-agent映射可以不关联角色",
-      "context": "该表同时包含 user_id, role_id, agent_id，但 role_id 没有 NOT NULL 约束，与 platform_ai_role_agent_mapping 的设计不一致",
-      "impact": "无法确定用户自定义 agent 的完整业务逻辑，可能导致数据查询遗漏",
+      "entity": "platform_ai_role vs platform_ai_role_user",
+      "question": "platform_ai_role 中 type=user 时有 user_id，但同时存在 platform_ai_role_user 表关联用户和角色，两者关系不清晰",
+      "context": "platform_ai_role.type='user' 且有 user_id 字段；platform_ai_role_user 表也关联 role_id 和 user_id",
+      "impact": "无法确定用户自定义角色的存储逻辑，可能导致数据冗余或查询错误",
       "suggestions": [
-        "明确 role_id 为空的业务场景（如用户直接收藏 agent）",
-        "考虑添加约束或拆分为两张表",
-        "补充业务流程说明文档"
+        "明确 type=user 的 role 是否表示用户创建的角色",
+        "说明 platform_ai_role_user 表的作用（是否表示用户收藏/订阅角色）",
+        "补充两表的业务场景差异说明"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_platform_ai_role_user_agent_mapping_2",
-      "status": "resolved",
-      "answer": "我不知道",
-      "answered_at": "2025-11-21T10:03:58.210585"
+      "id": "ai_agent_system_platform_ai_role vs platform_ai_role_user_11"
     },
     {
       "type": "schema_ambiguity",
-      "category": "字段含义不明",
+      "category": "字段含义不清",
       "priority": "medium",
       "entity": "platform_ai_role_guide.discover",
-      "question": "discover 字段的数据类型为 varchar，注释为 'discover GlobalGPT'，无法理解其实际用途和存储内容",
-      "context": "该表用于记录用户引导选择的角色，但 discover 字段的业务含义完全不明确",
-      "impact": "无法理解用户引导流程的完整逻辑",
+      "question": "discover 字段类型为 varchar，注释为 'discover GlobalGPT'，含义和用途不明确",
+      "context": "字段注释只有示例值，未说明该字段的业务含义、取值范围和使用场景",
+      "impact": "无法理解用户引导流程中该字段的作用",
       "suggestions": [
-        "补充详细注释说明该字段的业务含义",
-        "说明可能的取值范围",
-        "如果是布尔标识考虑改为 tinyint 类型"
+        "补充字段的业务含义说明",
+        "说明取值范围和枚举值",
+        "解释与 role_id 字段的关系"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_platform_ai_role_guide.discover_3",
-      "status": "resolved",
-      "answer": "111",
-      "answered_at": "2025-11-26T13:13:46.897714"
+      "id": "ai_agent_system_platform_ai_role_guide.discover_12"
+    },
+    {
+      "type": "business_logic_unclear",
+      "category": "业务逻辑",
+      "priority": "high",
+      "entity": "platform_ai_role_user_agent_mapping",
+      "question": "该表同时包含 role_id 和 agent_id，但 role_id 可为空，业务逻辑不清晰",
+      "context": "表名暗示是用户角色与 agent 的映射，但 role_id 非必填，可能表示用户直接关联 agent",
+      "impact": "无法确定该表是否支持用户绕过角色直接关联 agent，影响权限和推荐逻辑理解",
+      "suggestions": [
+        "明确 role_id 为空时的业务场景",
+        "说明该表与 platform_ai_role_agent_mapping 的区别",
+        "补充用户自定义 agent 关联的完整业务流程"
+      ],
+      "domain": "ai_agent_system",
+      "id": "ai_agent_system_platform_ai_role_user_agent_mapping_13"
     },
     {
       "type": "naming_confusion",
       "category": "命名不一致",
       "priority": "medium",
       "entity": "i18n_config",
-      "question": "多语言配置字段在不同表中的注释不一致，语言代码格式不统一",
-      "context": "platform_ai_agent 使用 'en_US', 'zh_CN'；platform_ai_agent_tag 和 platform_ai_role 使用 'en', 'zh'",
-      "impact": "可能导致多语言数据格式不一致，增加解析复杂度",
+      "question": "多语言配置字段在不同表中语言代码格式不一致",
+      "context": "platform_ai_agent 使用 'en_US'/'zh_CN'，platform_ai_agent_tag 使用 'en'/'zh'",
+      "impact": "可能导致多语言处理逻辑不一致，增加开发复杂度",
       "suggestions": [
-        "统一语言代码格式标准（建议使用 ISO 639-1 + ISO 3166-1）",
-        "在设计文档中明确规范",
-        "考虑使用统一的 i18n 配置表"
+        "统一多语言代码格式标准（建议使用 ISO 639-1 + ISO 3166-1）",
+        "在文档中明确说明各表使用的语言代码规范",
+        "考虑抽取公共多语言配置表"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_i18n_config_4",
-      "status": "skipped",
-      "skip_reason": "用户跳过",
-      "skipped_at": "2025-11-26T13:13:56.584227"
-    },
-    {
-      "type": "business_logic_unclear",
-      "category": "业务关系",
-      "priority": "medium",
-      "entity": "platform_ai_role",
-      "question": "type 字段包含 'system|recommend|user' 三种类型，但 recommend 类型的使用场景和与其他类型的区别不清晰",
-      "context": "注释说明 'recommend 用于AI推荐'，但不清楚推荐逻辑如何工作，以及与 system 类型的关系",
-      "impact": "无法完整理解角色分类体系和推荐机制",
-      "suggestions": [
-        "补充 recommend 类型的详细业务说明",
-        "说明三种类型在业务流程中的使用场景",
-        "明确 recommend 类型的数据来源和更新机制"
-      ],
-      "domain": "ai_agent_system",
-      "id": "ai_agent_system_platform_ai_role_5"
+      "id": "ai_agent_system_i18n_config_14"
     },
     {
       "type": "schema_ambiguity",
-      "category": "字段含义不明",
+      "category": "字段含义不清",
       "priority": "medium",
       "entity": "chatpal_agent_ad.ext_config",
-      "question": "ext_config 字段类型为 text，无注释说明其用途和数据格式",
-      "context": "该字段在运营位配置表中，可能用于扩展配置，但完全没有说明",
-      "impact": "无法理解运营位的完整配置能力",
+      "question": "ext_config 字段为 text 类型，无注释说明其结构和用途",
+      "context": "字段名暗示是扩展配置，但未说明 JSON 结构、必填字段和使用场景",
+      "impact": "无法理解广告位的扩展配置能力，影响功能扩展性分析",
       "suggestions": [
-        "添加注释说明该字段的用途",
-        "说明 JSON 结构示例",
-        "如果未使用考虑删除"
+        "补充 ext_config 的 JSON 结构示例",
+        "说明支持的配置项和默认值",
+        "明确该字段的使用场景"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_chatpal_agent_ad.ext_config_6"
+      "id": "ai_agent_system_chatpal_agent_ad.ext_config_15"
     },
     {
       "type": "business_logic_unclear",
-      "category": "数据一致性",
-      "priority": "low",
-      "entity": "platform_ai_agent_categray",
-      "question": "parent_id 字段标记为 NOT NULL，但不清楚顶级分类的 parent_id 应该设置为什么值",
-      "context": "该表支持分类层级结构，但顶级分类的处理方式不明确（通常为 0 或 NULL）",
-      "impact": "可能导致顶级分类查询逻辑不一致",
+      "category": "业务逻辑",
+      "priority": "medium",
+      "entity": "robot vs platform_ai_agent",
+      "question": "robot 表与 platform_ai_agent 表的关系和区别不明确",
+      "context": "两表都包含 model、is_enable、name、desc、icon、sort 等相似字段，但业务定位不清晰",
+      "impact": "无法确定两表是否表示不同的 agent 类型，或是否存在数据冗余",
       "suggestions": [
-        "明确顶级分类的 parent_id 约定值（如 0 或 -1）",
-        "考虑允许 NULL 并添加默认值",
-        "补充分类层级的业务规则说明"
+        "明确 robot 表和 platform_ai_agent 表的业务边界",
+        "说明是否存在数据迁移或整合计划",
+        "补充两表在系统中的使用场景差异"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_platform_ai_agent_categray_7"
+      "id": "ai_agent_system_robot vs platform_ai_agent_16"
+    },
+    {
+      "type": "schema_ambiguity",
+      "category": "字段含义不清",
+      "priority": "low",
+      "entity": "robot.include_share_free_times",
+      "question": "字段注释 '参与共享免费使用次数（一共3次）' 中硬编码的 3 次与字段类型 smallint 不匹配",
+      "context": "注释暗示固定值为 3，但字段类型允许变化，业务规则不清晰",
+      "impact": "无法确定该字段是布尔标志还是计数器",
+      "suggestions": [
+        "明确该字段是标志位（0/1）还是计数器",
+        "如果是标志位，建议改为 tinyint 或 boolean",
+        "将 '3次' 的业务规则移到配置表或常量定义"
+      ],
+      "domain": "ai_agent_system",
+      "id": "ai_agent_system_robot.include_share_free_times_17"
     },
     {
       "type": "naming_confusion",
       "category": "命名不一致",
       "priority": "low",
       "entity": "时间戳字段",
-      "question": "时间字段命名不一致：create_at/update_at 使用 'at' 后缀，但语义上应为 'created_at/updated_at'",
-      "context": "所有表都使用 create_at/update_at 命名模式",
-      "impact": "命名不符合常见约定，轻微影响可读性",
+      "question": "时间字段命名和类型不一致",
+      "context": "大部分表使用 bigint 类型的 create_at/update_at，robot 表使用 timestamp 类型的 created_at/updated_at",
+      "impact": "增加数据处理复杂度，可能导致时区处理不一致",
       "suggestions": [
-        "统一使用 created_at/updated_at 命名",
-        "或在团队规范中明确说明使用 'at' 而非 'ed_at' 的原因"
+        "统一时间字段的命名规范（create_at vs created_at）",
+        "统一时间字段的数据类型（建议使用 timestamp 或 bigint 毫秒时间戳）",
+        "在文档中说明时间存储标准（UTC/本地时间）"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_时间戳字段_8",
-      "status": "skipped",
-      "skip_reason": "用户跳过",
-      "skipped_at": "2025-11-26T13:13:39.351511"
+      "id": "ai_agent_system_时间戳字段_18"
     }
   ],
-  "uncertainty_count": 9,
-  "uncertainty_analyzed_at": "2025-11-20T13:34:53.637333",
-  "business_rules": [
-    {
-      "entity": "platform_ai_agent_categray",
-      "category": "命名不一致",
-      "question": "表名和字段名中 'categray' 拼写错误，正确应为 'category'",
-      "answer": "的确是拼写错误",
-      "added_at": "2025-11-21T09:59:54.921153"
-    },
-    {
-      "entity": "platform_ai_agent.upload_type",
-      "category": "字段含义不明",
-      "question": "upload_type 字段注释过于冗长且混杂了业务说明，字段值与实际含义的映射关系不清晰",
-      "answer": "我不知道",
-      "added_at": "2025-11-21T10:03:58.000922"
-    },
-    {
-      "entity": "platform_ai_role_user_agent_mapping",
-      "category": "业务关系",
-      "question": "role_id 字段允许为空，但不清楚在什么业务场景下用户-agent映射可以不关联角色",
-      "answer": "我不知道",
-      "added_at": "2025-11-21T10:03:58.210585"
-    },
-    {
-      "entity": "platform_ai_role_guide.discover",
-      "category": "字段含义不明",
-      "question": "discover 字段的数据类型为 varchar，注释为 'discover GlobalGPT'，无法理解其实际用途和存储内容",
-      "answer": "111",
-      "added_at": "2025-11-26T13:13:46.897714"
-    }
-  ]
+  "uncertainty_count": 10,
+  "uncertainty_analyzed_at": "2025-11-27T16:48:23.405827"
 }

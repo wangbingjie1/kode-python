@@ -1,6 +1,6 @@
 {
-  "version": "v20251120_133205",
-  "created_at": "2025-11-20T13:32:05.016789",
+  "version": "v20251127_164606",
+  "created_at": "2025-11-27T16:46:06.708857",
   "connection_name": "yanfa",
   "schema": {
     "status": "success",
@@ -16,7 +16,7 @@
     },
     "database": "yanfa",
     "schema": "",
-    "table_count": 110,
+    "table_count": 106,
     "tables": {
       "ao_awareness": {
         "name": "ao_awareness",
@@ -4730,272 +4730,6 @@
           "note": "前 5 行样例数据（快速采样，无排序）"
         }
       },
-      "basi_10.15-11.15_bill": {
-        "name": "basi_10.15-11.15_bill",
-        "columns": [
-          {
-            "name": "token_name",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "model_name",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          }
-        ],
-        "foreign_keys": [],
-        "column_count": 2,
-        "sample_data": {
-          "row_count": 0,
-          "rows": [],
-          "error": "(pymysql.err.ProgrammingError) (1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-11.15_bill LIMIT 5' at line 1\")\n[SQL: SELECT * FROM basi_10.15-11.15_bill LIMIT 5]\n(Background on this error at: https://sqlalche.me/e/20/f405)",
-          "note": "无法获取样例数据"
-        }
-      },
-      "basi_bill": {
-        "name": "basi_bill",
-        "columns": [
-          {
-            "name": "id",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "user_id",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "created_at",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "type",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "content",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "username",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "token_name",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "model_name",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "quota",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "prompt_tokens",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "completion_tokens",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "use_time",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "is_stream",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "token_id",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "other",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "channel_name",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "group",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "ip",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          }
-        ],
-        "foreign_keys": [],
-        "column_count": 18,
-        "sample_data": {
-          "row_count": 5,
-          "rows": [
-            {
-              "id": "2128435",
-              "user_id": "65",
-              "created_at": "1757865601",
-              "type": "2",
-              "content": "模型倍率 1.50，补全倍率 5.00，分组倍率 1.00",
-              "username": "MasterLi",
-              "token_name": "dify2",
-              "model_name": "claude-sonnet-4-20250514",
-              "quota": "142683",
-              "prompt_tokens": "94952",
-              "completion_tokens": "34",
-              "use_time": "7",
-              "is_stream": "1",
-              "token_id": "545",
-              "other": "{\"admin_info\":{\"use_channel\":[\"14810\"]},\"cache_ratio\":0.1,\"cache_tokens\":0,\"completion_ratio\":5,\"frt\":6154,\"group_ratio\":1,\"model_price\":-1,\"model_ratio\":1.5,\"user_group_ratio\":-1}",
-              "channel_name": "NULL",
-              "group": "default",
-              "ip": null
-            },
-            {
-              "id": "2128436",
-              "user_id": "65",
-              "created_at": "1757865612",
-              "type": "2",
-              "content": "模型倍率 1.25，补全倍率 4.00，分组倍率 1.00",
-              "username": "MasterLi",
-              "token_name": "dify2",
-              "model_name": "gpt-4o",
-              "quota": "766",
-              "prompt_tokens": "377",
-              "completion_tokens": "59",
-              "use_time": "1",
-              "is_stream": "0",
-              "token_id": "545",
-              "other": "{\"admin_info\":{\"use_channel\":[\"14791\"]},\"cache_ratio\":0.5,\"cache_tokens\":0,\"completion_ratio\":4,\"frt\":-1000,\"group_ratio\":1,\"model_price\":-1,\"model_ratio\":1.25,\"user_group_ratio\":-1}",
-              "channel_name": "NULL",
-              "group": "default",
-              "ip": null
-            },
-            {
-              "id": "2128437",
-              "user_id": "65",
-              "created_at": "1757865618",
-              "type": "2",
-              "content": "模型倍率 0.07，补全倍率 4.00，分组倍率 1.00",
-              "username": "MasterLi",
-              "token_name": "dify",
-              "model_name": "gpt-4o-mini",
-              "quota": "157",
-              "prompt_tokens": "765",
-              "completion_tokens": "331",
-              "use_time": "6",
-              "is_stream": "0",
-              "token_id": "477",
-              "other": "{\"admin_info\":{\"use_channel\":[\"14791\"]},\"cache_ratio\":0.5,\"cache_tokens\":0,\"completion_ratio\":4,\"frt\":-1000,\"group_ratio\":1,\"model_price\":-1,\"model_ratio\":0.075,\"user_group_ratio\":-1}",
-              "channel_name": "NULL",
-              "group": "default",
-              "ip": null
-            },
-            {
-              "id": "2128438",
-              "user_id": "65",
-              "created_at": "1757865645",
-              "type": "2",
-              "content": "模型倍率 1.25，补全倍率 4.00，分组倍率 1.00",
-              "username": "MasterLi",
-              "token_name": "dify",
-              "model_name": "gpt-4o",
-              "quota": "560",
-              "prompt_tokens": "236",
-              "completion_tokens": "53",
-              "use_time": "2",
-              "is_stream": "0",
-              "token_id": "477",
-              "other": "{\"admin_info\":{\"use_channel\":[\"14791\"]},\"cache_ratio\":0.5,\"cache_tokens\":0,\"completion_ratio\":4,\"frt\":-1000,\"group_ratio\":1,\"model_price\":-1,\"model_ratio\":1.25,\"user_group_ratio\":-1}",
-              "channel_name": "NULL",
-              "group": "default",
-              "ip": null
-            },
-            {
-              "id": "2128439",
-              "user_id": "65",
-              "created_at": "1757865645",
-              "type": "2",
-              "content": "模型倍率 0.07，补全倍率 4.00，分组倍率 1.00",
-              "username": "MasterLi",
-              "token_name": "dify",
-              "model_name": "gpt-4o-mini",
-              "quota": "195",
-              "prompt_tokens": "1084",
-              "completion_tokens": "379",
-              "use_time": "6",
-              "is_stream": "0",
-              "token_id": "477",
-              "other": "{\"admin_info\":{\"use_channel\":[\"14791\"]},\"cache_ratio\":0.5,\"cache_tokens\":0,\"completion_ratio\":4,\"frt\":-1000,\"group_ratio\":1,\"model_price\":-1,\"model_ratio\":0.075,\"user_group_ratio\":-1}",
-              "channel_name": "NULL",
-              "group": "default",
-              "ip": null
-            }
-          ],
-          "note": "前 5 行样例数据（快速采样，无排序）"
-        }
-      },
       "bill": {
         "name": "bill",
         "columns": [
@@ -6463,58 +6197,58 @@
           "row_count": 5,
           "rows": [
             {
-              "id": 4546736,
-              "uuid": "6fe75dd4-15ce-47fc-b07d-c9aed3fbdebf",
-              "user_id": 1066025,
-              "page_name": "pc_subscribe_4008",
-              "event_name": "pageview",
-              "dom_name": "",
-              "created_at": "2025-10-20T11:15:26",
-              "updated_at": "2025-10-20T11:15:26",
-              "channel": "glbgpt"
-            },
-            {
-              "id": 4546737,
-              "uuid": "d8d1b468-8219-4cfe-a30d-cc6b1019270b",
-              "user_id": 1066027,
-              "page_name": "pc_subscribe_4008",
-              "event_name": "pageview",
-              "dom_name": "",
-              "created_at": "2025-10-20T11:15:26",
-              "updated_at": "2025-10-20T11:15:26",
-              "channel": "glbgpt"
-            },
-            {
-              "id": 4546738,
-              "uuid": "d269658a-fdea-46ef-ad9c-4379971e354c",
-              "user_id": 1066026,
+              "id": 4602919,
+              "uuid": "c1ab760f-72bd-4f8e-87f1-73e64bc1dd51",
+              "user_id": 1080393,
               "page_name": "mobile_subscribe_4008",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-20T11:15:27",
-              "updated_at": "2025-10-20T11:15:27",
+              "created_at": "2025-10-27T11:15:36",
+              "updated_at": "2025-10-27T11:15:36",
               "channel": "glbgpt"
             },
             {
-              "id": 4546739,
-              "uuid": "ef4129b7-940d-4e44-8f4e-43f1eb068ba0",
-              "user_id": 1065973,
-              "page_name": "mobile_subscribe_4002",
+              "id": 4602920,
+              "uuid": "061bdcd2-21f0-4615-b3e9-6ef2b836992f",
+              "user_id": 1080392,
+              "page_name": "pc_subscribe_4008",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-20T11:15:41",
-              "updated_at": "2025-10-20T11:15:41",
+              "created_at": "2025-10-27T11:15:36",
+              "updated_at": "2025-10-27T11:15:36",
               "channel": "glbgpt"
             },
             {
-              "id": 4546740,
-              "uuid": "ef4129b7-940d-4e44-8f4e-43f1eb068ba0",
-              "user_id": 1065973,
-              "page_name": "mobile_subscribe_4002",
+              "id": 4602921,
+              "uuid": "41381acc-f614-4c14-9553-86479930a572",
+              "user_id": 0,
+              "page_name": "mobile_click_subscription",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-20T11:15:57",
-              "updated_at": "2025-10-20T11:15:57",
+              "created_at": "2025-10-27T11:16:39",
+              "updated_at": "2025-10-27T11:16:39",
+              "channel": "glbgpt"
+            },
+            {
+              "id": 4602922,
+              "uuid": "41381acc-f614-4c14-9553-86479930a572",
+              "user_id": 0,
+              "page_name": "mobile_visit_subscription",
+              "event_name": "pageview",
+              "dom_name": "",
+              "created_at": "2025-10-27T11:16:40",
+              "updated_at": "2025-10-27T11:16:40",
+              "channel": "glbgpt"
+            },
+            {
+              "id": 4602923,
+              "uuid": "1f991818-8308-459c-9ff6-2587db67fb52",
+              "user_id": 0,
+              "page_name": "pc_visit_subscription",
+              "event_name": "pageview",
+              "dom_name": "",
+              "created_at": "2025-10-27T11:16:41",
+              "updated_at": "2025-10-27T11:16:41",
               "channel": "glbgpt"
             }
           ],
@@ -6772,7 +6506,7 @@
             {
               "id": 7,
               "test_name": "Discount_Modal_Design_Test",
-              "group_num": 5,
+              "group_num": 3,
               "test_desc": "Discount_Modal_Design_Test",
               "start_time": "2025-10-26T00:00:00",
               "end_time": "2026-10-27T14:56:13",
@@ -8826,133 +8560,6 @@
             }
           ],
           "note": "前 5 行样例数据（快速采样，无排序）"
-        }
-      },
-      "opennext": {
-        "name": "opennext",
-        "columns": [
-          {
-            "name": "id",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "created_at",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "created_time",
-            "type": "date",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "quota",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "model_name",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "quota_div",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "prompt",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          }
-        ],
-        "foreign_keys": [],
-        "column_count": 7,
-        "sample_data": {
-          "row_count": 5,
-          "rows": [
-            {
-              "id": "3548919",
-              "created_at": "1755189901",
-              "created_time": "2025-08-15",
-              "quota": "1000000",
-              "model_name": null,
-              "quota_div": "2",
-              "prompt": "{\"prompt\":\"Using this exact image of a technician and making him look alive with as much real movement as possible.  I would like you to create a video of this technician walking to the table with our customers a married couple in their mid forties. . The customers sits down at the table and they invite the technician to sit as well. The technician is discussing the plumbing issues with the customers home. In the scene it should be a modern kitchen sitting at a round table with four chairs. The technician is sitting across from the couple showing them different options on an iPad. The customers listen for a a few seconds and then point to the iPad choosing an option. The technician shakes his head in agreement and hands the iPad over to the customer to sign. They all look happy with the decision that was made. \",\"seed\":0,\"duration\":\"10\",\"aspect_ratio\":\"1:1\",\"image\":\"https://static.futureshareai.com/upload_files/20250814/c66b98ab-6d0c-49a0-a6dd-9755d90d2026.png\",\"negative_prompt\":\"I don't want any motion blur \"}"
-            },
-            {
-              "id": "3548973",
-              "created_at": "1755193957",
-              "created_time": "2025-08-15",
-              "quota": "500000",
-              "model_name": null,
-              "quota_div": "1",
-              "prompt": "{\"prompt\":\"Dolly-out shot as a giant white Baby Golden Retriever runs directly toward camera in Tokyo. Buildings collapse on both sides. Cars are crushed under its paws. Bright daylight. Destructive, surreal, unstoppable.Camera slowly dollies backward while a massive white cat charges forward. Towers crack and fall. Buses and taxis flatten. Clear shadows stretch across the street. Intense, controlled, cinematic.Dolly-out motion through city street. A huge white cat runs toward camera, smashing buildings and vehicles in its path. No dust, only clean destruction. Harsh sun above. Precise, dramatic, terrifying.Linear dolly-out as the giant white cat rushes forward. Skyscrapers break apart, taxis compress beneath. No smoke, only collapsing structures. Daylight is sharp and cold. Brutal, vivid, realistic.\",\"seed\":0,\"duration\":\"10\",\"aspect_ratio\":\"9:16\",\"image\":\"\",\"negative_prompt\":\"\"}"
-            },
-            {
-              "id": "3549012",
-              "created_at": "1755196130",
-              "created_time": "2025-08-15",
-              "quota": "1000000",
-              "model_name": null,
-              "quota_div": "2",
-              "prompt": "{\"prompt\":\"animate all the elements, the man is moving forward to the home, clouds are moving, trees are animating\",\"seed\":0,\"duration\":\"5\",\"aspect_ratio\":\"1:1\",\"image\":\"https://static.futureshareai.com/upload_files/20250814/84877f27-7312-4d53-9ca5-409dc4224c9c.jpg\",\"negative_prompt\":\"\"}"
-            },
-            {
-              "id": "3549018",
-              "created_at": "1755196406",
-              "created_time": "2025-08-15",
-              "quota": "1000000",
-              "model_name": null,
-              "quota_div": "2",
-              "prompt": "{\"prompt\":\"Can you make me doing cowboy dancing with cowboy hat?\",\"seed\":0,\"duration\":\"5\",\"aspect_ratio\":\"1:1\",\"image\":\"https://static.futureshareai.com/upload_files/20250814/34e06f36-1f62-4006-a3a0-d86f595faabe.jpg\",\"negative_prompt\":\"\"}"
-            },
-            {
-              "id": "3549023",
-              "created_at": "1755196546",
-              "created_time": "2025-08-15",
-              "quota": "1000000",
-              "model_name": null,
-              "quota_div": "2",
-              "prompt": "{\"prompt\":\"Can you make me doing cowboy dancing with cowboy hat?\",\"seed\":0,\"duration\":\"10\",\"aspect_ratio\":\"1:1\",\"image\":\"https://static.futureshareai.com/upload_files/20250814/34e06f36-1f62-4006-a3a0-d86f595faabe.jpg\",\"negative_prompt\":\"\"}"
-            }
-          ],
-          "note": "前 5 行样例数据（快速采样，无排序）"
-        }
-      },
-      "opennext_chat_10.15-11.15_bill": {
-        "name": "opennext_chat_10.15-11.15_bill",
-        "columns": [
-          {
-            "name": "model",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          }
-        ],
-        "foreign_keys": [],
-        "column_count": 1,
-        "sample_data": {
-          "row_count": 0,
-          "rows": [],
-          "error": "(pymysql.err.ProgrammingError) (1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-11.15_bill LIMIT 5' at line 1\")\n[SQL: SELECT * FROM opennext_chat_10.15-11.15_bill LIMIT 5]\n(Background on this error at: https://sqlalche.me/e/20/f405)",
-          "note": "无法获取样例数据"
         }
       },
       "order": {
@@ -11294,6 +10901,94 @@
             }
           ],
           "note": "前 5 行样例数据（快速采样，无排序）"
+        }
+      },
+      "platform_ai_conversation_msg_perplexity_meta": {
+        "name": "platform_ai_conversation_msg_perplexity_meta",
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint",
+            "nullable": false,
+            "default": null,
+            "comment": "主键ID"
+          },
+          {
+            "name": "message_id",
+            "type": "varchar",
+            "nullable": false,
+            "default": null,
+            "comment": "关联的消息ID（platform_ai_conversation_msg.message_id）"
+          },
+          {
+            "name": "conversation_id",
+            "type": "varchar",
+            "nullable": false,
+            "default": null,
+            "comment": "会话ID（冗余字段，便于查询）"
+          },
+          {
+            "name": "citations",
+            "type": "json",
+            "nullable": true,
+            "default": null,
+            "comment": "引用来源列表，存储为JSON数组，例如：[\"https://example.com\"]"
+          },
+          {
+            "name": "search_results",
+            "type": "json",
+            "nullable": true,
+            "default": null,
+            "comment": "搜索结果详情，存储为JSON对象数组"
+          },
+          {
+            "name": "images",
+            "type": "json",
+            "nullable": true,
+            "default": null,
+            "comment": "相关图片列表，存储为JSON数组"
+          },
+          {
+            "name": "videos",
+            "type": "json",
+            "nullable": true,
+            "default": null,
+            "comment": "相关视频列表，存储为JSON数组"
+          },
+          {
+            "name": "related_questions",
+            "type": "json",
+            "nullable": true,
+            "default": null,
+            "comment": "相关问题列表，存储为JSON数组"
+          },
+          {
+            "name": "create_at",
+            "type": "bigint",
+            "nullable": true,
+            "default": null,
+            "comment": "创建时间（毫秒时间戳）"
+          },
+          {
+            "name": "update_at",
+            "type": "bigint",
+            "nullable": true,
+            "default": null,
+            "comment": "更新时间（毫秒时间戳）"
+          }
+        ],
+        "foreign_keys": [],
+        "primary_key": {
+          "name": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        },
+        "column_count": 10,
+        "sample_data": {
+          "row_count": 0,
+          "rows": [],
+          "note": "前 0 行样例数据（快速采样，无排序）"
         }
       },
       "platform_ai_model": {
@@ -19760,305 +19455,6 @@
           "note": "前 5 行样例数据（快速采样，无排序）"
         }
       },
-      "unified_payments": {
-        "name": "unified_payments",
-        "columns": [
-          {
-            "name": "id",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Created date (UTC)",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Amount",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Amount Refunded",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Currency",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Captured",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Converted Amount",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Converted Amount Refunded",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Converted Currency",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Decline Reason",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Description",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Fee",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Refunded date (UTC)",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Statement Descriptor",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Status",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Seller Message",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Taxes On Fee",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Card ID",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Customer ID",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Customer Description",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Customer Email",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Invoice ID",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          },
-          {
-            "name": "Transfer",
-            "type": "varchar",
-            "nullable": true,
-            "default": null,
-            "comment": ""
-          }
-        ],
-        "foreign_keys": [],
-        "column_count": 23,
-        "sample_data": {
-          "row_count": 5,
-          "rows": [
-            {
-              "id": "ch_3SSnufDzc5zOivMJ01gIPMvU",
-              "Created date (UTC)": "2025-11-12 23:57:22",
-              "Amount": "14.00",
-              "Amount Refunded": "0.00",
-              "Currency": "usd",
-              "Captured": "true",
-              "Converted Amount": "14.00",
-              "Converted Amount Refunded": "0.00",
-              "Converted Currency": "usd",
-              "Decline Reason": null,
-              "Description": "Subscription creation",
-              "Fee": "0.92",
-              "Refunded date (UTC)": null,
-              "Statement Descriptor": "FUTURE SHARE LLC",
-              "Status": "Paid",
-              "Seller Message": "Payment complete.",
-              "Taxes On Fee": "0.00",
-              "Card ID": "pm_1SSnueDzc5zOivMJ9hoQaMgw",
-              "Customer ID": "cus_TPdBpZhSUnVTIO",
-              "Customer Description": null,
-              "Customer Email": "verums.short.movies@gmail.com",
-              "Invoice ID": "in_1SSnufDzc5zOivMJZBrzImEq",
-              "Transfer": null
-            },
-            {
-              "id": "py_3SSnGoDzc5zOivMJ2vj1N5oT",
-              "Created date (UTC)": "2025-11-12 23:16:13",
-              "Amount": "11.90",
-              "Amount Refunded": "0.00",
-              "Currency": "usd",
-              "Captured": "true",
-              "Converted Amount": "11.90",
-              "Converted Amount Refunded": "0.00",
-              "Converted Currency": "usd",
-              "Decline Reason": null,
-              "Description": "Subscription update",
-              "Fee": "0.82",
-              "Refunded date (UTC)": null,
-              "Statement Descriptor": "FUTURE SHARE LLC",
-              "Status": "Paid",
-              "Seller Message": "Payment complete.",
-              "Taxes On Fee": "0.00",
-              "Card ID": null,
-              "Customer ID": "cus_T2klX09PyTzHYs",
-              "Customer Description": null,
-              "Customer Email": "nnocandy@gmail.com",
-              "Invoice ID": "in_1SSmKKDzc5zOivMJOnsBmjAK",
-              "Transfer": null
-            },
-            {
-              "id": "ch_3SSnG5Dzc5zOivMJ2s5IzfVr",
-              "Created date (UTC)": "2025-11-12 23:15:26",
-              "Amount": "34.00",
-              "Amount Refunded": "0.00",
-              "Currency": "usd",
-              "Captured": "true",
-              "Converted Amount": "34.00",
-              "Converted Amount Refunded": "0.00",
-              "Converted Currency": "usd",
-              "Decline Reason": null,
-              "Description": "Subscription creation",
-              "Fee": "1.80",
-              "Refunded date (UTC)": null,
-              "Statement Descriptor": "FUTURE SHARE LLC",
-              "Status": "Paid",
-              "Seller Message": "Payment complete.",
-              "Taxes On Fee": "0.00",
-              "Card ID": "pm_1SSnG3Dzc5zOivMJzWasgDTR",
-              "Customer ID": "cus_TPcVZdJzulkibr",
-              "Customer Description": null,
-              "Customer Email": "joshflorence123@gmail.com",
-              "Invoice ID": "in_1SSnG4Dzc5zOivMJ00wELJQW",
-              "Transfer": null
-            },
-            {
-              "id": "py_3SSn0vDzc5zOivMJ0oLXR3Eh",
-              "Created date (UTC)": "2025-11-12 22:59:47",
-              "Amount": "99.00",
-              "Amount Refunded": "0.00",
-              "Currency": "usd",
-              "Captured": "true",
-              "Converted Amount": "99.00",
-              "Converted Amount Refunded": "0.00",
-              "Converted Currency": "usd",
-              "Decline Reason": null,
-              "Description": "Subscription creation",
-              "Fee": "3.17",
-              "Refunded date (UTC)": null,
-              "Statement Descriptor": "FUTURE SHARE LLC",
-              "Status": "Paid",
-              "Seller Message": "Payment complete.",
-              "Taxes On Fee": "0.00",
-              "Card ID": null,
-              "Customer ID": "cus_TPcF7Y3FlxFQu2",
-              "Customer Description": null,
-              "Customer Email": "budluepke@gmail.com",
-              "Invoice ID": "in_1SSn0vDzc5zOivMJbX1T9JOC",
-              "Transfer": null
-            },
-            {
-              "id": "ch_3SSmwKDzc5zOivMJ0pQ2wJsq",
-              "Created date (UTC)": "2025-11-12 22:55:27",
-              "Amount": "20.00",
-              "Amount Refunded": "0.00",
-              "Currency": "usd",
-              "Captured": "true",
-              "Converted Amount": "20.00",
-              "Converted Amount Refunded": "0.00",
-              "Converted Currency": "usd",
-              "Decline Reason": null,
-              "Description": null,
-              "Fee": "1.18",
-              "Refunded date (UTC)": null,
-              "Statement Descriptor": "FUTURE SHARE LLC",
-              "Status": "Paid",
-              "Seller Message": "Payment complete.",
-              "Taxes On Fee": "0.00",
-              "Card ID": "pm_1SSmwJDzc5zOivMJNNfLQJJM",
-              "Customer ID": null,
-              "Customer Description": null,
-              "Customer Email": "t.hennop@hotmail.co.za",
-              "Invoice ID": null,
-              "Transfer": null
-            }
-          ],
-          "note": "前 5 行样例数据（快速采样，无排序）"
-        }
-      },
       "user": {
         "name": "user",
         "columns": [
@@ -20351,7 +19747,7 @@
               "name": null,
               "email": "richardlegalnow@gmail.com",
               "password": "8186f37f028ba5967babfb8fb03e8ce2",
-              "balance": "81.747330",
+              "balance": "40.897589",
               "block_amount": "0.000000",
               "chain_account": null,
               "source": "Email",
@@ -20542,6 +19938,6 @@
       }
     },
     "relationships": [],
-    "extraction_time": "2025-11-20T13:32:05.015591"
+    "extraction_time": "2025-11-27T16:46:06.708330"
   }
 }

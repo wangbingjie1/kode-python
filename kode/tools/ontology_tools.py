@@ -55,8 +55,9 @@ class OntologySearchInput(BaseModel):
     """Input schema for OntologySearchTool."""
 
     ontology_path: str = Field(
-        description="Path to ontology storage DIRECTORY (e.g., 'ontology_store/yanfa' or 'ontology_store/{connection_name}'). "
-        "Do NOT pass a file path - the tool will automatically look for 'ontology_latest.json' in this directory."
+        description="Connection name (e.g., 'yanfa') OR path to ontology storage directory (e.g., 'ontology_store/yanfa'). "
+        "Recommended: Just pass the connection_name directly. "
+        "The tool will automatically find ontology_v2.json or ontology_latest.json."
     )
     query: str = Field(description="Search query (natural language)")
     search_type: str = Field(
@@ -128,6 +129,20 @@ class OntologyBuilderTool(KodeTool):
             Ontology as JSON
         """
         try:
+            # 🔒 步骤0：检查业务理解是否完成（V2 前置条件）
+            from kode.tools.business_understanding import BusinessUnderstandingTool
+            from kode.utils.ontology_storage import OntologyStorageV2
+
+            business_tool = BusinessUnderstandingTool()
+            if not business_tool.is_completed(connection_name):
+                return json.dumps({
+                    "status": "error",
+                    "gate_check_failed": True,
+                    "reason": "missing_business_understanding",
+                    "message": "❌ 请先运行 BusinessUnderstanding 完成业务理解五问",
+                    "suggestion": "使用 BusinessUnderstanding(connection_name='{}') 开始业务理解".format(connection_name),
+                }, indent=2, ensure_ascii=False)
+
             # Load schema from saved file
             config = ConfigManager()
             schema_path = config.get("storage.schema_path", "./schema_store")
@@ -145,10 +160,10 @@ class OntologyBuilderTool(KodeTool):
                     ensure_ascii=False,
                 )
 
-            # 🔍 检查本体是否已存在（仅当未强制重建时）
+            # 🔍 检查本体是否已存在（仅当未强制重建时）- V2 格式
             if not force_rebuild:
                 ontology_path = config.get("storage.ontology_path", "./ontology_store")
-                existing_ontology_file = Path(ontology_path) / get_safe_connection_path(connection_name) / "ontology_latest.json"
+                existing_ontology_file = Path(ontology_path) / get_safe_connection_path(connection_name) / "ontology_v2.json"
 
                 if existing_ontology_file.exists():
                     # 读取现有本体的元数据
@@ -157,8 +172,8 @@ class OntologyBuilderTool(KodeTool):
                             existing_data = json.load(f)
 
                         existing_version = existing_data.get("version", "未知")
-                        created_at = existing_data.get("created_at", "未知")
-                        ontology_stats = existing_data.get("ontology", {}).get("statistics", {})
+                        created_at = existing_data.get("meta", {}).get("created_at", existing_data.get("created_at", "未知"))
+                        ontology_stats = existing_data.get("statistics", {})
 
                         return json.dumps(
                             {
@@ -170,15 +185,15 @@ class OntologyBuilderTool(KodeTool):
                                     "version": existing_version,
                                     "created_at": created_at,
                                     "statistics": {
-                                        "concept_count": ontology_stats.get("concept_count", 0),
-                                        "property_count": ontology_stats.get("property_count", 0),
-                                        "relationship_count": ontology_stats.get("relationship_count", 0),
+                                        "class_count": ontology_stats.get("class_count", 0),
+                                        "business_rule_count": ontology_stats.get("business_rule_count", 0),
+                                        "metric_count": ontology_stats.get("metric_count", 0),
                                         "uncertainty_count": ontology_stats.get("uncertainty_count", 0)
                                     }
                                 },
                                 "question": "是否要重新构建本体？这将覆盖现有的本体文件。",
                                 "suggestion": "如果要重新构建，请明确告诉我'重新构建本体'或'覆盖现有本体'。如果不需要重新构建，可以直接使用 OntologySearch 工具搜索现有本体。",
-                                "note": "重新构建会保留历史版本（ontology_v{timestamp}.json），但 ontology_latest.json 会被更新。"
+                                "note": "重新构建会保留历史版本，但 ontology_v2.json 会被更新。"
                             },
                             indent=2,
                             ensure_ascii=False,
@@ -328,22 +343,25 @@ class OntologyBuilderTool(KodeTool):
                     "message": "domain_index.json not found. Please run DomainClusteringTool first to cluster the schema into domains."
                 }, indent=2, ensure_ascii=False)
 
-            # Auto-save ontology to file
+            # Auto-save ontology to file (V2 format)
             if auto_save:
                 save_result = self._save_ontology(ontology, connection_name, version)
                 ontology["storage"] = save_result
 
-            # Return lightweight summary instead of full ontology (save tokens)
+            # Return lightweight summary instead of full ontology (save tokens) - V2 格式
             summary = {
                 "status": "success",
-                "message": "Ontology built successfully",
+                "message": "✅ 本体构建完成（V2格式）",
                 "file_path": ontology.get("storage", {}).get("latest_path", ""),
-                "statistics": {
-                    "concept_count": len(ontology.get("concepts", {})),
-                    "relationship_count": len(ontology.get("relationships", [])),
+                "statistics": ontology.get("statistics", {
+                    "class_count": len(ontology.get("classes", [])),
+                    "business_rule_count": len(ontology.get("business_rules", [])),
+                    "metric_count": len(ontology.get("metrics", [])),
+                    "data_flow_count": len(ontology.get("data_flows", [])),
                     "uncertainty_count": len(ontology.get("uncertainties", []))
-                },
-                "metadata": ontology.get("metadata", {})
+                }),
+                "domains": ontology.get("domains", []),
+                "meta": ontology.get("meta", {})
             }
 
             return json.dumps(summary, indent=2, ensure_ascii=False)
@@ -712,10 +730,10 @@ Schema: {db_schema or "默认"}
         self, ontology: Dict[str, Any], connection_name: str, version: str
     ) -> Dict[str, Any]:
         """
-        Save ontology to file with version control.
+        Save ontology to file (V2 format).
 
         Args:
-            ontology: Ontology data to save
+            ontology: Ontology data (V2 format with classes/business_rules/metrics/data_flows)
             connection_name: Database connection name
             version: Version identifier
 
@@ -732,33 +750,20 @@ Schema: {db_schema or "默认"}
             conn_dir = base_dir / get_safe_connection_path(connection_name)
             conn_dir.mkdir(parents=True, exist_ok=True)
 
-            # Generate version
-            if version == "auto":
-                version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            # V2 格式：直接保存 ontology 数据（已包含 meta/classes 等）
+            # 确保有 version 和 updated_at
+            ontology["version"] = "2.0"
+            ontology["updated_at"] = datetime.now().isoformat()
 
-            # Prepare ontology with metadata
-            ontology_with_meta = {
-                "version": version,
-                "created_at": datetime.now().isoformat(),
-                "connection_name": connection_name,
-                "ontology": ontology,
-            }
-
-            # Save versioned file
-            version_file = conn_dir / f"ontology_{version}.json"
-            with open(version_file, "w", encoding="utf-8") as f:
-                json.dump(ontology_with_meta, f, indent=2, ensure_ascii=False)
-
-            # Update latest pointer (使用 copy 而不是重复写入)
-            import shutil
-            latest_file = conn_dir / "ontology_latest.json"
-            shutil.copy2(version_file, latest_file)
+            # 保存到 ontology_v2.json（V2 主文件）
+            v2_file = conn_dir / "ontology_v2.json"
+            with open(v2_file, "w", encoding="utf-8") as f:
+                json.dump(ontology, f, indent=2, ensure_ascii=False)
 
             return {
                 "saved": True,
-                "version": version,
-                "version_file": str(version_file),
-                "latest_file": str(latest_file),
+                "version": "2.0",
+                "latest_path": str(v2_file),
             }
 
         except Exception as e:
@@ -919,21 +924,32 @@ Schema: {db_schema or "默认"}
                 model_manager=model_manager
             )
 
-            logger.info(f"🎉 本体构建完成：{final_ontology['statistics']['concept_count']} 个概念")
+            logger.info(f"🎉 本体构建完成：{final_ontology['statistics']['class_count']} 个类")
             return final_ontology
 
         except Exception as e:
-            logger.error(f"简化构建失败: {str(e)}")
+            logger.error(f"简化构建失败: {str(e)}", exc_info=True)
             return {
-                "metadata": {
+                "version": "2.0",
+                "meta": {
                     "created_at": datetime.now().isoformat(),
                     "created_by": "error_simplified",
                     "error": str(e),
                 },
-                "concepts": {},
-                "properties": {},
-                "relationships": [],
-                "hierarchies": [],
+                "domains": [],
+                "classes": [],
+                "business_rules": [],
+                "metrics": [],
+                "data_flows": [],
+                "uncertainties": [],
+                "statistics": {
+                    "class_count": 0,
+                    "business_rule_count": 0,
+                    "metric_count": 0,
+                    "data_flow_count": 0,
+                    "uncertainty_count": 0,
+                    "domain_count": 0
+                }
             }
 
 
@@ -1005,16 +1021,16 @@ Schema: {db_schema or "默认"}
         model
     ) -> Dict[str, Any]:
         """
-        为单个业务域构建本体（异步并行化版本）。
+        为单个业务域构建本体（V2 格式，异步并行化版本）。
 
-        关键简化：不再需要全局上下文，直接基于领域 schema 生成。
+        直接生成 V2 格式：classes/business_rules/metrics/data_flows
         """
         from langchain_core.messages import HumanMessage
 
         # 准备领域 schema 文本
         domain_schema_text = self._prepare_domain_schema(domain_schema)
 
-        # 🔥 新增：加载并注入High优先级不确定性的答案（极致压缩）
+        # 🔥 加载并注入不确定性的答案
         uncertainty_rules = self._load_high_priority_rules(connection_name, domain_name)
         uncertainty_section = ""
         if uncertainty_rules:
@@ -1022,8 +1038,8 @@ Schema: {db_schema or "默认"}
             uncertainty_section += uncertainty_rules
             uncertainty_section += "\n**重要**: 构建本体时必须严格遵循上述规则！\n"
 
-        # 简化版 Prompt（无全局上下文）
-        prompt = f"""你是 ERP 架构师。为业务域 "{domain_name}" 构建详细本体。
+        # V2 格式 Prompt
+        prompt = f"""你是 ERP 架构师。为业务域 "{domain_name}" 构建详细本体（V2格式）。
 
 # 当前域: {domain_name}
 数据库: {database}
@@ -1032,41 +1048,71 @@ Schema: {db_schema or "默认"}
 {domain_schema_text}
 
 # 任务
-构建本体（JSON格式）：
-1. **Concepts**: 每个表转换为业务概念
-   - technical_name, business_name_cn, business_name_en
-   - description（业务含义）
-   - domain（固定为 "{domain_name}"）
-   - importance, primary_key, data_source
+构建本体（V2 JSON格式）：
 
-2. **Properties**: 每个字段转换为业务属性
-   - technical_name (table.column), business_name_cn, business_name_en
-   - description, data_type, nullable, concept, data_source
+1. **classes**: 业务类列表（每个表转换为一个类）
+   每个 class 包含：
+   - name: 中文业务名称
+   - technical_name: 技术名称（表名）
+   - description: 业务描述
+   - domain: 固定为 "{domain_name}"
+   - table_mapping: 表名
+   - properties: 属性列表，每个属性包含：
+     - name: 中文属性名
+     - technical_name: 字段名
+     - type: 数据类型
+     - description: 业务含义
+     - column_mapping: 字段名
+     - nullable: 是否可空
+   - relationships: 关系列表，每个关系包含：
+     - target_class: 目标类名（中文）
+     - type: 关系类型（has_many/belongs_to/has_one）
+     - description: 关系描述
 
-3. **Relationships**: 表之间的关系（含外键+推断关系）
-   - from_concept, to_concept, relationship_type, cardinality
-   - business_meaning, from_properties, to_properties
+2. **business_rules**: 业务规则（从约束、默认值推断）
+   - name: 规则名称
+   - description: 规则描述
+   - type: 类型（invariant/constraint/validation）
+   - applies_to: 适用的类名列表
 
-4. **Hierarchies**: 层次结构（如自引用、分类树）
-   - concept, type, parent_property, description
+3. **metrics**: 指标定义（如果能从字段推断）
+   - name: 指标名称
+   - description: 描述
+   - formula: 计算公式
+   - dependencies: 依赖的类名列表
+
+4. **data_flows**: 数据流（如果能从关系推断）
+   - from: 源
+   - to: 目标
+   - description: 描述
 
 # 输出格式
 ```json
 {{{{
-  "concepts": {{}},
-  "properties": {{}},
-  "relationships": [],
-  "hierarchies": [],
-  "domain_insights": {{{{
-    "primary_domain": "{domain_name}",
-    "business_scenario": "..."
-  }}}}
+  "classes": [
+    {{{{
+      "name": "客户",
+      "technical_name": "customers",
+      "description": "系统中的客户实体",
+      "domain": "{domain_name}",
+      "table_mapping": "customers",
+      "properties": [
+        {{{{"name": "客户ID", "technical_name": "id", "type": "bigint", "description": "主键", "column_mapping": "id", "nullable": false}}}}
+      ],
+      "relationships": [
+        {{{{"target_class": "订单", "type": "has_many", "description": "客户拥有多个订单"}}}}
+      ]
+    }}}}
+  ],
+  "business_rules": [],
+  "metrics": [],
+  "data_flows": []
 }}}}
 ```
 
 **重要**：
-- 必须为该域的每个表生成 concept
-- 必须为每个字段生成 property
+- 必须为该域的每个表生成一个 class
+- 必须为每个字段生成一个 property
 - 充分利用字段注释理解业务含义
 - 只返回 JSON，不要任何解释文字
 """
@@ -1075,28 +1121,24 @@ Schema: {db_schema or "默认"}
         response = await model.ainvoke([HumanMessage(content=prompt)])
         ontology_data = self._extract_json_from_text(response.content)
 
-        if not ontology_data or "concepts" not in ontology_data:
+        if not ontology_data or "classes" not in ontology_data:
             logger.error(f"❌ 域 {domain_name} 生成失败，AI输出前500字符: {response.content[:500]}")
             return {
-                "concepts": {},
-                "properties": {},
-                "relationships": [],
-                "hierarchies": [],
-                "domain_insights": {},
-                "axioms": [],
+                "classes": [],
+                "business_rules": [],
+                "metrics": [],
+                "data_flows": [],
                 "uncertainties": []
             }
 
-        # 加载不确定性数据（结构化数据）
+        # 加载不确定性数据
         uncertainties = self._load_high_priority_rules_data(connection_name, domain_name)
 
         return {
-            "concepts": ontology_data.get("concepts", {}),
-            "properties": ontology_data.get("properties", {}),
-            "relationships": ontology_data.get("relationships", []),
-            "hierarchies": ontology_data.get("hierarchies", []),
-            "domain_insights": ontology_data.get("domain_insights", {}),
-            "axioms": ontology_data.get("axioms", []),
+            "classes": ontology_data.get("classes", []),
+            "business_rules": ontology_data.get("business_rules", []),
+            "metrics": ontology_data.get("metrics", []),
+            "data_flows": ontology_data.get("data_flows", []),
             "uncertainties": uncertainties
         }
 
@@ -1222,64 +1264,55 @@ Schema: {db_schema or "默认"}
         model_manager
     ) -> Dict[str, Any]:
         """
-        轻量级合并所有域的本体（无需 AI）。
+        轻量级合并所有域的本体（V2 格式，无需 AI）。
 
-        直接合并所有域的 concepts/properties/relationships。
+        直接合并所有域的 classes/business_rules/metrics/data_flows。
         """
-        all_concepts = {}
-        all_properties = {}
-        all_relationships = []
-        all_hierarchies = []
-        all_domain_insights = []
+        all_classes = []
+        all_business_rules = []
+        all_metrics = []
+        all_data_flows = []
         all_uncertainties = []
-        all_axioms = []
 
         for domain_name, ont in domain_ontologies.items():
-            all_concepts.update(ont.get("concepts", {}))
-            all_properties.update(ont.get("properties", {}))
-            all_relationships.extend(ont.get("relationships", []))
-            all_hierarchies.extend(ont.get("hierarchies", []))
-            if ont.get("domain_insights"):
-                all_domain_insights.append(ont["domain_insights"])
-
-            # 收集不确定性数据
+            all_classes.extend(ont.get("classes", []))
+            all_business_rules.extend(ont.get("business_rules", []))
+            all_metrics.extend(ont.get("metrics", []))
+            all_data_flows.extend(ont.get("data_flows", []))
             all_uncertainties.extend(ont.get("uncertainties", []))
-            # 收集公理数据
-            all_axioms.extend(ont.get("axioms", []))
 
-        # 合并 domain insights
-        primary_domains = [d.get("primary_domain") for d in all_domain_insights if d.get("primary_domain")]
-        business_scenarios = [d.get("business_scenario") for d in all_domain_insights if d.get("business_scenario")]
+        # 加载业务理解五问答案作为 meta
+        from kode.tools.business_understanding import BusinessUnderstandingTool
+        business_tool = BusinessUnderstandingTool()
+        business_answers = business_tool.get_answers(connection_name) or {}
 
         return {
-            "metadata": {
+            "version": "2.0",
+            "meta": {
+                "product_name": business_answers.get("product_name", ""),
+                "business_model": business_answers.get("business_model", ""),
+                "revenue_formula": business_answers.get("revenue_formula", ""),
+                "conversion_path": business_answers.get("conversion_path", ""),
+                "key_metrics": business_answers.get("key_metrics", ""),
                 "created_at": datetime.now().isoformat(),
-                "created_by": "simplified_parallel",
-                "model": model_manager.get_current_model_name(),
-                "source_database": database,
                 "source_connection": connection_name,
-                "build_method": "domain_based_parallel",
-                "total_domains": len(domain_ontologies)
+                "source_database": database,
+                "build_method": "domain_based_parallel_v2",
+                "model": model_manager.get_current_model_name(),
             },
-            "concepts": all_concepts,
-            "properties": all_properties,
-            "relationships": all_relationships,
-            "hierarchies": all_hierarchies,
-            "domain_insights": {
-                "primary_domain": ", ".join(set(primary_domains)),
-                "sub_domains": list(domain_ontologies.keys()),
-                "business_scenario": " | ".join(business_scenarios[:3]),  # 前3个
-                "architecture_pattern": "Multi-Domain ERP"
-            },
-            "axioms": all_axioms,
+            "domains": list(domain_ontologies.keys()),
+            "classes": all_classes,
+            "business_rules": all_business_rules,
+            "metrics": all_metrics,
+            "data_flows": all_data_flows,
             "uncertainties": all_uncertainties,
             "statistics": {
-                "concept_count": len(all_concepts),
-                "property_count": len(all_properties),
-                "relationship_count": len(all_relationships),
-                "hierarchy_count": len(all_hierarchies),
-                "axiom_count": len(all_axioms),
-                "uncertainty_count": len(all_uncertainties)
+                "class_count": len(all_classes),
+                "business_rule_count": len(all_business_rules),
+                "metric_count": len(all_metrics),
+                "data_flow_count": len(all_data_flows),
+                "uncertainty_count": len(all_uncertainties),
+                "domain_count": len(domain_ontologies)
             }
         }
 
@@ -1296,13 +1329,12 @@ class OntologySearchTool(KodeTool):
     name: str = "OntologySearch"
     description: str = """Search stored ontology for concepts, properties, and relationships.
 
-    **IMPORTANT**: The 'ontology_path' parameter must be the DIRECTORY containing the ontology,
-    NOT a file path. For example:
-    - Correct: 'ontology_store/yanfa'
-    - Wrong: 'ontology_store/yanfa/ontology_latest.json'
-    - Wrong: 'schema_store/yanfa/domains/order_management.json'
+    **USAGE**: Pass the connection_name directly (e.g., 'yanfa').
+    The tool will automatically find the ontology file (ontology_v2.json or ontology_latest.json).
 
-    The tool will automatically look for 'ontology_latest.json' inside the provided directory.
+    Examples:
+    - ontology_path='yanfa' → searches ontology_store/yanfa/ontology_v2.json
+    - ontology_path='ontology_store/yanfa' → also works
 
     Supports semantic search (with embeddings), exact matching, and fuzzy search."""
 
@@ -1320,7 +1352,8 @@ class OntologySearchTool(KodeTool):
         Search ontology.
 
         Args:
-            ontology_path: Path to ontology storage DIRECTORY
+            ontology_path: Path to ontology storage DIRECTORY (e.g., 'ontology_store/yanfa')
+                          OR connection_name directly (e.g., 'yanfa')
             query: Search query
             search_type: Type of search
             top_k: Number of results
@@ -1329,8 +1362,19 @@ class OntologySearchTool(KodeTool):
             Search results as JSON
         """
         try:
+            config = ConfigManager()
+            ontology_base = config.get("storage.ontology_path", "./ontology_store")
+
             # 🔍 智能路径检测和纠正
             ontology_path_obj = Path(ontology_path)
+
+            # 情况0：直接传入 connection_name（如 "yanfa"）
+            if not ontology_path_obj.exists() and "/" not in ontology_path and "\\" not in ontology_path:
+                # 尝试作为 connection_name 处理
+                corrected_path = Path(ontology_base) / ontology_path
+                if corrected_path.exists():
+                    logger.info(f"✅ 识别为 connection_name: {ontology_path} → {corrected_path}")
+                    ontology_path_obj = corrected_path
 
             # 检测常见错误：传入了文件路径而非目录
             if ontology_path_obj.suffix == ".json":
@@ -1346,34 +1390,45 @@ class OntologySearchTool(KodeTool):
                         if schema_idx + 1 < len(parts):
                             connection_name = parts[schema_idx + 1]
                             # 纠正路径
-                            config = ConfigManager()
-                            ontology_base = config.get("storage.ontology_path", "./ontology_store")
                             corrected_path = Path(ontology_base) / connection_name
                             logger.info(f"✅ 自动纠正: schema 路径 → ontology 路径 {corrected_path}")
                             ontology_path_obj = corrected_path
 
-                # 情况2：传入的是 ontology_store/.../ontology_latest.json → 提取目录
+                # 情况2：传入的是 ontology_store/.../ontology_*.json → 提取目录
                 elif "ontology_store" in str(ontology_path):
                     ontology_path_obj = ontology_path_obj.parent
                     logger.info(f"✅ 自动纠正: 文件路径 → 目录路径 {ontology_path_obj}")
 
-            # Load latest ontology
-            latest_path = ontology_path_obj / "ontology_latest.json"
+            # 🚀 新架构优先：先尝试 ontology_v2.json，再尝试 ontology_latest.json
+            ontology_v2_path = ontology_path_obj / "ontology_v2.json"
+            ontology_latest_path = ontology_path_obj / "ontology_latest.json"
 
-            if not latest_path.exists():
+            ontology_file = None
+            ontology_version = None
+
+            if ontology_v2_path.exists():
+                ontology_file = ontology_v2_path
+                ontology_version = "v2"
+                logger.info(f"✅ 使用新架构本体: {ontology_file}")
+            elif ontology_latest_path.exists():
+                ontology_file = ontology_latest_path
+                ontology_version = "v1"
+                logger.info(f"✅ 使用旧架构本体: {ontology_file}")
+
+            if not ontology_file:
                 # 生成友好的错误消息
-                error_msg = f"本体文件未找到: {latest_path}"
+                error_msg = f"本体文件未找到"
 
                 # 检查是否是路径错误
                 if "schema_store" in str(ontology_path):
                     error_msg += "\n\n❌ 错误原因: 你传入的是 schema 文件路径，而不是 ontology 目录！"
-                    error_msg += "\n\n✅ 正确用法: ontology_path 应该是 'ontology_store/{connection_name}'，例如："
-                    error_msg += "\n  - 正确: 'ontology_store/yanfa'"
+                    error_msg += "\n\n✅ 正确用法: ontology_path 应该是 'ontology_store/{connection_name}' 或直接传入 connection_name，例如："
+                    error_msg += "\n  - 正确: 'ontology_store/yanfa' 或 'yanfa'"
                     error_msg += "\n  - 错误: 'schema_store/yanfa/domains/order_management.json'"
                 else:
-                    error_msg += f"\n\n💡 提示: 请确保已运行 OntologyBuilder 工具生成本体。"
+                    error_msg += f"\n\n💡 提示: 请确保已运行 OntologyBuilder 或 OntologyV2Builder 工具生成本体。"
                     error_msg += f"\n  期望目录: {ontology_path_obj}"
-                    error_msg += f"\n  期望文件: {latest_path}"
+                    error_msg += f"\n  期望文件: {ontology_v2_path} 或 {ontology_latest_path}"
 
                 return json.dumps(
                     {
@@ -1381,16 +1436,21 @@ class OntologySearchTool(KodeTool):
                         "message": error_msg,
                         "provided_path": str(ontology_path),
                         "expected_directory": str(ontology_path_obj),
-                        "expected_file": str(latest_path),
+                        "expected_files": [str(ontology_v2_path), str(ontology_latest_path)],
                     },
                     indent=2,
                     ensure_ascii=False,
                 )
 
-            with open(latest_path, "r", encoding="utf-8") as f:
+            with open(ontology_file, "r", encoding="utf-8") as f:
                 ontology_data = json.load(f)
 
-            ontology = ontology_data.get("ontology", {})
+            # 兼容两种格式：v1 的 ontology_data.ontology 和 v2 的直接结构
+            if "ontology" in ontology_data and isinstance(ontology_data["ontology"], dict):
+                ontology = ontology_data["ontology"]
+            else:
+                # v2 格式：直接就是本体数据
+                ontology = ontology_data
             query_lower = query.lower()
 
             results = {"concepts": [], "properties": [], "relationships": []}
@@ -1405,7 +1465,7 @@ class OntologySearchTool(KodeTool):
 
             # elif search_type == "semantic":
                 # Semantic search with embeddings (ChromaDB)
-            results = self._semantic_search(ontology, query, top_k, ontology_path)
+            results = self._semantic_search(ontology, query, top_k, str(ontology_path_obj))
 
             # 提取 uncertainties（完整列表）
             uncertainties = ontology.get("uncertainties", [])
@@ -1440,13 +1500,14 @@ class OntologySearchTool(KodeTool):
                     "query": query,
                     "search_type": search_type,
                     "results": results,  # Keep search results (usually small)
-                    "ontology_version": ontology_data.get("version"),
+                    "ontology_version": ontology_version,  # v1 or v2
+                    "ontology_file": str(ontology_file),
                     "uncertainties": {
                         "related_count": len(related_uncertainties),
                         "unresolved_count": len([u for u in uncertainties if u.get("status") != "resolved"]),
                         "total_count": len(uncertainties),
                         "resolved_count": len([u for u in uncertainties if u.get("status") == "resolved"]),
-                        "message": "Use FileRead to view full uncertainties from ontology_latest.json if needed"
+                        "message": "Use FileRead to view full uncertainties from ontology file if needed"
                     }
                 },
                 indent=2,
@@ -1640,19 +1701,48 @@ class OntologySearchTool(KodeTool):
                 )
 
             # Parse results and retrieve full ontology data
-            results: Dict[str, List] = {"concepts": [], "properties": [], "relationships": []}
+            # 支持 V1 (concepts/properties) 和 V2 (classes) 两种格式
+            results: Dict[str, List] = {"concepts": [], "properties": [], "relationships": [], "classes": []}
 
-            # Add concepts
-            if concept_results and concept_results["ids"] and concept_results["ids"][0]:
-                for concept_id in concept_results["ids"][0]:
-                    if concept_id in ontology.get("concepts", {}):
-                        results["concepts"].append(ontology["concepts"][concept_id])
+            # V2 格式：classes 数组
+            if "classes" in ontology:
+                # 构建 class 索引（用于快速查找）
+                class_by_name = {c.get("name", ""): c for c in ontology.get("classes", [])}
+                class_by_tech = {c.get("technical_name", ""): c for c in ontology.get("classes", [])}
 
-            # Add properties
-            if property_results and property_results["ids"] and property_results["ids"][0]:
-                for prop_id in property_results["ids"][0]:
-                    if prop_id in ontology.get("properties", {}):
-                        results["properties"].append(ontology["properties"][prop_id])
+                # Add classes from concept results
+                if concept_results and concept_results["ids"] and concept_results["ids"][0]:
+                    for class_id in concept_results["ids"][0]:
+                        if class_id in class_by_name:
+                            results["classes"].append(class_by_name[class_id])
+                        elif class_id in class_by_tech:
+                            results["classes"].append(class_by_tech[class_id])
+
+                # Add classes from property results (find parent class)
+                if property_results and property_results["ids"] and property_results["ids"][0]:
+                    for prop_id in property_results["ids"][0]:
+                        # prop_id 格式: "class_name.property_name" 或 "technical_name.column"
+                        parts = prop_id.split(".", 1)
+                        if len(parts) >= 1:
+                            class_name = parts[0]
+                            if class_name in class_by_name and class_by_name[class_name] not in results["classes"]:
+                                results["classes"].append(class_by_name[class_name])
+                            elif class_name in class_by_tech and class_by_tech[class_name] not in results["classes"]:
+                                results["classes"].append(class_by_tech[class_name])
+
+            # V1 格式：concepts/properties 字典
+            else:
+                # Add concepts
+                if concept_results and concept_results["ids"] and concept_results["ids"][0]:
+                    for concept_id in concept_results["ids"][0]:
+                        if concept_id in ontology.get("concepts", {}):
+                            results["concepts"].append(ontology["concepts"][concept_id])
+
+                # Add properties
+                if property_results and property_results["ids"] and property_results["ids"][0]:
+                    for prop_id in property_results["ids"][0]:
+                        if prop_id in ontology.get("properties", {}):
+                            results["properties"].append(ontology["properties"][prop_id])
 
             return results
 
@@ -1668,54 +1758,97 @@ class OntologySearchTool(KodeTool):
     ):
         """
         Index ontology data into ChromaDB collections.
+        支持 V1 (concepts/properties) 和 V2 (classes) 两种格式。
 
         Args:
             ontology: Ontology data structure
-            concepts_collection: ChromaDB collection for concepts
+            concepts_collection: ChromaDB collection for concepts/classes
             properties_collection: ChromaDB collection for properties
         """
-        # Index concepts
         concept_ids = []
         concept_docs = []
         concept_metadatas = []
+        property_ids = []
+        property_docs = []
+        property_metadatas = []
 
-        for concept_name, concept_data in ontology.get("concepts", {}).items():
-            concept_ids.append(concept_name)
+        # V2 格式：classes 数组
+        if "classes" in ontology:
+            for class_data in ontology.get("classes", []):
+                class_name = class_data.get("name", "")
+                tech_name = class_data.get("technical_name", "")
+                if not class_name and not tech_name:
+                    continue
 
-            # Create rich text representation for embedding
-            doc_text = f"{concept_data.get('business_name_cn', '')} {concept_data.get('business_name_en', '')} {concept_data.get('description', '')} {concept_data.get('domain', '')}"
-            concept_docs.append(doc_text)
+                # 用 name 或 technical_name 作为 ID
+                class_id = class_name or tech_name
+                concept_ids.append(class_id)
 
-            concept_metadatas.append({
-                "technical_name": concept_name,
-                "business_name": concept_data.get("business_name_cn", ""),
-                "domain": concept_data.get("domain", "")
-            })
+                # Create rich text representation for embedding
+                doc_text = f"{class_name} {tech_name} {class_data.get('description', '')} {class_data.get('domain', '')} {class_data.get('table_mapping', '')}"
+                concept_docs.append(doc_text)
 
+                concept_metadatas.append({
+                    "name": class_name,
+                    "technical_name": tech_name,
+                    "domain": class_data.get("domain", ""),
+                    "table_mapping": class_data.get("table_mapping", "")
+                })
+
+                # Index properties within this class
+                for prop in class_data.get("properties", []):
+                    prop_name = prop.get("name", "")
+                    prop_tech = prop.get("technical_name", prop.get("column_mapping", ""))
+                    if not prop_name and not prop_tech:
+                        continue
+
+                    # prop_id 格式: "class_name.property_name"
+                    prop_id = f"{class_id}.{prop_name or prop_tech}"
+                    property_ids.append(prop_id)
+
+                    doc_text = f"{prop_name} {prop_tech} {prop.get('description', '')} {class_name}"
+                    property_docs.append(doc_text)
+
+                    property_metadatas.append({
+                        "property_name": prop_name,
+                        "technical_name": prop_tech,
+                        "class_name": class_name,
+                        "type": prop.get("type", "")
+                    })
+
+        # V1 格式：concepts/properties 字典
+        else:
+            for concept_name, concept_data in ontology.get("concepts", {}).items():
+                concept_ids.append(concept_name)
+
+                doc_text = f"{concept_data.get('business_name_cn', '')} {concept_data.get('business_name_en', '')} {concept_data.get('description', '')} {concept_data.get('domain', '')}"
+                concept_docs.append(doc_text)
+
+                concept_metadatas.append({
+                    "technical_name": concept_name,
+                    "business_name": concept_data.get("business_name_cn", ""),
+                    "domain": concept_data.get("domain", "")
+                })
+
+            for prop_key, prop_data in ontology.get("properties", {}).items():
+                property_ids.append(prop_key)
+
+                doc_text = f"{prop_data.get('business_name_cn', '')} {prop_data.get('business_name_en', '')} {prop_data.get('description', '')} {prop_data.get('domain', '')}"
+                property_docs.append(doc_text)
+
+                property_metadatas.append({
+                    "property_key": prop_key,
+                    "business_name": prop_data.get("business_name_cn", ""),
+                    "domain": prop_data.get("domain", "")
+                })
+
+        # Add to collections
         if concept_ids:
             concepts_collection.add(
                 ids=concept_ids,
                 documents=concept_docs,
                 metadatas=concept_metadatas
             )
-
-        # Index properties
-        property_ids = []
-        property_docs = []
-        property_metadatas = []
-
-        for prop_key, prop_data in ontology.get("properties", {}).items():
-            property_ids.append(prop_key)
-
-            # Create rich text representation
-            doc_text = f"{prop_data.get('business_name_cn', '')} {prop_data.get('business_name_en', '')} {prop_data.get('description', '')} {prop_data.get('domain', '')}"
-            property_docs.append(doc_text)
-
-            property_metadatas.append({
-                "property_key": prop_key,
-                "business_name": prop_data.get("business_name_cn", ""),
-                "domain": prop_data.get("domain", "")
-            })
 
         if property_ids:
             properties_collection.add(
@@ -1724,6 +1857,6 @@ class OntologySearchTool(KodeTool):
                 metadatas=property_metadatas
             )
 
-        logger.info(f"Indexed {len(concept_ids)} concepts and {len(property_ids)} properties to ChromaDB")
+        logger.info(f"Indexed {len(concept_ids)} classes/concepts and {len(property_ids)} properties to ChromaDB")
 
 
