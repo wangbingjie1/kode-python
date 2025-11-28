@@ -13,6 +13,7 @@ from .plan import Plan
 from .subscription import Subscription, SubscriptionStatus
 from .usage import Usage
 from .api_call_trace import APICallTrace
+from .ontology_change import OntologyChange, ChangeType, ChangeStatus
 
 __all__ = [
     "User",
@@ -25,4 +26,7 @@ __all__ = [
     "SubscriptionStatus",
     "Usage",
     "APICallTrace",
+    "OntologyChange",
+    "ChangeType",
+    "ChangeStatus",
 ]

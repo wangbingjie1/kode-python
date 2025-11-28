@@ -41,13 +41,13 @@ class OntologyBuilderInput(BaseModel):
     version: str = Field(default="auto", description="Version identifier (auto = timestamp)")
     force_rebuild: bool = Field(
         default=False,
-        description="Force rebuild even if ontology exists. Set to True only after user explicitly confirms to rebuild."
+        description="Force rebuild even if ontology exists. Set to True only after user explicitly confirms to rebuild.",
     )
     skip_uncertainty_check: bool = Field(
         default=False,
         description="跳过不确定性问题检查，直接构建本体。"
-                    "仅在用户明确表示'不回答问卷直接构建'时使用。"
-                    "注意：跳过检查可能导致本体质量下降。"
+        "仅在用户明确表示'不回答问卷直接构建'时使用。"
+        "注意：跳过检查可能导致本体质量下降。",
     )
 
 
@@ -60,9 +60,7 @@ class OntologySearchInput(BaseModel):
         "The tool will automatically find ontology_v2.json or ontology_latest.json."
     )
     query: str = Field(description="Search query (natural language)")
-    search_type: str = Field(
-        default="semantic", description="Search type: semantic, exact, fuzzy"
-    )
+    search_type: str = Field(default="semantic", description="Search type: semantic, exact, fuzzy")
     top_k: int = Field(default=5, description="Number of results to return")
 
 
@@ -135,18 +133,26 @@ class OntologyBuilderTool(KodeTool):
 
             business_tool = BusinessUnderstandingTool()
             if not business_tool.is_completed(connection_name):
-                return json.dumps({
-                    "status": "error",
-                    "gate_check_failed": True,
-                    "reason": "missing_business_understanding",
-                    "message": "❌ 请先运行 BusinessUnderstanding 完成业务理解五问",
-                    "suggestion": "使用 BusinessUnderstanding(connection_name='{}') 开始业务理解".format(connection_name),
-                }, indent=2, ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "gate_check_failed": True,
+                        "reason": "missing_business_understanding",
+                        "message": "❌ 请先运行 BusinessUnderstanding 完成业务理解五问",
+                        "suggestion": "使用 BusinessUnderstanding(connection_name='{}') 开始业务理解".format(
+                            connection_name
+                        ),
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
 
             # Load schema from saved file
             config = ConfigManager()
             schema_path = config.get("storage.schema_path", "./schema_store")
-            schema_file = Path(schema_path) / get_safe_connection_path(connection_name) / "schema_latest.json"
+            schema_file = (
+                Path(schema_path) / get_safe_connection_path(connection_name) / "schema_latest.json"
+            )
 
             if not schema_file.exists():
                 return json.dumps(
@@ -163,7 +169,11 @@ class OntologyBuilderTool(KodeTool):
             # 🔍 检查本体是否已存在（仅当未强制重建时）- V2 格式
             if not force_rebuild:
                 ontology_path = config.get("storage.ontology_path", "./ontology_store")
-                existing_ontology_file = Path(ontology_path) / get_safe_connection_path(connection_name) / "ontology_v2.json"
+                existing_ontology_file = (
+                    Path(ontology_path)
+                    / get_safe_connection_path(connection_name)
+                    / "ontology_v2.json"
+                )
 
                 if existing_ontology_file.exists():
                     # 读取现有本体的元数据
@@ -172,7 +182,9 @@ class OntologyBuilderTool(KodeTool):
                             existing_data = json.load(f)
 
                         existing_version = existing_data.get("version", "未知")
-                        created_at = existing_data.get("meta", {}).get("created_at", existing_data.get("created_at", "未知"))
+                        created_at = existing_data.get("meta", {}).get(
+                            "created_at", existing_data.get("created_at", "未知")
+                        )
                         ontology_stats = existing_data.get("statistics", {})
 
                         return json.dumps(
@@ -186,14 +198,18 @@ class OntologyBuilderTool(KodeTool):
                                     "created_at": created_at,
                                     "statistics": {
                                         "class_count": ontology_stats.get("class_count", 0),
-                                        "business_rule_count": ontology_stats.get("business_rule_count", 0),
+                                        "business_rule_count": ontology_stats.get(
+                                            "business_rule_count", 0
+                                        ),
                                         "metric_count": ontology_stats.get("metric_count", 0),
-                                        "uncertainty_count": ontology_stats.get("uncertainty_count", 0)
-                                    }
+                                        "uncertainty_count": ontology_stats.get(
+                                            "uncertainty_count", 0
+                                        ),
+                                    },
                                 },
                                 "question": "是否要重新构建本体？这将覆盖现有的本体文件。",
                                 "suggestion": "如果要重新构建，请明确告诉我'重新构建本体'或'覆盖现有本体'。如果不需要重新构建，可以直接使用 OntologySearch 工具搜索现有本体。",
-                                "note": "重新构建会保留历史版本，但 ontology_v2.json 会被更新。"
+                                "note": "重新构建会保留历史版本，但 ontology_v2.json 会被更新。",
                             },
                             indent=2,
                             ensure_ascii=False,
@@ -232,23 +248,23 @@ class OntologyBuilderTool(KodeTool):
 
                     # 从领域文件中读取 uncertainties
                     uncertainties = domain_data.get("uncertainties", [])
-                    high_uncertainties.extend([
-                        u for u in uncertainties
-                        if u.get("priority") == "high"
-                    ])
+                    high_uncertainties.extend(
+                        [u for u in uncertainties if u.get("priority") == "high"]
+                    )
                 except Exception as e:
                     logger.warning(f"读取领域文件 {domain_file.name} 失败: {e}")
             unresolved_high = [
-                u for u in high_uncertainties
-                if u.get("status") not in ["resolved", "skipped"]
+                u for u in high_uncertainties if u.get("status") not in ["resolved", "skipped"]
             ]
 
             if unresolved_high:
                 # 生成问题列表（前5个）
-                question_list = "\n".join([
-                    f"  {i+1}. [{u.get('domain')}] {u.get('question')}"
-                    for i, u in enumerate(unresolved_high[:5])
-                ])
+                question_list = "\n".join(
+                    [
+                        f"  {i+1}. [{u.get('domain')}] {u.get('question')}"
+                        for i, u in enumerate(unresolved_high[:5])
+                    ]
+                )
 
                 # 【重构】改为软提示模式：如果用户选择跳过检查，继续构建
                 if skip_uncertainty_check:
@@ -271,7 +287,7 @@ class OntologyBuilderTool(KodeTool):
                             "suggestion": (
                                 "建议先回答高优先级问题以提高本体质量。\n"
                                 "用户可以：\n"
-                                "1. 点击界面右上角的「上下文」按钮，在侧边栏中填写问卷\n"
+                                "1. 点击界面右上角的「不确定性」按钮，在侧边栏中填写问卷\n"
                                 "2. 或者告诉我「跳过问卷，直接构建本体」（会影响本体质量）"
                             ),
                             # 保留旧的 action_required 给 Agent 使用
@@ -281,20 +297,26 @@ class OntologyBuilderTool(KodeTool):
                             "sidebar_action": {
                                 "type": "open_questionnaire",
                                 "connection_name": connection_name,
-                                "unresolved_count": len(unresolved_high)
+                                "unresolved_count": len(unresolved_high),
                             },
-                            "note": "用户可在侧边栏随时填写问卷，无需阻塞对话流程。"
+                            "note": "用户可在侧边栏随时填写问卷，无需阻塞对话流程。",
                         },
                         indent=2,
                         ensure_ascii=False,
                     )
 
             # ✅ 情况3: 所有 high 问题已解决（或用户选择跳过）
-            resolved_count = len([u for u in high_uncertainties if u.get("status") in ["resolved", "skipped"]])
+            resolved_count = len(
+                [u for u in high_uncertainties if u.get("status") in ["resolved", "skipped"]]
+            )
             if skip_uncertainty_check and unresolved_high:
-                logger.info(f"⚠️ 用户跳过检查，继续构建。未解决: {len(unresolved_high)}，已解决: {resolved_count}")
+                logger.info(
+                    f"⚠️ 用户跳过检查，继续构建。未解决: {len(unresolved_high)}，已解决: {resolved_count}"
+                )
             else:
-                logger.info(f"✅ 门禁检查通过：所有 {len(high_uncertainties)} 个高优先级问题已解决（resolved: {resolved_count}）")
+                logger.info(
+                    f"✅ 门禁检查通过：所有 {len(high_uncertainties)} 个高优先级问题已解决（resolved: {resolved_count}）"
+                )
 
             # Load schema data
             with open(schema_file, "r", encoding="utf-8") as f:
@@ -307,7 +329,9 @@ class OntologyBuilderTool(KodeTool):
                 schema_metadata = schema_data
 
             # 🚀 新的简化流程：优先使用 domain_index.json（如果存在）
-            domain_index_file = Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
+            domain_index_file = (
+                Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
+            )
             database = schema_metadata.get("database", "未知")
             db_schema = schema_metadata.get("schema")
 
@@ -330,6 +354,7 @@ class OntologyBuilderTool(KodeTool):
                     loop = asyncio.get_running_loop()
                     # 在事件循环中，使用线程池运行
                     from concurrent.futures import ThreadPoolExecutor
+
                     with ThreadPoolExecutor(max_workers=1) as executor:
                         future = executor.submit(run_async_in_thread)
                         ontology = future.result()
@@ -338,10 +363,14 @@ class OntologyBuilderTool(KodeTool):
                     ontology = run_async_in_thread()
             else:
                 # domain_index.json 不存在，报错
-                return json.dumps({
-                    "status": "error",
-                    "message": "domain_index.json not found. Please run DomainClusteringTool first to cluster the schema into domains."
-                }, indent=2, ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "domain_index.json not found. Please run DomainClusteringTool first to cluster the schema into domains.",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
 
             # Auto-save ontology to file (V2 format)
             if auto_save:
@@ -353,15 +382,18 @@ class OntologyBuilderTool(KodeTool):
                 "status": "success",
                 "message": "✅ 本体构建完成（V2格式）",
                 "file_path": ontology.get("storage", {}).get("latest_path", ""),
-                "statistics": ontology.get("statistics", {
-                    "class_count": len(ontology.get("classes", [])),
-                    "business_rule_count": len(ontology.get("business_rules", [])),
-                    "metric_count": len(ontology.get("metrics", [])),
-                    "data_flow_count": len(ontology.get("data_flows", [])),
-                    "uncertainty_count": len(ontology.get("uncertainties", []))
-                }),
+                "statistics": ontology.get(
+                    "statistics",
+                    {
+                        "class_count": len(ontology.get("classes", [])),
+                        "business_rule_count": len(ontology.get("business_rules", [])),
+                        "metric_count": len(ontology.get("metrics", [])),
+                        "data_flow_count": len(ontology.get("data_flows", [])),
+                        "uncertainty_count": len(ontology.get("uncertainties", [])),
+                    },
+                ),
                 "domains": ontology.get("domains", []),
-                "meta": ontology.get("meta", {})
+                "meta": ontology.get("meta", {}),
             }
 
             return json.dumps(summary, indent=2, ensure_ascii=False)
@@ -438,7 +470,9 @@ class OntologyBuilderTool(KodeTool):
 
         return "\n".join(lines)
 
-    def _create_ontology_generation_prompt(self, schema_summary: str, connection_name: str, database: str, db_schema: Optional[str]) -> str:
+    def _create_ontology_generation_prompt(
+        self, schema_summary: str, connection_name: str, database: str, db_schema: Optional[str]
+    ) -> str:
         """创建用于本体生成的 AI prompt。"""
         return f"""你是一位资深的 ERP 系统架构师和业务分析专家。请分析以下数据库 schema，构建一个完整的业务本体（Ontology）。
 
@@ -696,11 +730,11 @@ Schema: {db_schema or "默认"}
             pass
 
         # 策略2：查找 { } 边界（常见情况）
-        start_idx = text.find('{')
-        end_idx = text.rfind('}')
+        start_idx = text.find("{")
+        end_idx = text.rfind("}")
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
             try:
-                potential_json = text[start_idx:end_idx+1]
+                potential_json = text[start_idx : end_idx + 1]
                 parsed = json.loads(potential_json)
                 # 验证是本体JSON
                 if "concepts" in parsed or "properties" in parsed or "business_domains" in parsed:
@@ -772,7 +806,6 @@ Schema: {db_schema or "默认"}
                 "error": str(e),
             }
 
-
     def _prepare_domain_schema(self, domain_schema: Dict[str, Any]) -> str:
         """为域准备详细schema文本（含样例数据智能摘要）。"""
         lines = []
@@ -809,11 +842,24 @@ Schema: {db_schema or "默认"}
             lines.append("")
         return "\n".join(lines)
 
-    def _merge_ontologies(self, domain_ontologies: Dict[str, Dict[str, Any]], cross_domain_insights: Dict[str, Any],
-                         global_context: Dict[str, Any], schema_metadata: Dict[str, Any],
-                         connection_name: str, model_manager) -> Dict[str, Any]:
+    def _merge_ontologies(
+        self,
+        domain_ontologies: Dict[str, Dict[str, Any]],
+        cross_domain_insights: Dict[str, Any],
+        global_context: Dict[str, Any],
+        schema_metadata: Dict[str, Any],
+        connection_name: str,
+        model_manager,
+    ) -> Dict[str, Any]:
         """合并所有域的本体+跨域洞察。"""
-        all_concepts, all_properties, all_relationships, all_hierarchies, all_uncertainties, all_axioms = {}, {}, [], [], [], []
+        (
+            all_concepts,
+            all_properties,
+            all_relationships,
+            all_hierarchies,
+            all_uncertainties,
+            all_axioms,
+        ) = ({}, {}, [], [], [], [])
 
         for ont in domain_ontologies.values():
             all_concepts.update(ont.get("concepts", {}))
@@ -832,7 +878,7 @@ Schema: {db_schema or "默认"}
                 "primary_domain": global_context.get("architecture_pattern", "未知"),
                 "sub_domains": list(domain_ontologies.keys()),
                 "business_scenario": global_context.get("insights", ""),
-                "architecture_pattern": global_context.get("architecture_pattern", "未知")
+                "architecture_pattern": global_context.get("architecture_pattern", "未知"),
             }
 
         # 跨域公理（如跨表的派生规则）
@@ -849,7 +895,7 @@ Schema: {db_schema or "默认"}
                 "build_method": "three_phase_batched",
                 "phase1_domains": len(global_context.get("business_domains", {})),
                 "phase2_domains": len(domain_ontologies),
-                "phase3_cross_relations": len(cross_domain_insights.get("relationships", []))
+                "phase3_cross_relations": len(cross_domain_insights.get("relationships", [])),
             },
             "concepts": all_concepts,
             "properties": all_properties,
@@ -888,7 +934,9 @@ Schema: {db_schema or "默认"}
             from langchain_core.messages import HumanMessage
 
             # 1. 读取 domain_index.json
-            domain_index_file = Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
+            domain_index_file = (
+                Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
+            )
             with open(domain_index_file, "r", encoding="utf-8") as f:
                 domain_index = json.load(f)
 
@@ -911,7 +959,7 @@ Schema: {db_schema or "默认"}
                 schema_path=schema_path,
                 database=database,
                 db_schema=db_schema,
-                model=model
+                model=model,
             )
             t_elapsed = time.time() - t_start
             logger.info(f"✅ 并行构建完成：{len(domain_ontologies)} 个域，耗时 {t_elapsed:.2f}s")
@@ -921,7 +969,7 @@ Schema: {db_schema or "默认"}
                 domain_ontologies=domain_ontologies,
                 connection_name=connection_name,
                 database=database,
-                model_manager=model_manager
+                model_manager=model_manager,
             )
 
             logger.info(f"🎉 本体构建完成：{final_ontology['statistics']['class_count']} 个类")
@@ -948,10 +996,9 @@ Schema: {db_schema or "默认"}
                     "metric_count": 0,
                     "data_flow_count": 0,
                     "uncertainty_count": 0,
-                    "domain_count": 0
-                }
+                    "domain_count": 0,
+                },
             }
-
 
     async def _build_all_domains_parallel(
         self,
@@ -960,7 +1007,7 @@ Schema: {db_schema or "默认"}
         schema_path: str,
         database: str,
         db_schema: Optional[str],
-        model
+        model,
     ) -> Dict[str, Dict[str, Any]]:
         """
         并行构建所有业务域的本体（核心性能优化）。
@@ -977,7 +1024,11 @@ Schema: {db_schema or "默认"}
             logger.info(f"🚀 开始构建 {domain_name}（{domain_info['table_count']} 个表）")
 
             # 读取领域的完整 schema
-            domain_file = Path(schema_path) / get_safe_connection_path(connection_name) / domain_info["file_path"]
+            domain_file = (
+                Path(schema_path)
+                / get_safe_connection_path(connection_name)
+                / domain_info["file_path"]
+            )
             with open(domain_file, "r", encoding="utf-8") as f:
                 domain_data = json.load(f)
 
@@ -989,16 +1040,19 @@ Schema: {db_schema or "默认"}
                 connection_name=connection_name,
                 database=database,
                 db_schema=db_schema,
-                model=model
+                model=model,
             )
             t_ai_elapsed = time.time() - t_ai_start
 
             t_elapsed = time.time() - t_start
-            logger.info(f"✅ {domain_name} 完成（{domain_info['table_count']} 个表，AI耗时 {t_ai_elapsed:.2f}s，总耗时 {t_elapsed:.2f}s）")
+            logger.info(
+                f"✅ {domain_name} 完成（{domain_info['table_count']} 个表，AI耗时 {t_ai_elapsed:.2f}s，总耗时 {t_elapsed:.2f}s）"
+            )
             return domain_name, domain_ont
 
         # 限流并发（最多5个同时）
         from asyncio import Semaphore
+
         semaphore = Semaphore(10)
 
         async def bounded_task(domain_info):
@@ -1018,7 +1072,7 @@ Schema: {db_schema or "默认"}
         connection_name: str,
         database: str,
         db_schema: Optional[str],
-        model
+        model,
     ) -> Dict[str, Any]:
         """
         为单个业务域构建本体（V2 格式，异步并行化版本）。
@@ -1128,7 +1182,7 @@ Schema: {db_schema or "默认"}
                 "business_rules": [],
                 "metrics": [],
                 "data_flows": [],
-                "uncertainties": []
+                "uncertainties": [],
             }
 
         # 加载不确定性数据
@@ -1139,11 +1193,12 @@ Schema: {db_schema or "默认"}
             "business_rules": ontology_data.get("business_rules", []),
             "metrics": ontology_data.get("metrics", []),
             "data_flows": ontology_data.get("data_flows", []),
-            "uncertainties": uncertainties
+            "uncertainties": uncertainties,
         }
 
-
-    def _load_high_priority_rules_data(self, connection_name: str, domain_name: str) -> List[Dict[str, Any]]:
+    def _load_high_priority_rules_data(
+        self, connection_name: str, domain_name: str
+    ) -> List[Dict[str, Any]]:
         """
         加载领域的所有不确定性数据（原样返回，用于保存到本体文件）。
 
@@ -1157,7 +1212,12 @@ Schema: {db_schema or "默认"}
             schema_path = config.get("storage.schema_path", "./schema_store")
 
             # ✨ 从领域JSON文件读取
-            domain_file = Path(schema_path) / get_safe_connection_path(connection_name) / "domains" / f"{domain_name}.json"
+            domain_file = (
+                Path(schema_path)
+                / get_safe_connection_path(connection_name)
+                / "domains"
+                / f"{domain_name}.json"
+            )
             if not domain_file.exists():
                 logger.warning(f"领域文件 {domain_file} 不存在")
                 return []
@@ -1194,7 +1254,12 @@ Schema: {db_schema or "默认"}
             schema_path = config.get("storage.schema_path", "./schema_store")
 
             # ✨ 新逻辑：从领域JSON文件中读取 uncertainties
-            domain_file = Path(schema_path) / get_safe_connection_path(connection_name) / "domains" / f"{domain_name}.json"
+            domain_file = (
+                Path(schema_path)
+                / get_safe_connection_path(connection_name)
+                / "domains"
+                / f"{domain_name}.json"
+            )
             if not domain_file.exists():
                 logger.warning(f"领域文件 {domain_file} 不存在")
                 return ""
@@ -1261,16 +1326,17 @@ Schema: {db_schema or "默认"}
         domain_ontologies: Dict[str, Dict[str, Any]],
         connection_name: str,
         database: str,
-        model_manager
+        model_manager,
     ) -> Dict[str, Any]:
         """
-        轻量级合并所有域的本体（V2 格式，无需 AI）。
+        轻量级合并所有域的本体（V2 格式）。
 
         直接合并所有域的 classes/business_rules/metrics/data_flows。
+        然后基于业务五问生成核心指标（core_metrics）。
         """
         all_classes = []
         all_business_rules = []
-        all_metrics = []
+        all_metrics = []  # 这些是衍生指标（derived_metrics）
         all_data_flows = []
         all_uncertainties = []
 
@@ -1283,8 +1349,17 @@ Schema: {db_schema or "默认"}
 
         # 加载业务理解五问答案作为 meta
         from kode.tools.business_understanding import BusinessUnderstandingTool
+
         business_tool = BusinessUnderstandingTool()
         business_answers = business_tool.get_answers(connection_name) or {}
+
+        # 🚀 基于业务五问生成核心指标（core_metrics）
+        core_metrics = self._generate_core_metrics(
+            business_answers=business_answers,
+            derived_metrics=all_metrics,
+            classes=all_classes,
+            model_manager=model_manager,
+        )
 
         return {
             "version": "2.0",
@@ -1303,20 +1378,156 @@ Schema: {db_schema or "默认"}
             "domains": list(domain_ontologies.keys()),
             "classes": all_classes,
             "business_rules": all_business_rules,
-            "metrics": all_metrics,
+            "core_metrics": core_metrics,  # 高层级核心业务指标
+            "metrics": all_metrics,  # 低层级衍生指标（保留原有）
             "data_flows": all_data_flows,
             "uncertainties": all_uncertainties,
             "statistics": {
                 "class_count": len(all_classes),
                 "business_rule_count": len(all_business_rules),
+                "core_metric_count": len(core_metrics),
                 "metric_count": len(all_metrics),
                 "data_flow_count": len(all_data_flows),
                 "uncertainty_count": len(all_uncertainties),
-                "domain_count": len(domain_ontologies)
-            }
+                "domain_count": len(domain_ontologies),
+            },
         }
 
+    def _generate_core_metrics(
+        self,
+        business_answers: Dict[str, str],
+        derived_metrics: List[Dict[str, Any]],
+        classes: List[Dict[str, Any]],
+        model_manager,
+    ) -> List[Dict[str, Any]]:
+        """
+        基于业务理解五问生成核心业务指标（core_metrics）。
 
+        核心指标来源：
+        1. key_metrics: 用户明确指定的核心指标（如 MRR, Churn Rate）
+        2. revenue_formula: 收入公式中隐含的指标
+        3. conversion_path: 转化路径中的漏斗指标
+
+        Returns:
+            核心指标列表，每个指标包含：
+            - name: 指标名称
+            - description: 业务含义
+            - category: 分类（revenue/conversion/engagement/retention）
+            - formula: 计算公式（基于现有 classes 和 derived_metrics）
+            - dependencies: 依赖的类或衍生指标
+            - importance: 重要性（critical/high/medium）
+        """
+        from langchain_core.messages import HumanMessage
+
+        key_metrics_text = business_answers.get("key_metrics", "")
+        revenue_formula = business_answers.get("revenue_formula", "")
+        conversion_path = business_answers.get("conversion_path", "")
+        product_name = business_answers.get("product_name", "")
+        business_model = business_answers.get("business_model", "")
+
+        # 如果没有业务答案，返回空
+        if not key_metrics_text and not revenue_formula:
+            logger.warning("业务五问答案为空，跳过核心指标生成")
+            return []
+
+        # 准备 classes 摘要（只取名称和描述）
+        class_summary = "\n".join(
+            [
+                f"- {c.get('name', '')} ({c.get('technical_name', '')}): {c.get('description', '')[:50]}"
+                for c in classes[:50]  # 限制数量
+            ]
+        )
+
+        # 准备衍生指标摘要
+        derived_summary = "\n".join(
+            [f"- {m.get('name', '')}: {m.get('formula', '')}" for m in derived_metrics[:30]]
+        )
+
+        prompt = f"""你是 SaaS/ERP 业务分析专家。请根据用户的业务上下文，生成核心业务指标（KPIs）。
+
+# 用户业务上下文
+
+**产品**: {product_name}
+**商业模式**: {business_model}
+**收入公式**: {revenue_formula}
+**转化路径**: {conversion_path}
+**用户关注的核心指标**: {key_metrics_text}
+
+# 可用的数据类（业务实体）
+
+{class_summary}
+
+# 已有的衍生指标（可复用）
+
+{derived_summary}
+
+# 任务
+
+请根据以上业务上下文，生成 **核心业务指标（Core Metrics / KPIs）**。
+
+**要求**：
+1. 必须包含用户明确提到的指标（如 MRR、Churn Rate）
+2. 根据收入公式推导相关指标
+3. 根据转化路径推导漏斗指标
+4. 每个指标必须能通过现有数据类计算（给出具体公式）
+5. 指标分类：revenue（营收）、conversion（转化）、engagement（活跃）、retention（留存）
+
+**输出 JSON 格式**：
+```json
+{{
+  "core_metrics": [
+    {{
+      "name": "MRR (月经常性收入)",
+      "description": "每月从订阅用户获得的经常性收入，SaaS核心营收指标",
+      "category": "revenue",
+      "formula": "SUM(订阅订单.月付金额) WHERE 订阅状态='活跃'",
+      "dependencies": ["订阅订单", "平台用户"],
+      "importance": "critical",
+      "calculation_notes": "需要从订单表筛选订阅类型订单，按月汇总"
+    }},
+    {{
+      "name": "Churn Rate (流失率)",
+      "description": "每月流失的付费用户占比，衡量用户留存的核心指标",
+      "category": "retention",
+      "formula": "(期初付费用户数 - 期末付费用户数) / 期初付费用户数 * 100%",
+      "dependencies": ["用户", "订阅订单"],
+      "importance": "critical",
+      "calculation_notes": "需要按月追踪用户订阅状态变化"
+    }},
+    {{
+      "name": "付费转化率",
+      "description": "注册用户中成功付费的比例",
+      "category": "conversion",
+      "formula": "付费用户数 / 注册用户数 * 100%",
+      "dependencies": ["用户", "订单"],
+      "importance": "high",
+      "calculation_notes": "使用 top_up_tag 或 subscription_tag 判断是否付费"
+    }}
+  ]
+}}
+```
+
+**只返回 JSON，不要解释文字。**
+"""
+
+        try:
+            model = model_manager.get_model("main")
+            model.temperature = 0.0
+            model.max_tokens = 8000
+
+            response = model.invoke([HumanMessage(content=prompt)])
+            result = self._extract_json_from_text(response.content)
+
+            if result and "core_metrics" in result:
+                logger.info(f"✅ 生成了 {len(result['core_metrics'])} 个核心指标")
+                return result["core_metrics"]
+            else:
+                logger.warning(f"核心指标生成失败，AI输出: {response.content[:500]}")
+                return []
+
+        except Exception as e:
+            logger.error(f"核心指标生成异常: {e}")
+            return []
 
 
 class OntologySearchTool(KodeTool):
@@ -1369,7 +1580,11 @@ class OntologySearchTool(KodeTool):
             ontology_path_obj = Path(ontology_path)
 
             # 情况0：直接传入 connection_name（如 "yanfa"）
-            if not ontology_path_obj.exists() and "/" not in ontology_path and "\\" not in ontology_path:
+            if (
+                not ontology_path_obj.exists()
+                and "/" not in ontology_path
+                and "\\" not in ontology_path
+            ):
                 # 尝试作为 connection_name 处理
                 corrected_path = Path(ontology_base) / ontology_path
                 if corrected_path.exists():
@@ -1391,7 +1606,9 @@ class OntologySearchTool(KodeTool):
                             connection_name = parts[schema_idx + 1]
                             # 纠正路径
                             corrected_path = Path(ontology_base) / connection_name
-                            logger.info(f"✅ 自动纠正: schema 路径 → ontology 路径 {corrected_path}")
+                            logger.info(
+                                f"✅ 自动纠正: schema 路径 → ontology 路径 {corrected_path}"
+                            )
                             ontology_path_obj = corrected_path
 
                 # 情况2：传入的是 ontology_store/.../ontology_*.json → 提取目录
@@ -1421,7 +1638,9 @@ class OntologySearchTool(KodeTool):
 
                 # 检查是否是路径错误
                 if "schema_store" in str(ontology_path):
-                    error_msg += "\n\n❌ 错误原因: 你传入的是 schema 文件路径，而不是 ontology 目录！"
+                    error_msg += (
+                        "\n\n❌ 错误原因: 你传入的是 schema 文件路径，而不是 ontology 目录！"
+                    )
                     error_msg += "\n\n✅ 正确用法: ontology_path 应该是 'ontology_store/{connection_name}' 或直接传入 connection_name，例如："
                     error_msg += "\n  - 正确: 'ontology_store/yanfa' 或 'yanfa'"
                     error_msg += "\n  - 错误: 'schema_store/yanfa/domains/order_management.json'"
@@ -1464,7 +1683,7 @@ class OntologySearchTool(KodeTool):
             #     results = self._semantic_search(ontology, query_lower, top_k)
 
             # elif search_type == "semantic":
-                # Semantic search with embeddings (ChromaDB)
+            # Semantic search with embeddings (ChromaDB)
             results = self._semantic_search(ontology, query, top_k, str(ontology_path_obj))
 
             # 提取 uncertainties（完整列表）
@@ -1482,10 +1701,10 @@ class OntologySearchTool(KodeTool):
 
                 # 判断是否相关（实体名匹配 OR 问题描述包含查询词）
                 is_related = (
-                    entity in query_lower or
-                    query_lower in entity or
-                    query_lower in question or
-                    query_lower in context
+                    entity in query_lower
+                    or query_lower in entity
+                    or query_lower in question
+                    or query_lower in context
                 )
 
                 if is_related:
@@ -1504,11 +1723,15 @@ class OntologySearchTool(KodeTool):
                     "ontology_file": str(ontology_file),
                     "uncertainties": {
                         "related_count": len(related_uncertainties),
-                        "unresolved_count": len([u for u in uncertainties if u.get("status") != "resolved"]),
+                        "unresolved_count": len(
+                            [u for u in uncertainties if u.get("status") != "resolved"]
+                        ),
                         "total_count": len(uncertainties),
-                        "resolved_count": len([u for u in uncertainties if u.get("status") == "resolved"]),
-                        "message": "Use FileRead to view full uncertainties from ontology file if needed"
-                    }
+                        "resolved_count": len(
+                            [u for u in uncertainties if u.get("status") == "resolved"]
+                        ),
+                        "message": "Use FileRead to view full uncertainties from ontology file if needed",
+                    },
                 },
                 indent=2,
                 ensure_ascii=False,
@@ -1529,9 +1752,10 @@ class OntologySearchTool(KodeTool):
 
         # Search concepts
         for concept_name, concept_data in ontology.get("concepts", {}).items():
-            if query in concept_name.lower() or query in concept_data.get(
-                "business_name", ""
-            ).lower():
+            if (
+                query in concept_name.lower()
+                or query in concept_data.get("business_name", "").lower()
+            ):
                 results["concepts"].append(concept_data)
 
         # Search properties
@@ -1541,9 +1765,7 @@ class OntologySearchTool(KodeTool):
 
         return results
 
-    def _fuzzy_search(
-        self, ontology: Dict[str, Any], query: str, top_k: int
-    ) -> Dict[str, List]:
+    def _fuzzy_search(self, ontology: Dict[str, Any], query: str, top_k: int) -> Dict[str, List]:
         """Fuzzy match search with scoring."""
         results: Dict[str, List] = {"concepts": [], "properties": [], "relationships": []}
 
@@ -1556,7 +1778,7 @@ class OntologySearchTool(KodeTool):
                 concept_data.get("business_name_cn", ""),
                 concept_data.get("business_name_en", ""),
                 concept_data.get("description", ""),
-                concept_data.get("domain", "")
+                concept_data.get("domain", ""),
             ]
             score = self._calculate_fuzzy_score(query, search_targets)
             if score > 0:
@@ -1575,7 +1797,7 @@ class OntologySearchTool(KodeTool):
                 prop_data.get("business_name_cn", ""),
                 prop_data.get("business_name_en", ""),
                 prop_data.get("description", ""),
-                prop_data.get("domain", "")
+                prop_data.get("domain", ""),
             ]
             score = self._calculate_fuzzy_score(query, search_targets)
             if score > 0:
@@ -1661,34 +1883,28 @@ class OntologySearchTool(KodeTool):
             chroma_dir.mkdir(exist_ok=True)
 
             client = chromadb.PersistentClient(
-                path=str(chroma_dir),
-                settings=Settings(anonymized_telemetry=False)
+                path=str(chroma_dir), settings=Settings(anonymized_telemetry=False)
             )
 
             # Get or create collections for concepts and properties
             concepts_collection = client.get_or_create_collection(
-                name="ontology_concepts",
-                metadata={"hnsw:space": "cosine"}  # Use cosine similarity
+                name="ontology_concepts", metadata={"hnsw:space": "cosine"}  # Use cosine similarity
             )
 
             properties_collection = client.get_or_create_collection(
-                name="ontology_properties",
-                metadata={"hnsw:space": "cosine"}
+                name="ontology_properties", metadata={"hnsw:space": "cosine"}
             )
 
             # Check if we need to index (collection is empty)
             if concepts_collection.count() == 0:
-                self._index_ontology_to_chroma(
-                    ontology, concepts_collection, properties_collection
-                )
+                self._index_ontology_to_chroma(ontology, concepts_collection, properties_collection)
 
             # Search concepts
             concept_count = concepts_collection.count()
             concept_results = None
             if concept_count > 0:
                 concept_results = concepts_collection.query(
-                    query_texts=[query],
-                    n_results=min(top_k, concept_count)
+                    query_texts=[query], n_results=min(top_k, concept_count)
                 )
 
             # Search properties
@@ -1696,19 +1912,25 @@ class OntologySearchTool(KodeTool):
             property_results = None
             if property_count > 0:
                 property_results = properties_collection.query(
-                    query_texts=[query],
-                    n_results=min(top_k, property_count)
+                    query_texts=[query], n_results=min(top_k, property_count)
                 )
 
             # Parse results and retrieve full ontology data
             # 支持 V1 (concepts/properties) 和 V2 (classes) 两种格式
-            results: Dict[str, List] = {"concepts": [], "properties": [], "relationships": [], "classes": []}
+            results: Dict[str, List] = {
+                "concepts": [],
+                "properties": [],
+                "relationships": [],
+                "classes": [],
+            }
 
             # V2 格式：classes 数组
             if "classes" in ontology:
                 # 构建 class 索引（用于快速查找）
                 class_by_name = {c.get("name", ""): c for c in ontology.get("classes", [])}
-                class_by_tech = {c.get("technical_name", ""): c for c in ontology.get("classes", [])}
+                class_by_tech = {
+                    c.get("technical_name", ""): c for c in ontology.get("classes", [])
+                }
 
                 # Add classes from concept results
                 if concept_results and concept_results["ids"] and concept_results["ids"][0]:
@@ -1725,9 +1947,15 @@ class OntologySearchTool(KodeTool):
                         parts = prop_id.split(".", 1)
                         if len(parts) >= 1:
                             class_name = parts[0]
-                            if class_name in class_by_name and class_by_name[class_name] not in results["classes"]:
+                            if (
+                                class_name in class_by_name
+                                and class_by_name[class_name] not in results["classes"]
+                            ):
                                 results["classes"].append(class_by_name[class_name])
-                            elif class_name in class_by_tech and class_by_tech[class_name] not in results["classes"]:
+                            elif (
+                                class_name in class_by_tech
+                                and class_by_tech[class_name] not in results["classes"]
+                            ):
                                 results["classes"].append(class_by_tech[class_name])
 
             # V1 格式：concepts/properties 字典
@@ -1751,10 +1979,7 @@ class OntologySearchTool(KodeTool):
             return self._fuzzy_search(ontology, query.lower(), top_k)
 
     def _index_ontology_to_chroma(
-        self,
-        ontology: Dict[str, Any],
-        concepts_collection,
-        properties_collection
+        self, ontology: Dict[str, Any], concepts_collection, properties_collection
     ):
         """
         Index ontology data into ChromaDB collections.
@@ -1788,12 +2013,14 @@ class OntologySearchTool(KodeTool):
                 doc_text = f"{class_name} {tech_name} {class_data.get('description', '')} {class_data.get('domain', '')} {class_data.get('table_mapping', '')}"
                 concept_docs.append(doc_text)
 
-                concept_metadatas.append({
-                    "name": class_name,
-                    "technical_name": tech_name,
-                    "domain": class_data.get("domain", ""),
-                    "table_mapping": class_data.get("table_mapping", "")
-                })
+                concept_metadatas.append(
+                    {
+                        "name": class_name,
+                        "technical_name": tech_name,
+                        "domain": class_data.get("domain", ""),
+                        "table_mapping": class_data.get("table_mapping", ""),
+                    }
+                )
 
                 # Index properties within this class
                 for prop in class_data.get("properties", []):
@@ -1809,12 +2036,14 @@ class OntologySearchTool(KodeTool):
                     doc_text = f"{prop_name} {prop_tech} {prop.get('description', '')} {class_name}"
                     property_docs.append(doc_text)
 
-                    property_metadatas.append({
-                        "property_name": prop_name,
-                        "technical_name": prop_tech,
-                        "class_name": class_name,
-                        "type": prop.get("type", "")
-                    })
+                    property_metadatas.append(
+                        {
+                            "property_name": prop_name,
+                            "technical_name": prop_tech,
+                            "class_name": class_name,
+                            "type": prop.get("type", ""),
+                        }
+                    )
 
         # V1 格式：concepts/properties 字典
         else:
@@ -1824,11 +2053,13 @@ class OntologySearchTool(KodeTool):
                 doc_text = f"{concept_data.get('business_name_cn', '')} {concept_data.get('business_name_en', '')} {concept_data.get('description', '')} {concept_data.get('domain', '')}"
                 concept_docs.append(doc_text)
 
-                concept_metadatas.append({
-                    "technical_name": concept_name,
-                    "business_name": concept_data.get("business_name_cn", ""),
-                    "domain": concept_data.get("domain", "")
-                })
+                concept_metadatas.append(
+                    {
+                        "technical_name": concept_name,
+                        "business_name": concept_data.get("business_name_cn", ""),
+                        "domain": concept_data.get("domain", ""),
+                    }
+                )
 
             for prop_key, prop_data in ontology.get("properties", {}).items():
                 property_ids.append(prop_key)
@@ -1836,27 +2067,25 @@ class OntologySearchTool(KodeTool):
                 doc_text = f"{prop_data.get('business_name_cn', '')} {prop_data.get('business_name_en', '')} {prop_data.get('description', '')} {prop_data.get('domain', '')}"
                 property_docs.append(doc_text)
 
-                property_metadatas.append({
-                    "property_key": prop_key,
-                    "business_name": prop_data.get("business_name_cn", ""),
-                    "domain": prop_data.get("domain", "")
-                })
+                property_metadatas.append(
+                    {
+                        "property_key": prop_key,
+                        "business_name": prop_data.get("business_name_cn", ""),
+                        "domain": prop_data.get("domain", ""),
+                    }
+                )
 
         # Add to collections
         if concept_ids:
             concepts_collection.add(
-                ids=concept_ids,
-                documents=concept_docs,
-                metadatas=concept_metadatas
+                ids=concept_ids, documents=concept_docs, metadatas=concept_metadatas
             )
 
         if property_ids:
             properties_collection.add(
-                ids=property_ids,
-                documents=property_docs,
-                metadatas=property_metadatas
+                ids=property_ids, documents=property_docs, metadatas=property_metadatas
             )
 
-        logger.info(f"Indexed {len(concept_ids)} classes/concepts and {len(property_ids)} properties to ChromaDB")
-
-
+        logger.info(
+            f"Indexed {len(concept_ids)} classes/concepts and {len(property_ids)} properties to ChromaDB"
+        )

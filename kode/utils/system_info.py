@@ -111,8 +111,13 @@ def format_system_info_dynamic() -> str:
     Returns:
         格式化的动态系统信息文本
     """
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    return f"**当前时间**: {current_time}"
+    now = datetime.now()
+    # 星期映射（避免 locale 问题）
+    weekday_names_cn = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+    weekday_name = weekday_names_cn[now.weekday()]
+
+    current_time = now.strftime('%Y-%m-%d %H:%M:%S')
+    return f"**当前时间**: {current_time} ({weekday_name})"
 
 
 def format_system_info_for_prompt() -> str:

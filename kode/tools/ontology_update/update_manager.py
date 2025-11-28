@@ -1,0 +1,446 @@
+"""
+Ontology Update Manager
+
+本体更新管理器：立即生效 + 异步持久化模式
+"""
+
+from typing import Dict, Any, Optional, List
+import json
+import time
+import threading
+from pathlib import Path
+from datetime import datetime
+import copy
+
+from kode.tools.ontology_update.impact_graph import ChangeImpactGraph
+from kode.models.ontology_change import ChangeType, ChangeStatus
+from kode.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+class Change:
+    """变更对象"""
+
+    def __init__(
+        self,
+        change_type: str,
+        target_path: str,
+        new_value: Any,
+        old_value: Optional[Any] = None,
+        user_intent: str = "",
+        conversation_id: Optional[int] = None,
+    ):
+        self.id = f"{int(time.time() * 1000)}_{hash(target_path) % 10000}"
+        self.change_type = change_type
+        self.target_path = target_path
+        self.new_value = new_value
+        self.old_value = old_value
+        self.user_intent = user_intent
+        self.conversation_id = conversation_id
+        self.created_at = datetime.now()
+
+
+class OntologyUpdateManager:
+    """
+    本体更新管理器：立即生效 + 异步优化
+
+    核心特性：
+    1. 变更立即应用到内存中的本体
+    2. 后续操作立即看到变更效果
+    3. 磁盘写入异步执行（不阻塞用户）
+    4. 数据库记录异步执行
+
+    触发条件：
+    - 累积5次变更
+    - 距离上次写入超过10秒
+    - Layer 2 变更（添加类/属性/关系）
+    """
+
+    # 类级别的锁（用于多线程安全）
+    _lock = threading.Lock()
+
+    def __init__(self, connection_name: str, ontology_path: str):
+        """
+        初始化更新管理器
+
+        Args:
+            connection_name: 数据库连接名称
+            ontology_path: 本体文件路径
+        """
+        self.connection_name = connection_name
+        self.ontology_path = Path(ontology_path)
+
+        # 加载本体到内存
+        self.ontology = self._load_ontology()
+
+        # 构建影响图
+        self.impact_graph = ChangeImpactGraph(self.ontology)
+
+        # 待写入磁盘的变更队列
+        self.pending_writes: List[Change] = []
+
+        # 上次磁盘写入时间
+        self.last_disk_write = time.time()
+
+        # 变更计数
+        self.change_count = 0
+
+        # 配置参数
+        self.batch_size = 5  # 累积多少次变更触发写入
+        self.write_interval = 10  # 写入间隔（秒）
+
+    def _load_ontology(self) -> Dict[str, Any]:
+        """从磁盘加载本体到内存"""
+        if not self.ontology_path.exists():
+            logger.warning(f"本体文件不存在: {self.ontology_path}，创建空本体")
+            return {
+                "classes": {},
+                "relationships": [],
+                "business_rules": [],
+                "metrics": [],
+            }
+
+        try:
+            with open(self.ontology_path, "r", encoding="utf-8") as f:
+                ontology = json.load(f)
+            logger.info(f"✅ 已加载本体: {self.ontology_path}")
+            return ontology
+        except Exception as e:
+            logger.error(f"❌ 加载本体失败: {e}")
+            raise
+
+    def apply_change(self, change: Change) -> Dict[str, Any]:
+        """
+        立即应用变更到内存本体
+
+        Args:
+            change: 变更对象
+
+        Returns:
+            应用结果字典
+        """
+        with self._lock:
+            try:
+                # 1. 计算影响
+                impact_score, affected_entities = self.impact_graph.calculate_impact(
+                    change.target_path, change.change_type
+                )
+
+                logger.info(
+                    f"📊 变更影响分析: type={change.change_type}, "
+                    f"path={change.target_path}, "
+                    f"score={impact_score}, "
+                    f"affected={len(affected_entities)}"
+                )
+
+                # 2. 立即修改内存中的本体
+                if change.change_type in ["add_enum_value", "update_property_desc", "update_class_desc"]:
+                    # Layer 1: 直接JSON操作（<10ms）
+                    self._apply_metadata_change(change)
+                elif change.change_type in ["add_class", "add_property", "add_relationship"]:
+                    # Layer 2: 添加新实体（也是JSON操作，但需要更新影响图）
+                    self._apply_entity_addition(change)
+                else:
+                    # 其他复杂变更
+                    self._apply_complex_change(change)
+
+                # 3. 增量更新影响图
+                self.impact_graph.update_from_change(
+                    change.target_path, change.change_type, change.new_value
+                )
+
+                # 4. 加入待写磁盘队列
+                self.pending_writes.append(change)
+                self.change_count += 1
+
+                # 5. 智能触发磁盘写入
+                self._trigger_disk_write_if_needed(change.change_type)
+
+                logger.info(f"✅ 变更已立即生效: {change.id}")
+
+                return {
+                    "status": "success",
+                    "applied": True,
+                    "change_id": change.id,
+                    "impact_score": impact_score,
+                    "affected_entities": affected_entities,
+                }
+
+            except Exception as e:
+                logger.error(f"❌ 应用变更失败: {e}")
+                return {
+                    "status": "error",
+                    "applied": False,
+                    "error": str(e),
+                }
+
+    def _get_class_by_name(self, class_name: str) -> Optional[Dict[str, Any]]:
+        """
+        根据类名获取类定义（兼容 V1 和 V2 格式）
+
+        V1 格式: {"classes": {"User": {...}}}  # 字典
+        V2 格式: {"classes": [{"name": "用户", "technical_name": "users", ...}]}  # 数组
+
+        Args:
+            class_name: 类名（可能是中文名或技术名）
+
+        Returns:
+            类定义字典，如果不存在返回 None
+        """
+        classes = self.ontology.get("classes", {})
+
+        # V1 格式：classes 是字典
+        if isinstance(classes, dict):
+            return classes.get(class_name)
+
+        # V2 格式：classes 是数组
+        elif isinstance(classes, list):
+            for cls in classes:
+                # 尝试匹配中文名或技术名
+                if cls.get("name") == class_name or cls.get("technical_name") == class_name:
+                    return cls
+            return None
+
+        return None
+
+    def _get_property_by_name(self, class_def: Dict[str, Any], prop_name: str) -> Optional[Dict[str, Any]]:
+        """
+        根据属性名获取属性定义（兼容 V1 和 V2 格式）
+
+        V1 格式: {"properties": {"age": {...}}}  # 字典
+        V2 格式: {"properties": [{"name": "年龄", "technical_name": "age", ...}]}  # 数组
+
+        Args:
+            class_def: 类定义
+            prop_name: 属性名（可能是中文名或技术名）
+
+        Returns:
+            属性定义字典，如果不存在返回 None
+        """
+        if not class_def:
+            return None
+
+        properties = class_def.get("properties", {})
+
+        # V1 格式：properties 是字典
+        if isinstance(properties, dict):
+            return properties.get(prop_name)
+
+        # V2 格式：properties 是数组
+        elif isinstance(properties, list):
+            for prop in properties:
+                # 尝试匹配中文名或技术名
+                if prop.get("name") == prop_name or prop.get("technical_name") == prop_name:
+                    return prop
+            return None
+
+        return None
+
+    def _apply_metadata_change(self, change: Change):
+        """
+        应用元数据层变更（Layer 1）
+
+        支持：
+        - add_enum_value: 添加枚举值
+        - update_property_desc: 更新属性描述
+        - update_class_desc: 更新类描述
+        - update_class_mapping: 更新类的表映射
+        - update_column_mapping: 更新属性的字段映射
+        """
+        parts = change.target_path.split(".")
+
+        if change.change_type == "add_enum_value":
+            # 路径示例: classes.User.properties.status.enum_values
+            if len(parts) >= 5 and parts[0] == "classes" and parts[2] == "properties":
+                class_name = parts[1]
+                prop_name = parts[3]
+
+                # 获取属性定义
+                prop_def = (
+                    self.ontology.get("classes", {})
+                    .get(class_name, {})
+                    .get("properties", {})
+                    .get(prop_name, {})
+                )
+
+                if "enum_values" not in prop_def:
+                    prop_def["enum_values"] = []
+
+                # 检查是否已存在
+                existing_values = [ev.get("value") for ev in prop_def["enum_values"]]
+                new_val = change.new_value if isinstance(change.new_value, dict) else {"value": change.new_value}
+
+                if new_val.get("value") not in existing_values:
+                    prop_def["enum_values"].append(new_val)
+                    logger.info(f"✅ 已添加枚举值: {class_name}.{prop_name} += {new_val}")
+
+        elif change.change_type == "update_property_desc":
+            # 路径示例: classes.User.properties.age.business_description
+            if len(parts) >= 5 and parts[0] == "classes" and parts[2] == "properties":
+                class_name = parts[1]
+                prop_name = parts[3]
+                field_name = parts[4] if len(parts) > 4 else "business_description"
+
+                prop_def = (
+                    self.ontology.get("classes", {})
+                    .get(class_name, {})
+                    .get("properties", {})
+                    .get(prop_name, {})
+                )
+
+                if prop_def:
+                    change.old_value = prop_def.get(field_name)
+                    prop_def[field_name] = change.new_value
+                    logger.info(f"✅ 已更新属性描述: {class_name}.{prop_name}.{field_name}")
+
+        elif change.change_type == "update_class_desc":
+            # 路径示例: classes.User.business_description
+            if len(parts) >= 3 and parts[0] == "classes":
+                class_name = parts[1]
+                field_name = parts[2] if len(parts) > 2 else "business_description"
+
+                class_def = self.ontology.get("classes", {}).get(class_name, {})
+
+                if class_def:
+                    change.old_value = class_def.get(field_name)
+                    class_def[field_name] = change.new_value
+                    logger.info(f"✅ 已更新类描述: {class_name}.{field_name}")
+
+        elif change.change_type == "update_class_mapping":
+            # 路径示例: classes.订单.table_mapping
+            if len(parts) >= 3 and parts[0] == "classes":
+                class_name = parts[1]
+                field_name = parts[2]  # table_mapping
+
+                class_def = self._get_class_by_name(class_name)
+
+                if class_def:
+                    change.old_value = class_def.get(field_name)
+                    class_def[field_name] = change.new_value
+                    logger.info(f"✅ 已更新类表映射: {class_name}.{field_name} = {change.new_value}")
+                else:
+                    logger.warning(f"⚠️ 类 {class_name} 不存在，无法更新表映射")
+
+        elif change.change_type == "update_column_mapping":
+            # 路径示例: classes.订单.properties.status.column_mapping
+            if len(parts) >= 5 and parts[0] == "classes" and parts[2] == "properties":
+                class_name = parts[1]
+                prop_name = parts[3]
+                field_name = parts[4]  # column_mapping
+
+                class_def = self._get_class_by_name(class_name)
+                prop_def = self._get_property_by_name(class_def, prop_name)
+
+                if prop_def:
+                    change.old_value = prop_def.get(field_name)
+                    prop_def[field_name] = change.new_value
+                    logger.info(f"✅ 已更新属性字段映射: {class_name}.{prop_name}.{field_name} = {change.new_value}")
+                else:
+                    logger.warning(f"⚠️ 属性 {class_name}.{prop_name} 不存在，无法更新字段映射")
+
+    def _apply_entity_addition(self, change: Change):
+        """
+        应用实体添加变更（Layer 2）
+
+        支持：
+        - add_class: 添加新类
+        - add_property: 添加新属性
+        - add_relationship: 添加新关系
+        """
+        parts = change.target_path.split(".")
+
+        if change.change_type == "add_class":
+            # 路径示例: classes.NewClass
+            if len(parts) >= 2 and parts[0] == "classes":
+                class_name = parts[1]
+                if "classes" not in self.ontology:
+                    self.ontology["classes"] = {}
+
+                if class_name not in self.ontology["classes"]:
+                    # new_value 应该是完整的类定义
+                    self.ontology["classes"][class_name] = change.new_value
+                    logger.info(f"✅ 已添加新类: {class_name}")
+
+        elif change.change_type == "add_property":
+            # 路径示例: classes.User.properties.new_field
+            if len(parts) >= 4 and parts[0] == "classes" and parts[2] == "properties":
+                class_name = parts[1]
+                prop_name = parts[3]
+
+                class_def = self.ontology.get("classes", {}).get(class_name, {})
+                if class_def:
+                    if "properties" not in class_def:
+                        class_def["properties"] = {}
+
+                    if prop_name not in class_def["properties"]:
+                        # new_value 应该是完整的属性定义
+                        class_def["properties"][prop_name] = change.new_value
+                        logger.info(f"✅ 已添加新属性: {class_name}.{prop_name}")
+
+        elif change.change_type == "add_relationship":
+            # 路径示例: relationships.{index}
+            if "relationships" not in self.ontology:
+                self.ontology["relationships"] = []
+
+            # new_value 应该是完整的关系定义
+            self.ontology["relationships"].append(change.new_value)
+            logger.info(f"✅ 已添加新关系: {change.new_value.get('relationship_type')}")
+
+    def _apply_complex_change(self, change: Change):
+        """应用复杂变更（Layer 3）"""
+        # TODO: 实现合并类、拆分类等复杂变更
+        logger.warning(f"⚠️ 复杂变更暂未实现: {change.change_type}")
+
+    def _trigger_disk_write_if_needed(self, change_type: str):
+        """智能触发磁盘写入"""
+        should_write = False
+
+        # 条件1: 累积变更数达到阈值
+        if self.change_count >= self.batch_size:
+            should_write = True
+            logger.info(f"🔄 触发磁盘写入（累积{self.change_count}次变更）")
+
+        # 条件2: 距离上次写入时间超过间隔
+        elif time.time() - self.last_disk_write > self.write_interval:
+            should_write = True
+            logger.info(f"🔄 触发磁盘写入（超过{self.write_interval}秒）")
+
+        # 条件3: Layer 2 变更（重要变更立即写入）
+        elif change_type in ["add_class", "add_property", "add_relationship"]:
+            should_write = True
+            logger.info(f"🔄 触发磁盘写入（Layer 2 变更）")
+
+        if should_write:
+            # 异步写入（不阻塞当前线程）
+            threading.Thread(target=self._write_to_disk, daemon=True).start()
+
+    def _write_to_disk(self):
+        """异步写入本体到磁盘"""
+        try:
+            # 使用 JSON 序列化来创建副本（避免 deepcopy 的线程锁问题）
+            ontology_json = json.dumps(self.ontology, ensure_ascii=False)
+            ontology_copy = json.loads(ontology_json)
+
+            # 写入磁盘
+            with open(self.ontology_path, "w", encoding="utf-8") as f:
+                json.dump(ontology_copy, f, ensure_ascii=False, indent=2)
+
+            logger.info(f"💾 本体已写入磁盘: {self.ontology_path}")
+
+            # 更新状态
+            self.last_disk_write = time.time()
+            self.change_count = 0
+            self.pending_writes.clear()
+
+        except Exception as e:
+            logger.error(f"❌ 写入磁盘失败: {e}")
+
+    def get_ontology(self) -> Dict[str, Any]:
+        """获取当前内存中的本体（最新版本）"""
+        return self.ontology
+
+    def force_flush(self):
+        """强制刷新到磁盘（同步操作）"""
+        with self._lock:
+            self._write_to_disk()

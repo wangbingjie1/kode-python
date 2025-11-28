@@ -34,6 +34,7 @@ try:
         OntologySearchTool,
         OntologyBuilderTool,
     )
+    from kode.tools.ontology_update import OntologyUpdateTool, OntologyReflectTool
     from kode.tools.domain_uncertainty_analyzer import DomainUncertaintyAnalyzer
     from kode.tools.uncertainty_qa_tool import UncertaintyQAManager
     from kode.tools.business_understanding import BusinessUnderstandingTool
@@ -111,13 +112,15 @@ class AsyncConversationService:
                     UncertaintyQAManager(),  # 不确定性问答管理
                     OntologyBuilderTool(),  # 本体构建器（V2格式）
                     OntologySearchTool(),
+                    OntologyUpdateTool(),  # 本体增量更新工具（Phase 1）
+                    OntologyReflectTool(),  # 本体反思工具（Phase 3）
                     MetricCalculatorTool(),  # 指标计算工具
                     DataInstanceExtractorTool(),  # 数据实例抽取工具
                     MappingValidatorTool(),  # 映射验证工具
                 ]
             )
             logger.info(
-                "Database and ontology tools loaded (OntologyBuilder outputs V2 format)"
+                "Database and ontology tools loaded (includes OntologyUpdateTool)"
             )
 
             # Load existing database connections from persistence FIRST
@@ -291,6 +294,156 @@ SchemaQuery(connection_name="yanfa", table_name="order")
 当本体已存在时（OntologyBuilder 返回提示）：
 - 向用户展示现有本体信息
 - 用户明确说"重建"才设置 `force_rebuild=True`
+
+## 本体对话式更新 ⭐ **新能力** (Phase 1)
+
+你现在拥有通过对话自然更新本体的能力，无需重建整个本体。
+
+### 使用场景
+
+**场景1：用户补充业务知识**
+```
+用户："订单状态还有'已取消'这个选项"
+→ 调用 OntologyUpdateTool 添加枚举值
+```
+
+**场景2：用户纠正业务理解**
+```
+用户："这个字段不是年龄，是用户等级"
+→ 调用 OntologyUpdateTool 更新属性描述
+```
+
+**场景3：用户添加新规则**
+```
+用户："会员等级大于3的订单可以享受优惠"
+→ 调用 OntologyUpdateTool 添加业务规则
+```
+
+**场景4：⭐ 用户指出查询错误（关键场景）**
+```
+用户："你查错表了，应该查 platform_trade_order 不是 order"
+用户："这个状态值不对，实际数据库里是数字不是文字"
+用户："这两个表不是你说的那个关系"
+→ 立即调用 OntologyUpdateTool 修正本体中的错误映射
+→ 更新 table_mapping / column_mapping / relationships
+→ 然后重新执行正确的查询
+```
+
+### OntologyUpdateTool 使用指南
+
+**支持的变更类型**：
+
+1. **add_enum_value** - 添加枚举值
+   ```
+   用户提示："XX字段还有YY选项"、"状态还包括ZZ"
+   target_path: "classes.{ClassName}.properties.{field_name}.enum_values"
+   new_value: {"value": "code", "label": "显示名"}
+   ```
+
+2. **update_property_desc** - 更新属性业务描述
+   ```
+   用户提示："这个字段其实是..."、"XX的含义应该是..."
+   target_path: "classes.{ClassName}.properties.{field_name}.business_description"
+   new_value: "正确的业务描述"
+   ```
+
+3. **update_class_desc** - 更新类/表业务描述
+   ```
+   用户提示："这个表不是XX，是YY"
+   target_path: "classes.{ClassName}.business_description"
+   new_value: "正确的表业务描述"
+   ```
+
+4. **add_property** - 添加新属性（用户告知新字段）
+   ```
+   target_path: "classes.{ClassName}.properties.{new_field}"
+   new_value: {完整的属性定义}
+   ```
+
+5. **add_class** - 添加新类（用户告知新表）
+   ```
+   target_path: "classes.{NewClassName}"
+   new_value: {完整的类定义}
+   ```
+
+6. **add_relationship** - 添加新关系
+   ```
+   target_path: "relationships.{index}"
+   new_value: {完整的关系定义}
+   ```
+
+### 识别规则
+
+**自动触发更新的对话模式**：
+
+- "XX还有YY选项/状态/类型" → add_enum_value
+- "这个字段不是XX，是YY" → update_property_desc
+- "XX的意思应该是..." → update_property_desc/update_class_desc
+- "还有个字段叫XX" → add_property
+- "表里还有个XX表" → add_class
+- ⭐ **"你查错表了"/"应该查XX表"/"不是XX表是YY表"** → 更新 table_mapping
+- ⭐ **"这个字段错了"/"实际是XX字段"** → 更新 column_mapping
+- ⭐ **"这两个表的关系不对"/"应该是XX关系"** → 更新 relationships
+- ⭐ **"枚举值不对"/"数据库里是数字/文字"** → 更新 enum_values 或 enum_mapping
+
+**重要原则**：
+- ✅ 用户明确表达业务知识时，主动调用 OntologyUpdateTool
+- ✅ **用户指出查询错误时，立即更新本体并重新查询**
+- ✅ 变更立即生效，后续查询会看到更新
+- ✅ 记录 user_intent 参数，便于审计
+- ❌ 不要问用户"是否需要更新本体"，直接执行
+- ❌ 不要让用户手动重建本体
+- ❌ 不要重复犯同样的查询错误（利用本体更新避免）
+
+### 示例对话
+
+**示例1：补充枚举**
+```
+用户: 订单状态除了待支付、已支付、已发货，还有已取消和已退款
+AI: 好的，我帮你补充订单状态的枚举值。
+    [Extended Thinking: 用户补充了2个新枚举值]
+    [调用 OntologyUpdateTool]
+    ✅ 已添加状态"已取消"和"已退款"到订单状态枚举
+```
+
+**示例2：纠正描述**
+```
+用户: user 表的 level 字段不是等级，是积分
+AI: 明白了，我更正一下。
+    [Extended Thinking: 用户纠正了字段含义]
+    [调用 OntologyUpdateTool]
+    ✅ 已将 user.level 的业务描述从"用户等级"更新为"用户积分"
+```
+
+**示例3：⭐ 修正查询错误（重要）**
+```
+用户: 你查错表了，订单数据在 platform_trade_order 表，不是 order 表
+AI: 非常抱歉！我立即修正本体映射。
+    [Extended Thinking: 用户指出表映射错误，需要更新本体中"订单"类的 table_mapping]
+    [调用 OntologyUpdateTool(
+        connection_name="erp_db",
+        change_type="update_class_mapping",
+        target_path="classes.订单.table_mapping",
+        new_value="platform_trade_order",
+        old_value="order",
+        user_intent="用户纠正：订单数据实际在 platform_trade_order 表"
+    )]
+    ✅ 已更新"订单"类的表映射：order → platform_trade_order
+
+    现在重新查询订单数据...
+    [调用 DatabaseExecuteQuery with corrected table name]
+```
+
+**示例4：修正枚举值类型错误**
+```
+用户: 订单状态字段的值不对，数据库里存的是数字 0/1/2，不是中文
+AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是真正的 ENUM。
+    [Extended Thinking: 需要更新属性的枚举定义，从 enum_values 改为 enum_mapping]
+    [调用 OntologyUpdateTool 更新枚举类型]
+    ✅ 已修正订单状态的存储格式
+
+    重新生成 SQL：WHERE status IN (0, 1, 2)
+```
 
 ## 数据查询流程
 
