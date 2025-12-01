@@ -2628,7 +2628,10 @@
         "如无法修改，需在文档中明确说明这是历史遗留问题"
       ],
       "domain": "ai_agent_system",
-      "id": "ai_agent_system_platform_ai_agent_categray_9"
+      "id": "ai_agent_system_platform_ai_agent_categray_9",
+      "status": "resolved",
+      "answer": "category 的确是拼接错误",
+      "answered_at": "2025-12-01T12:11:15.254224"
     },
     {
       "type": "schema_ambiguity",
@@ -2776,5 +2779,14 @@
     }
   ],
   "uncertainty_count": 10,
-  "uncertainty_analyzed_at": "2025-11-27T16:48:23.405827"
+  "uncertainty_analyzed_at": "2025-11-27T16:48:23.405827",
+  "business_rules": [
+    {
+      "entity": "platform_ai_agent_categray",
+      "category": "命名不一致",
+      "question": "表名和字段名中 'categray' 拼写错误，正确应为 'category'",
+      "answer": "category 的确是拼接错误",
+      "added_at": "2025-12-01T12:11:15.254224"
+    }
+  ]
 }

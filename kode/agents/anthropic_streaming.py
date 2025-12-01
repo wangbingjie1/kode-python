@@ -747,24 +747,97 @@ class AnthropicStreamingAgent:
                         yield {
                             "type": "error",
                             "content": f"网络连接失败（已重试 {max_retries} 次）: {error_message}",
-                            "metadata": {"error": error_message, "retries": max_retries},
+                            "metadata": {"error": error_message, "retries": max_retries, "error_type": "network_error"},
                         }
                         return
 
                 except Exception as e:
-                    # 其他非网络错误，直接失败不重试
+                    # 识别 Anthropic API 特定错误类型
+                    from anthropic import AuthenticationError, PermissionDeniedError, RateLimitError, BadRequestError, APIError
                     from kode.utils.logger import safe_log_exception
 
                     error_message = str(e)
-                    safe_log_exception(
-                        logger, f"Error streaming from Anthropic: {error_message}", e
-                    )
-                    yield {
-                        "type": "error",
-                        "content": f"Error: {error_message}",
-                        "metadata": {"error": error_message},
-                    }
-                    return
+                    error_type = type(e).__name__
+
+                    # 区分不同错误类型，提供清晰提示
+                    if isinstance(e, AuthenticationError):
+                        # ⚠️ Token 无效或过期，不重试
+                        safe_log_exception(
+                            logger, f"[认证失败] API Token 无效或已过期: {error_message}", e
+                        )
+                        yield {
+                            "type": "error",
+                            "content": f"认证失败：API Token 无效或已过期。请检查 .kode.json 中的 apiKeys.anthropic 配置或 ANTHROPIC_API_KEY 环境变量。\n\n错误详情: {error_message}",
+                            "metadata": {
+                                "error": error_message,
+                                "error_type": "authentication_error",
+                                "suggestion": "请更新您的 API Token 并重新启动服务",
+                            },
+                        }
+                        return
+
+                    elif isinstance(e, RateLimitError):
+                        # ⚠️ 超出速率限制，建议稍后重试
+                        safe_log_exception(
+                            logger, f"[速率限制] API 请求频率过高: {error_message}", e
+                        )
+                        yield {
+                            "type": "error",
+                            "content": f"速率限制：API 请求频率过高，请稍后再试。\n\n错误详情: {error_message}",
+                            "metadata": {
+                                "error": error_message,
+                                "error_type": "rate_limit_error",
+                                "suggestion": "请等待几分钟后重新发送消息",
+                            },
+                        }
+                        return
+
+                    elif isinstance(e, PermissionDeniedError):
+                        # ⚠️ 权限不足
+                        safe_log_exception(
+                            logger, f"[权限不足] API Token 权限不足: {error_message}", e
+                        )
+                        yield {
+                            "type": "error",
+                            "content": f"权限不足：当前 API Token 无权访问该资源。\n\n错误详情: {error_message}",
+                            "metadata": {
+                                "error": error_message,
+                                "error_type": "permission_denied",
+                                "suggestion": "请检查 API Token 的权限设置",
+                            },
+                        }
+                        return
+
+                    elif isinstance(e, BadRequestError):
+                        # ⚠️ 请求参数错误
+                        safe_log_exception(
+                            logger, f"[请求错误] API 请求参数有误: {error_message}", e
+                        )
+                        yield {
+                            "type": "error",
+                            "content": f"请求错误：发送给 AI 的请求格式有误，这可能是系统配置问题。\n\n错误详情: {error_message}",
+                            "metadata": {
+                                "error": error_message,
+                                "error_type": "bad_request",
+                                "suggestion": "请联系技术支持并提供此错误信息",
+                            },
+                        }
+                        return
+
+                    else:
+                        # 其他未知错误
+                        safe_log_exception(
+                            logger, f"Error streaming from Anthropic: {error_message}", e
+                        )
+                        yield {
+                            "type": "error",
+                            "content": f"系统错误: {error_message}",
+                            "metadata": {
+                                "error": error_message,
+                                "error_type": error_type,
+                            },
+                        }
+                        return
 
             # Add assistant message to history
             messages.append({"role": "assistant", "content": content_blocks})

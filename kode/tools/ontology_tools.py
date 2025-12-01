@@ -61,7 +61,10 @@ class OntologySearchInput(BaseModel):
     )
     query: str = Field(description="Search query (natural language)")
     search_type: str = Field(default="semantic", description="Search type: semantic, exact, fuzzy")
-    top_k: int = Field(default=5, description="Number of results to return")
+    top_k: int = Field(
+        default=10,
+        description="基础结果数量（实际返回 top_k*3 个候选后去重）。对于复杂查询，建议设置为 10-15"
+    )
 
 
 # ==================== Ontology Tools ====================
@@ -1900,11 +1903,12 @@ class OntologySearchTool(KodeTool):
                 self._index_ontology_to_chroma(ontology, concepts_collection, properties_collection)
 
             # Search concepts
+            # ✨ 增大召回范围：从 top_k 增加到 top_k*3，提高复杂查询的召回率
             concept_count = concepts_collection.count()
             concept_results = None
             if concept_count > 0:
                 concept_results = concepts_collection.query(
-                    query_texts=[query], n_results=min(top_k, concept_count)
+                    query_texts=[query], n_results=min(top_k * 3, concept_count)
                 )
 
             # Search properties
@@ -1912,7 +1916,7 @@ class OntologySearchTool(KodeTool):
             property_results = None
             if property_count > 0:
                 property_results = properties_collection.query(
-                    query_texts=[query], n_results=min(top_k, property_count)
+                    query_texts=[query], n_results=min(top_k * 3, property_count)
                 )
 
             # Parse results and retrieve full ontology data
@@ -1932,13 +1936,19 @@ class OntologySearchTool(KodeTool):
                     c.get("technical_name", ""): c for c in ontology.get("classes", [])
                 }
 
+                # ✨ 使用集合去重，避免重复添加同一个类
+                added_class_ids = set()
+
                 # Add classes from concept results
                 if concept_results and concept_results["ids"] and concept_results["ids"][0]:
                     for class_id in concept_results["ids"][0]:
-                        if class_id in class_by_name:
-                            results["classes"].append(class_by_name[class_id])
-                        elif class_id in class_by_tech:
-                            results["classes"].append(class_by_tech[class_id])
+                        if class_id not in added_class_ids:
+                            if class_id in class_by_name:
+                                results["classes"].append(class_by_name[class_id])
+                                added_class_ids.add(class_id)
+                            elif class_id in class_by_tech:
+                                results["classes"].append(class_by_tech[class_id])
+                                added_class_ids.add(class_id)
 
                 # Add classes from property results (find parent class)
                 if property_results and property_results["ids"] and property_results["ids"][0]:
@@ -1947,16 +1957,13 @@ class OntologySearchTool(KodeTool):
                         parts = prop_id.split(".", 1)
                         if len(parts) >= 1:
                             class_name = parts[0]
-                            if (
-                                class_name in class_by_name
-                                and class_by_name[class_name] not in results["classes"]
-                            ):
-                                results["classes"].append(class_by_name[class_name])
-                            elif (
-                                class_name in class_by_tech
-                                and class_by_tech[class_name] not in results["classes"]
-                            ):
-                                results["classes"].append(class_by_tech[class_name])
+                            if class_name not in added_class_ids:
+                                if class_name in class_by_name:
+                                    results["classes"].append(class_by_name[class_name])
+                                    added_class_ids.add(class_name)
+                                elif class_name in class_by_tech:
+                                    results["classes"].append(class_by_tech[class_name])
+                                    added_class_ids.add(class_name)
 
             # V1 格式：concepts/properties 字典
             else:
@@ -2010,7 +2017,11 @@ class OntologySearchTool(KodeTool):
                 concept_ids.append(class_id)
 
                 # Create rich text representation for embedding
-                doc_text = f"{class_name} {tech_name} {class_data.get('description', '')} {class_data.get('domain', '')} {class_data.get('table_mapping', '')}"
+                # ✨ 增强：包含所有属性名和描述，提高语义匹配准确性
+                property_names = " ".join([p.get("name", "") for p in class_data.get("properties", [])])
+                property_descs = " ".join([p.get("description", "")[:30] for p in class_data.get("properties", []) if p.get("description")])  # 限制每个描述30字
+
+                doc_text = f"{class_name} {tech_name} {class_data.get('description', '')} {class_data.get('domain', '')} {class_data.get('table_mapping', '')} {property_names} {property_descs}"
                 concept_docs.append(doc_text)
 
                 concept_metadatas.append(

@@ -65,7 +65,6 @@ class DatabaseSchemaExtractorInput(BaseModel):
     include_indexes: bool = Field(default=True, description="Include index information")
     include_relationships: bool = Field(default=True, description="Include foreign key relationships")
     include_statistics: bool = Field(default=False, description="Include table statistics")
-    include_sample_data: bool = Field(default=True, description="Include last 5 rows of sample data")
     sample_row_limit: int = Field(default=5, description="Number of sample rows to extract (default 5)")
     auto_save: bool = Field(default=True, description="Automatically save schema to file")
     version: str = Field(default="auto", description="Version identifier (auto = timestamp)")
@@ -217,7 +216,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
     - 主键和外键约束
     - 索引信息
     - 表间关系图
-    - 可选的样例数据(每表前5行)
+    - 样例数据(每表倒数 N 行,默认 5 行,永远启用)
 
     适用场景: 数据库探索、本体构建、数据分析。"""
 
@@ -251,7 +250,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
         include_indexes: bool = True,
         include_relationships: bool = True,
         include_statistics: bool = False,
-        include_sample_data: bool = True,
         sample_row_limit: int = 5,
         auto_save: bool = True,
         version: str = "auto",
@@ -268,8 +266,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
             include_indexes: Include indexes
             include_relationships: Include relationships
             include_statistics: Include statistics
-            include_sample_data: Include sample data (last N rows)
-            sample_row_limit: Number of sample rows to extract
+            sample_row_limit: Number of sample rows to extract (always included)
 
         Returns:
             Schema metadata as JSON
@@ -312,7 +309,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 include_columns=include_columns,
                 include_constraints=include_constraints,
                 include_indexes=include_indexes,
-                include_sample_data=include_sample_data,
                 sample_row_limit=sample_row_limit,
                 max_workers=10,
                 enable_progress=enable_progress
@@ -694,7 +690,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
         include_columns: bool,
         include_constraints: bool,
         include_indexes: bool,
-        include_sample_data: bool,
         sample_row_limit: int
     ) -> Dict[str, Any]:
         """
@@ -706,8 +701,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
             include_columns: Include column metadata
             include_constraints: Include constraints
             include_indexes: Include indexes
-            include_sample_data: Include sample data
-            sample_row_limit: Number of sample rows
+            sample_row_limit: Number of sample rows (always included)
 
         Returns:
             Table metadata dictionary
@@ -790,11 +784,10 @@ class DatabaseSchemaExtractorTool(KodeTool):
                     for idx in indexes
                 ]
 
-        # Sample Data
-        if include_sample_data:
-            sample_data = self._get_sample_data(connection_name, table_name, sample_row_limit)
-            if sample_data:
-                table_data["sample_data"] = sample_data
+        # Sample Data (永远启用)
+        sample_data = self._get_sample_data(connection_name, table_name, sample_row_limit)
+        if sample_data:
+            table_data["sample_data"] = sample_data
 
         return table_data
 
@@ -1077,7 +1070,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
         include_columns: bool,
         include_constraints: bool,
         include_indexes: bool,
-        include_sample_data: bool,
         sample_row_limit: int,
         max_workers: int = 10,
         enable_progress: bool = True
@@ -1095,8 +1087,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
             include_columns: Include column metadata
             include_constraints: Include constraints
             include_indexes: Include indexes
-            include_sample_data: Include sample data
-            sample_row_limit: Number of sample rows
+            sample_row_limit: Number of sample rows (always included)
             max_workers: Maximum concurrent threads
             enable_progress: Enable progress callbacks
 
@@ -1120,15 +1111,14 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 if enable_progress:
                     self._emit_progress("表结构提取完成，开始读取样例数据...", total_tables // 2, total_tables)
 
-                # 补充样例数据（并发读取，带进度）
-                if include_sample_data:
-                    sample_data_map = self._get_sample_data_batch_with_progress(
-                        connection_name, table_names, sample_row_limit,
-                        max_workers=max_workers, enable_progress=enable_progress
-                    )
-                    for table_name, sample_data in sample_data_map.items():
-                        if table_name in fast_results:
-                            fast_results[table_name]["sample_data"] = sample_data
+                # 补充样例数据（并发读取，带进度，永远启用）
+                sample_data_map = self._get_sample_data_batch_with_progress(
+                    connection_name, table_names, sample_row_limit,
+                    max_workers=max_workers, enable_progress=enable_progress
+                )
+                for table_name, sample_data in sample_data_map.items():
+                    if table_name in fast_results:
+                        fast_results[table_name]["sample_data"] = sample_data
 
                 return fast_results
 
@@ -1148,7 +1138,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
                     include_columns,
                     include_constraints,
                     include_indexes,
-                    include_sample_data,
                     sample_row_limit
                 ): table_name
                 for table_name in table_names

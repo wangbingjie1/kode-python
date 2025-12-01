@@ -295,17 +295,20 @@ class OntologyUpdateManager:
                     logger.info(f"✅ 已更新属性描述: {class_name}.{prop_name}.{field_name}")
 
         elif change.change_type == "update_class_desc":
-            # 路径示例: classes.User.business_description
+            # 路径示例: classes.User.description (V1) 或 classes.订单.description (V2)
             if len(parts) >= 3 and parts[0] == "classes":
                 class_name = parts[1]
-                field_name = parts[2] if len(parts) > 2 else "business_description"
+                field_name = parts[2] if len(parts) > 2 else "description"
 
-                class_def = self.ontology.get("classes", {}).get(class_name, {})
+                # 使用兼容 V1/V2 的方法
+                class_def = self._get_class_by_name(class_name)
 
                 if class_def:
                     change.old_value = class_def.get(field_name)
                     class_def[field_name] = change.new_value
                     logger.info(f"✅ 已更新类描述: {class_name}.{field_name}")
+                else:
+                    logger.warning(f"⚠️ 类 {class_name} 不存在，无法更新描述")
 
         elif change.change_type == "update_class_mapping":
             # 路径示例: classes.订单.table_mapping
@@ -393,27 +396,11 @@ class OntologyUpdateManager:
         logger.warning(f"⚠️ 复杂变更暂未实现: {change.change_type}")
 
     def _trigger_disk_write_if_needed(self, change_type: str):
-        """智能触发磁盘写入"""
-        should_write = False
+        """所有变更立即写盘"""
+        logger.info(f"🔄 触发磁盘写入（变更类型: {change_type}）")
 
-        # 条件1: 累积变更数达到阈值
-        if self.change_count >= self.batch_size:
-            should_write = True
-            logger.info(f"🔄 触发磁盘写入（累积{self.change_count}次变更）")
-
-        # 条件2: 距离上次写入时间超过间隔
-        elif time.time() - self.last_disk_write > self.write_interval:
-            should_write = True
-            logger.info(f"🔄 触发磁盘写入（超过{self.write_interval}秒）")
-
-        # 条件3: Layer 2 变更（重要变更立即写入）
-        elif change_type in ["add_class", "add_property", "add_relationship"]:
-            should_write = True
-            logger.info(f"🔄 触发磁盘写入（Layer 2 变更）")
-
-        if should_write:
-            # 异步写入（不阻塞当前线程）
-            threading.Thread(target=self._write_to_disk, daemon=True).start()
+        # 异步写入（不阻塞当前线程）
+        threading.Thread(target=self._write_to_disk, daemon=True).start()
 
     def _write_to_disk(self):
         """异步写入本体到磁盘"""

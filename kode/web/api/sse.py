@@ -325,6 +325,9 @@ async def event_generator(
         all_messages = []  # List of Message objects to save (in order)
         message_sequence = user_message_sequence  # 从 user 消息的序列号开始递增
 
+        # ⚠️ 标志：消息是否已经保存到数据库（避免重复保存）
+        messages_saved = False
+
         # 将cancel_event和message_queue传递给conversation_service
         async for chunk in conversation_service.execute_task_streaming(
             task=task_content,
@@ -695,6 +698,9 @@ async def event_generator(
                 # 使用量更新失败不应该影响主流程
                 logger.warning(f"[SSE] Failed to update usage: {e}")
 
+        # 标记消息已保存
+        messages_saved = True
+
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done', 'content': '', 'metadata': {}}, ensure_ascii=False)}\n\n"
 
@@ -728,6 +734,57 @@ async def event_generator(
         yield f"data: {error_data}\n\n"
 
     finally:
+        # ⚠️ CRITICAL: 确保即使出错，也保存已完成的消息到数据库
+        # 这样下次对话时能看到之前的上下文，不会丢失进度
+        from kode.database.session import async_session_maker
+
+        # 检查变量是否存在（可能在初始化阶段就失败了）
+        has_messages = 'all_messages' in locals() and all_messages
+        has_tokens = 'total_input_tokens' in locals() and (total_input_tokens > 0 or total_output_tokens > 0)
+        already_saved = 'messages_saved' in locals() and messages_saved
+
+        # 只在消息未保存且有数据时才保存（避免重复保存）
+        if not already_saved and (has_messages or has_tokens):
+            try:
+                async with async_session_maker() as db:
+                    # 保存所有已收集的消息（即使流被中断）
+                    if has_messages:
+                        for msg in all_messages:
+                            db.add(msg)
+                        await db.commit()
+                        logger.info(
+                            f"[SSE Recovery] Saved {len(all_messages)} messages despite interruption"
+                        )
+
+                    # 如果有 token 统计，也保存
+                    if has_tokens:
+                        message_sequence += 1
+
+                        # 构建 metadata（安全处理可能不存在的变量）
+                        final_metadata = {"type": "final", "interrupted": True}
+                        if 'assistant_metadata' in locals():
+                            final_metadata.update(assistant_metadata)
+
+                        final_msg = Message(
+                            conversation_id=conversation_id,
+                            role="assistant",
+                            content="",  # 内容为空，只用于记录 token 和 metadata
+                            sequence=message_sequence,
+                            message_metadata=final_metadata,
+                            input_tokens=total_input_tokens,
+                            output_tokens=total_output_tokens,
+                            cache_creation_tokens=total_cache_creation_tokens if 'total_cache_creation_tokens' in locals() else 0,
+                            cache_read_tokens=total_cache_read_tokens if 'total_cache_read_tokens' in locals() else 0,
+                        )
+                        db.add(final_msg)
+                        await db.commit()
+                        logger.info(
+                            f"[SSE Recovery] Saved token stats despite interruption"
+                        )
+            except Exception as save_error:
+                # 保存失败不应该阻塞会话清理
+                logger.error(f"[SSE Recovery] Failed to save messages during cleanup: {save_error}")
+
         # 清理会话
         streaming_session_manager.remove_session(conversation_id)
         logger.info(f"[SSE] Removed streaming session for conversation {conversation_id}")
@@ -791,10 +848,9 @@ async def stream_chat(
 
     # Convert to Anthropic API chat history format
     # 需要重建包含 tool_use 和 tool_result 的完整消息流
-    # Convert to Anthropic API chat history format
-    # 需要重建包含 tool_use 和 tool_result 的完整消息流
     chat_history = []
     current_assistant_content = []  # List of blocks for current assistant message
+    pending_tool_use_ids = set()  # Track tool_use IDs waiting for results
 
     for msg in messages:
         msg_type = msg.message_metadata.get("type") if msg.message_metadata else None
@@ -809,6 +865,13 @@ async def stream_chat(
             # Add tool result message
             tool_use_id = msg.message_metadata.get("tool_use_id")
             if tool_use_id and isinstance(tool_use_id, str):
+                # ✅ 验证：这个 tool_result 必须对应之前的 tool_use
+                if tool_use_id not in pending_tool_use_ids:
+                    logger.warning(
+                        f"Orphaned tool_result (no matching tool_use): {tool_use_id}, skipping"
+                    )
+                    continue  # 跳过孤立的 tool_result
+
                 chat_history.append(
                     {
                         "role": "user",
@@ -821,6 +884,7 @@ async def stream_chat(
                         ],
                     }
                 )
+                pending_tool_use_ids.discard(tool_use_id)  # 标记为已匹配
             else:
                 logger.warning(
                     f"Invalid tool_use_id in tool_result message {msg.id}: {tool_use_id}, skipping"
@@ -840,6 +904,7 @@ async def stream_chat(
                             "input": msg.message_metadata.get("tool_args", {}),
                         }
                     )
+                    pending_tool_use_ids.add(tool_use_id)  # 记录等待 result
                 else:
                     logger.warning(
                         f"Invalid tool_use_id in message {msg.id}: {tool_use_id}, skipping tool_use block"
@@ -856,15 +921,28 @@ async def stream_chat(
         elif msg.role == "user":
             # Flush pending assistant content first
             if current_assistant_content:
-                chat_history.append({"role": "assistant", "content": current_assistant_content})
-                current_assistant_content = []
+                # ✅ 验证：如果有未匹配的 tool_use，不能 flush（会导致 API 错误）
+                if pending_tool_use_ids:
+                    logger.warning(
+                        f"Skipping assistant message with unmatched tool_uses: {pending_tool_use_ids}"
+                    )
+                    current_assistant_content = []
+                    pending_tool_use_ids.clear()
+                else:
+                    chat_history.append({"role": "assistant", "content": current_assistant_content})
+                    current_assistant_content = []
 
             if msg.content:
                 chat_history.append({"role": "user", "content": msg.content})
 
-    # Flush remaining assistant content
+    # Flush remaining assistant content (仅在没有孤立 tool_use 时)
     if current_assistant_content:
-        chat_history.append({"role": "assistant", "content": current_assistant_content})
+        if pending_tool_use_ids:
+            logger.warning(
+                f"Discarding final assistant message with unmatched tool_uses: {pending_tool_use_ids}"
+            )
+        else:
+            chat_history.append({"role": "assistant", "content": current_assistant_content})
 
     logger.info(
         f"Loaded {len(messages)} raw messages, converted to {len(chat_history)} Anthropic API messages"

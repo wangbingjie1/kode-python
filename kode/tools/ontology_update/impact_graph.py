@@ -37,23 +37,62 @@ class ChangeImpactGraph:
         self._build_graph()
 
     def _build_graph(self):
-        """从本体构建依赖图"""
-        # 1. 类 -> 属性依赖
+        """从本体构建依赖图（兼容 V1 和 V2 格式）"""
         classes = self.ontology.get("classes", {})
-        for class_name, class_def in classes.items():
+
+        # 兼容 V1（字典）和 V2（数组）格式
+        if isinstance(classes, dict):
+            # V1 格式
+            class_items = classes.items()
+        elif isinstance(classes, list):
+            # V2 格式：classes 是数组，使用 name 或 technical_name 作为 key
+            class_items = [
+                (cls.get("technical_name") or cls.get("name"), cls) for cls in classes
+            ]
+        else:
+            class_items = []
+
+        # 1. 类 -> 属性依赖
+        for class_name, class_def in class_items:
+            if not class_name:
+                continue
+
             class_id = f"Class.{class_name}"
 
             # 类依赖其属性
             properties = class_def.get("properties", {})
-            for prop_name in properties:
+            # V2 格式：properties 可能是数组
+            if isinstance(properties, list):
+                prop_names = [p.get("technical_name") or p.get("name") for p in properties]
+            else:
+                prop_names = list(properties.keys())
+
+            for prop_name in prop_names:
+                if not prop_name:
+                    continue
                 prop_id = f"Property.{class_name}.{prop_name}"
                 self.dependencies[class_id].append(prop_id)
                 self.reverse_dependencies[prop_id].append(class_id)
 
         # 2. 属性 -> 枚举值依赖
-        for class_name, class_def in classes.items():
+        for class_name, class_def in class_items:
+            if not class_name:
+                continue
+
             properties = class_def.get("properties", {})
-            for prop_name, prop_def in properties.items():
+
+            # V2 格式：properties 可能是数组
+            if isinstance(properties, list):
+                prop_items = [
+                    (p.get("technical_name") or p.get("name"), p) for p in properties
+                ]
+            else:
+                prop_items = properties.items()
+
+            for prop_name, prop_def in prop_items:
+                if not prop_name:
+                    continue
+
                 prop_id = f"Property.{class_name}.{prop_name}"
 
                 # 如果属性有枚举值
