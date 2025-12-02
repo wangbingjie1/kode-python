@@ -1095,8 +1095,8 @@ Schema: {db_schema or "默认"}
             uncertainty_section += uncertainty_rules
             uncertainty_section += "\n**重要**: 构建本体时必须严格遵循上述规则！\n"
 
-        # V2 格式 Prompt
-        prompt = f"""你是 ERP 架构师。为业务域 "{domain_name}" 构建详细本体（V2格式）。
+        # V2 格式 Prompt（融合优化版）
+        prompt = f"""你是资深 ERP 架构师和业务分析专家。为业务域 "{domain_name}" 构建详细本体。
 
 # 当前域: {domain_name}
 数据库: {database}
@@ -1104,74 +1104,216 @@ Schema: {db_schema or "默认"}
 {uncertainty_section}
 {domain_schema_text}
 
-# 任务
-构建本体（V2 JSON格式）：
+# 核心原则
 
-1. **classes**: 业务类列表（每个表转换为一个类）
-   每个 class 包含：
-   - name: 中文业务名称
-   - technical_name: 技术名称（表名）
-   - description: 业务描述
-   - domain: 固定为 "{domain_name}"
-   - table_mapping: 表名
-   - properties: 属性列表，每个属性包含：
-     - name: 中文属性名
-     - technical_name: 字段名
-     - type: 数据类型
-     - description: 业务含义
-     - column_mapping: 字段名
-     - nullable: 是否可空
-   - relationships: 关系列表，每个关系包含：
-     - target_class: 目标类名（中文）
-     - type: 关系类型（has_many/belongs_to/has_one）
-     - description: 关系描述
+1. **应然与实然对齐**：将数据库结构（实然）转换为业务语义（应然）
+2. **设计透明**：每个重要决策都要说明 why（为什么这样设计）
+3. **状态感知**：识别有生命周期的实体，明确状态流转
 
-2. **business_rules**: 业务规则（从约束、默认值推断）
-   - name: 规则名称
-   - description: 规则描述
-   - type: 类型（invariant/constraint/validation）
-   - applies_to: 适用的类名列表
+# 输出结构
 
-3. **metrics**: 指标定义（如果能从字段推断）
-   - name: 指标名称
-   - description: 描述
-   - formula: 计算公式
-   - dependencies: 依赖的类名列表
+## 1. classes（业务类列表）
 
-4. **data_flows**: 数据流（如果能从关系推断）
-   - from: 源
-   - to: 目标
-   - description: 描述
+每个表转换为一个业务类：
 
-# 输出格式
+| 字段 | 说明 | 必填 |
+|-----|------|-----|
+| name | 中文业务名称 | ✓ |
+| technical_name | 技术名称（表名） | ✓ |
+| description | 业务描述（这个类代表什么？解决什么问题？） | ✓ |
+| why | 为什么这个类重要？在业务中扮演什么角色？ | ✓ |
+| domain | 固定为 "{domain_name}" | ✓ |
+| table_mapping | 对应的数据库表名 | ✓ |
+| importance | 重要性：critical/high/medium/low | ✓ |
+| lifecycle_states | 生命周期状态列表（如有状态字段，如 status/state） | 可选 |
+| properties | 属性列表 | ✓ |
+| relationships | 关系列表 | ✓ |
+
+### properties（属性）格式：
+
+| 字段 | 说明 |
+|-----|------|
+| name | 中文属性名 |
+| technical_name | 字段名 |
+| type | 数据类型 |
+| description | 业务含义 |
+| column_mapping | 对应的数据库字段 |
+| nullable | 是否可空 |
+| is_enum | 是否是枚举类型（如状态、类型字段） |
+| enum_values | 枚举值列表（如果 is_enum=true） |
+| default_value | 默认值（如果有业务含义） |
+| why | 为什么需要这个字段（仅对关键字段填写） |
+
+### relationships（关系）格式：
+
+| 字段 | 说明 |
+|-----|------|
+| target_class | 目标类名（中文） |
+| target_technical_name | 目标表名 |
+| type | 关系类型：belongs_to/has_many/has_one/many_to_many |
+| foreign_key | 外键字段 |
+| description | 关系的业务含义 |
+| why | 为什么存在这个关系 |
+
+## 2. business_rules（业务规则）
+
+从约束、默认值、字段注释推断业务规则：
+
+| 字段 | 说明 |
+|-----|------|
+| name | 规则名称 |
+| description | 规则描述 |
+| type | invariant（恒定约束）/ constraint（状态约束）/ validation（校验规则）/ derivation（派生规则） |
+| scope | entity（单实体）/ cross_entity（跨实体） |
+| applies_to | 适用的类名列表 |
+| expression | 伪代码或逻辑表达式 |
+| why | 为什么需要这个规则 |
+| confidence | high/medium/low（推断的置信度） |
+
+## 3. metrics（指标定义）
+
+从数值字段、聚合关系推断可能的指标：
+
+| 字段 | 说明 |
+|-----|------|
+| name | 指标名称 |
+| description | 业务描述 |
+| category | revenue/conversion/engagement/retention/operation |
+| formula | 计算公式（基于类和属性） |
+| dependencies | 依赖的类名列表 |
+| why | 为什么这个指标重要 |
+
+## 4. data_flows（数据流）
+
+从关系推断数据流向：
+
+| 字段 | 说明 |
+|-----|------|
+| from | 源类 |
+| to | 目标类 |
+| trigger | 触发条件（如："订单创建时"） |
+| description | 数据如何流转 |
+
+# 输出格式（严格 JSON）
+
 ```json
 {{{{
   "classes": [
     {{{{
-      "name": "客户",
-      "technical_name": "customers",
-      "description": "系统中的客户实体",
+      "name": "订单",
+      "technical_name": "orders",
+      "description": "记录用户的购买交易，是电商系统的核心业务实体",
+      "why": "订单是交易的载体，连接用户、商品、支付、物流等多个业务域",
       "domain": "{domain_name}",
-      "table_mapping": "customers",
+      "table_mapping": "orders",
+      "importance": "critical",
+      "lifecycle_states": ["待支付", "已支付", "已发货", "已完成", "已取消"],
       "properties": [
-        {{{{"name": "客户ID", "technical_name": "id", "type": "bigint", "description": "主键", "column_mapping": "id", "nullable": false}}}}
+        {{{{
+          "name": "订单ID",
+          "technical_name": "id",
+          "type": "bigint",
+          "description": "订单唯一标识",
+          "column_mapping": "id",
+          "nullable": false
+        }}}},
+        {{{{
+          "name": "订单状态",
+          "technical_name": "status",
+          "type": "varchar",
+          "description": "订单当前所处的生命周期阶段",
+          "column_mapping": "status",
+          "nullable": false,
+          "is_enum": true,
+          "enum_values": ["pending", "paid", "shipped", "completed", "cancelled"],
+          "why": "状态驱动订单的业务流转和权限控制"
+        }}}},
+        {{{{
+          "name": "订单金额",
+          "technical_name": "total_amount",
+          "type": "decimal(10,2)",
+          "description": "订单总金额",
+          "column_mapping": "total_amount",
+          "nullable": false,
+          "default_value": "0.00",
+          "why": "核心财务字段，影响收入统计和对账"
+        }}}}
       ],
       "relationships": [
-        {{{{"target_class": "订单", "type": "has_many", "description": "客户拥有多个订单"}}}}
+        {{{{
+          "target_class": "用户",
+          "target_technical_name": "users",
+          "type": "belongs_to",
+          "foreign_key": "user_id",
+          "description": "订单属于某个用户",
+          "why": "建立用户与交易的关联，支持用户订单历史查询"
+        }}}},
+        {{{{
+          "target_class": "订单明细",
+          "target_technical_name": "order_items",
+          "type": "has_many",
+          "foreign_key": "order_id",
+          "description": "订单包含多个商品明细",
+          "why": "支持一单多品，是电商的标准模式"
+        }}}}
       ]
     }}}}
   ],
-  "business_rules": [],
-  "metrics": [],
-  "data_flows": []
+  "business_rules": [
+    {{{{
+      "name": "订单金额非负",
+      "description": "订单总金额必须大于等于零",
+      "type": "invariant",
+      "scope": "entity",
+      "applies_to": ["订单"],
+      "expression": "orders.total_amount >= 0",
+      "why": "财务约束，防止数据错误",
+      "confidence": "high"
+    }}}},
+    {{{{
+      "name": "已发货订单不可取消",
+      "description": "订单状态为'已发货'后，不允许取消",
+      "type": "constraint",
+      "scope": "entity",
+      "applies_to": ["订单"],
+      "expression": "IF orders.status = 'shipped' THEN cannot_transition_to('cancelled')",
+      "why": "物流已发出，取消成本高",
+      "confidence": "medium"
+    }}}}
+  ],
+  "metrics": [
+    {{{{
+      "name": "GMV（成交总额）",
+      "description": "一段时间内所有已完成订单的总金额",
+      "category": "revenue",
+      "formula": "SUM(orders.total_amount) WHERE orders.status = 'completed'",
+      "dependencies": ["订单"],
+      "why": "电商核心指标，衡量平台交易规模"
+    }}}}
+  ],
+  "data_flows": [
+    {{{{
+      "from": "订单",
+      "to": "库存",
+      "trigger": "订单支付成功时",
+      "description": "扣减商品库存"
+    }}}}
+  ]
 }}}}
 ```
 
-**重要**：
-- 必须为该域的每个表生成一个 class
-- 必须为每个字段生成一个 property
-- 充分利用字段注释理解业务含义
-- 只返回 JSON，不要任何解释文字
+# 重要要求
+
+1. **必须为该域的每个表生成一个 class**
+2. **必须为每个字段生成一个 property**
+3. **充分利用字段注释（comment）理解业务含义**
+4. **识别状态字段并提取 lifecycle_states 和 enum_values**
+5. **为重要的类、属性、规则添加 why 说明**
+6. **business_rules 的 confidence 要诚实标注**：
+   - high: 有明确的数据库约束支撑（NOT NULL、CHECK、UNIQUE）
+   - medium: 从命名模式或字段注释推断
+   - low: 仅基于业务常识猜测
+7. **只返回 JSON，不要任何解释文字**
 """
 
         # 异步调用 AI
@@ -1332,10 +1474,15 @@ Schema: {db_schema or "默认"}
         model_manager,
     ) -> Dict[str, Any]:
         """
-        轻量级合并所有域的本体（V2 格式）。
+        轻量级合并所有域的本体（V2 格式，融合优化版）。
 
         直接合并所有域的 classes/business_rules/metrics/data_flows。
         然后基于业务五问生成核心指标（core_metrics）。
+
+        新增统计：
+        - 带有 lifecycle_states 的类数量
+        - 带有 why 说明的类数量
+        - 高置信度规则数量
         """
         all_classes = []
         all_business_rules = []
@@ -1364,8 +1511,26 @@ Schema: {db_schema or "默认"}
             model_manager=model_manager,
         )
 
+        # 📊 计算增强统计信息
+        classes_with_lifecycle = sum(1 for c in all_classes if c.get("lifecycle_states"))
+        classes_with_why = sum(1 for c in all_classes if c.get("why"))
+        critical_classes = sum(1 for c in all_classes if c.get("importance") == "critical")
+        high_confidence_rules = sum(
+            1 for r in all_business_rules if r.get("confidence") == "high"
+        )
+        cross_entity_rules = sum(
+            1 for r in all_business_rules if r.get("scope") == "cross_entity"
+        )
+
+        # 统计属性中的枚举字段
+        total_properties = sum(len(c.get("properties", [])) for c in all_classes)
+        enum_properties = sum(
+            sum(1 for p in c.get("properties", []) if p.get("is_enum"))
+            for c in all_classes
+        )
+
         return {
-            "version": "2.0",
+            "version": "2.1",  # 升级版本号，标识新格式
             "meta": {
                 "product_name": business_answers.get("product_name", ""),
                 "business_model": business_answers.get("business_model", ""),
@@ -1375,8 +1540,14 @@ Schema: {db_schema or "默认"}
                 "created_at": datetime.now().isoformat(),
                 "source_connection": connection_name,
                 "source_database": database,
-                "build_method": "domain_based_parallel_v2",
+                "build_method": "domain_based_parallel_v2.1",
                 "model": model_manager.get_current_model_name(),
+                "design_principles": [
+                    "应然与实然对齐",
+                    "设计透明（why 字段）",
+                    "状态感知（lifecycle_states）",
+                    "置信度标注（confidence）",
+                ],
             },
             "domains": list(domain_ontologies.keys()),
             "classes": all_classes,
@@ -1386,13 +1557,24 @@ Schema: {db_schema or "默认"}
             "data_flows": all_data_flows,
             "uncertainties": all_uncertainties,
             "statistics": {
+                # 基础统计
                 "class_count": len(all_classes),
+                "property_count": total_properties,
                 "business_rule_count": len(all_business_rules),
                 "core_metric_count": len(core_metrics),
                 "metric_count": len(all_metrics),
                 "data_flow_count": len(all_data_flows),
                 "uncertainty_count": len(all_uncertainties),
                 "domain_count": len(domain_ontologies),
+                # 质量统计（新增）
+                "quality": {
+                    "classes_with_lifecycle": classes_with_lifecycle,
+                    "classes_with_why": classes_with_why,
+                    "critical_classes": critical_classes,
+                    "enum_properties": enum_properties,
+                    "high_confidence_rules": high_confidence_rules,
+                    "cross_entity_rules": cross_entity_rules,
+                },
             },
         }
 
