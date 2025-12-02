@@ -507,27 +507,28 @@ async def list_ontologies():
             if not conn_dir.is_dir():
                 continue
 
-            # Look for ontology_latest.json
-            latest_file = conn_dir / "ontology_latest.json"
-            if latest_file.exists():
+            # Look for ontology_v2.json
+            v2_file = conn_dir / "ontology_v2.json"
+            if v2_file.exists():
                 try:
-                    with open(latest_file, "r", encoding="utf-8") as f:
+                    with open(v2_file, "r", encoding="utf-8") as f:
                         data = json.load(f)
 
-                        ontology = data.get("ontology", {})
+                        # V2 格式：直接是本体数据，无嵌套的 "ontology" 字段
+                        classes = data.get("classes", [])
                         ontologies.append({
-                            "connection_name": data.get("connection_name"),
-                            "version": data.get("version"),
+                            "connection_name": data.get("connection_name", conn_dir.name),
+                            "version": data.get("version", "2.0"),
                             "created_at": data.get("created_at"),
-                            "concept_count": len(ontology.get("concepts", {})),
-                            "property_count": len(ontology.get("properties", {})),
-                            "relationship_count": len(ontology.get("relationships", [])),
-                            "axiom_count": len(ontology.get("axioms", [])),
-                            "uncertainty_count": len(ontology.get("uncertainties", [])),
-                            "has_domain_insights": "domain_insights" in ontology,
+                            "class_count": len(classes),
+                            "property_count": sum(len(cls.get("properties", [])) for cls in classes),
+                            "relationship_count": len(data.get("relationships", [])),
+                            "business_rule_count": len(data.get("business_rules", [])),
+                            "uncertainty_count": len(data.get("uncertainties", [])),
+                            "has_domain_insights": bool(data.get("domains")),
                         })
                 except Exception as e:
-                    logger.warning(f"Error reading ontology file {latest_file}: {e}")
+                    logger.warning(f"Error reading ontology file {v2_file}: {e}")
                     continue
 
         return ontologies
@@ -562,8 +563,9 @@ async def get_ontology(name: str, version: str = "latest"):
 
         ontology_path = Path("./ontology_store") / name
 
-        if version == "latest":
-            file_path = ontology_path / "ontology_latest.json"
+        # 仅支持 V2 格式
+        if version == "latest" or version == "v2":
+            file_path = ontology_path / "ontology_v2.json"
         else:
             file_path = ontology_path / f"ontology_{version}.json"
 

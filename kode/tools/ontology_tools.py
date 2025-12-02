@@ -57,7 +57,7 @@ class OntologySearchInput(BaseModel):
     ontology_path: str = Field(
         description="Connection name (e.g., 'yanfa') OR path to ontology storage directory (e.g., 'ontology_store/yanfa'). "
         "Recommended: Just pass the connection_name directly. "
-        "The tool will automatically find ontology_v2.json or ontology_latest.json."
+        "The tool will automatically find ontology_v2.json."
     )
     query: str = Field(description="Search query (natural language)")
     search_type: str = Field(default="semantic", description="Search type: semantic, exact, fuzzy")
@@ -1544,7 +1544,7 @@ class OntologySearchTool(KodeTool):
     description: str = """Search stored ontology for concepts, properties, and relationships.
 
     **USAGE**: Pass the connection_name directly (e.g., 'yanfa').
-    The tool will automatically find the ontology file (ontology_v2.json or ontology_latest.json).
+    The tool will automatically find the ontology file (ontology_v2.json).
 
     Examples:
     - ontology_path='yanfa' → searches ontology_store/yanfa/ontology_v2.json
@@ -1619,23 +1619,10 @@ class OntologySearchTool(KodeTool):
                     ontology_path_obj = ontology_path_obj.parent
                     logger.info(f"✅ 自动纠正: 文件路径 → 目录路径 {ontology_path_obj}")
 
-            # 🚀 新架构优先：先尝试 ontology_v2.json，再尝试 ontology_latest.json
+            # 仅支持 V2 格式本体
             ontology_v2_path = ontology_path_obj / "ontology_v2.json"
-            ontology_latest_path = ontology_path_obj / "ontology_latest.json"
 
-            ontology_file = None
-            ontology_version = None
-
-            if ontology_v2_path.exists():
-                ontology_file = ontology_v2_path
-                ontology_version = "v2"
-                logger.info(f"✅ 使用新架构本体: {ontology_file}")
-            elif ontology_latest_path.exists():
-                ontology_file = ontology_latest_path
-                ontology_version = "v1"
-                logger.info(f"✅ 使用旧架构本体: {ontology_file}")
-
-            if not ontology_file:
+            if not ontology_v2_path.exists():
                 # 生成友好的错误消息
                 error_msg = f"本体文件未找到"
 
@@ -1648,9 +1635,9 @@ class OntologySearchTool(KodeTool):
                     error_msg += "\n  - 正确: 'ontology_store/yanfa' 或 'yanfa'"
                     error_msg += "\n  - 错误: 'schema_store/yanfa/domains/order_management.json'"
                 else:
-                    error_msg += f"\n\n💡 提示: 请确保已运行 OntologyBuilder 或 OntologyV2Builder 工具生成本体。"
+                    error_msg += f"\n\n💡 提示: 请确保已运行 OntologyBuilder 工具生成本体。"
                     error_msg += f"\n  期望目录: {ontology_path_obj}"
-                    error_msg += f"\n  期望文件: {ontology_v2_path} 或 {ontology_latest_path}"
+                    error_msg += f"\n  期望文件: {ontology_v2_path}"
 
                 return json.dumps(
                     {
@@ -1658,21 +1645,18 @@ class OntologySearchTool(KodeTool):
                         "message": error_msg,
                         "provided_path": str(ontology_path),
                         "expected_directory": str(ontology_path_obj),
-                        "expected_files": [str(ontology_v2_path), str(ontology_latest_path)],
+                        "expected_file": str(ontology_v2_path),
                     },
                     indent=2,
                     ensure_ascii=False,
                 )
 
-            with open(ontology_file, "r", encoding="utf-8") as f:
+            logger.info(f"✅ 使用V2格式本体: {ontology_v2_path}")
+            with open(ontology_v2_path, "r", encoding="utf-8") as f:
                 ontology_data = json.load(f)
 
-            # 兼容两种格式：v1 的 ontology_data.ontology 和 v2 的直接结构
-            if "ontology" in ontology_data and isinstance(ontology_data["ontology"], dict):
-                ontology = ontology_data["ontology"]
-            else:
-                # v2 格式：直接就是本体数据
-                ontology = ontology_data
+            # V2 格式：直接就是本体数据
+            ontology = ontology_data
             query_lower = query.lower()
 
             results = {"concepts": [], "properties": [], "relationships": []}
@@ -1722,8 +1706,8 @@ class OntologySearchTool(KodeTool):
                     "query": query,
                     "search_type": search_type,
                     "results": results,  # Keep search results (usually small)
-                    "ontology_version": ontology_version,  # v1 or v2
-                    "ontology_file": str(ontology_file),
+                    "ontology_version": "2.0",
+                    "ontology_file": str(ontology_v2_path),
                     "uncertainties": {
                         "related_count": len(related_uncertainties),
                         "unresolved_count": len(

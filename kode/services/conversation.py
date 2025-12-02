@@ -560,7 +560,7 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
         # Check ontology cache
         ontology_dir = Path(ontology_path)
         if ontology_dir.exists():
-            cached_ontologies = list(ontology_dir.glob("*/ontology_latest.json"))
+            cached_ontologies = list(ontology_dir.glob("*/ontology_v2.json"))
             context_parts.append(f"业务本体文件所在路径: {ontology_path}")
             if cached_ontologies:
                 context_parts.append("\n## 已缓存的业务本体(Ontology)")

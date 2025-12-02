@@ -17,9 +17,8 @@ class OntologyStorageV2:
     ontology_store/
         {connection_name}/
             business_context.json  # 业务理解五问答案
-            ontology_v2.json       # 新格式本体
-            schema.json            # 原有schema（保留）
-            ontology.json          # 旧格式本体（保留，向后兼容）
+            ontology_v2.json       # V2格式本体（主格式）
+            schema.json            # 数据库schema缓存
     """
 
     def __init__(self, base_path: str = "ontology_store"):
@@ -193,27 +192,6 @@ class OntologyStorageV2:
         path = self.base_path / connection_name / "ontology_v2.json"
         return path.exists()
 
-    # ============ 旧格式兼容 ============
-
-    def load_ontology_v1(
-        self,
-        connection_name: str
-    ) -> Optional[Dict[str, Any]]:
-        """加载旧格式本体（向后兼容）
-
-        Args:
-            connection_name: 数据库连接名
-
-        Returns:
-            旧格式本体数据，不存在时返回None
-        """
-        path = self.base_path / connection_name / "ontology.json"
-        if not path.exists():
-            return None
-
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-
     # ============ 工具方法 ============
 
     def list_connections(self) -> list[str]:
@@ -251,7 +229,6 @@ class OntologyStorageV2:
             "connection_name": connection_name,
             "has_business_context": (conn_dir / "business_context.json").exists(),
             "has_ontology_v2": (conn_dir / "ontology_v2.json").exists(),
-            "has_ontology_v1": (conn_dir / "ontology.json").exists(),
             "has_schema": (conn_dir / "schema.json").exists(),
             "business_context_completed": self.is_business_context_completed(connection_name)
         }
