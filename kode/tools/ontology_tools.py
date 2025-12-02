@@ -797,18 +797,7 @@ Schema: {db_schema or "默认"}
             with open(v3_file, "w", encoding="utf-8") as f:
                 json.dump(ontology, f, indent=2, ensure_ascii=False)
 
-            # 同时保存一份到 ontology_v2.json 以保持向后兼容
-            # （部分旧代码可能仍在读取 v2 文件）
-            v2_file = conn_dir / "ontology_v2.json"
-            with open(v2_file, "w", encoding="utf-8") as f:
-                json.dump(ontology, f, indent=2, ensure_ascii=False)
-
-            return {
-                "saved": True,
-                "version": ontology["version"],
-                "latest_path": str(v3_file),
-                "compatible_path": str(v2_file),
-            }
+            return {"saved": True, "version": ontology["version"], "latest_path": str(v3_file)}
 
         except Exception as e:
             return {
