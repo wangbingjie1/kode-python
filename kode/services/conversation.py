@@ -456,11 +456,31 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
     重新生成 SQL：WHERE status IN (0, 1, 2)
 ```
 
-## 数据查询流程
+## 数据查询流程 ⭐ 必须严格遵守
 
 1. 使用 OntologySearch 搜索业务术语
-2. 从结果获取 table_mapping 和 column_mapping，如果返回了uncertainties内容，并且发现干扰你分析正确的答案，请调用AskUserTool
-3. 使用 DatabaseExecuteQuery 执行 SQL
+2. **⚠️ 必须处理不确定性**：检查返回的 `uncertainties`
+   - 查看 `related_to_results` 数组和 `related_count`
+   - **如果 `related_count > 0` 且包含与当前查询相关的 high 优先级问题**：
+     - **必须**调用 `AskUser` 向用户澄清，**禁止自己猜测或假设**
+     - 特别是这些情况**必须询问**：
+       - 存在多个同名/类似表（如 `order` vs `platform_trade_order`）→ 让用户选择
+       - 字段含义不明确 → 让用户确认
+       - 表的用途不清楚 → 让用户解释
+   - **AskUser 正确用法**（使用 select 类型让用户选择）：
+     ```python
+     AskUser(
+         question="发现数据库中有两套订单表体系，请选择你要查询的表：",
+         question_type="select",
+         options=[
+             "order - 旧系统订单表，字段: order_uid, status, sku_id",
+             "platform_trade_order - 平台统一订单表，支持多业态，字段: order_code, pay_status"
+         ],
+         context="这两个表可能分别对应不同的业务系统或历史版本"
+     )
+     ```
+3. 用户选择后，使用 SchemaQuery 获取准确的表结构
+4. 使用 DatabaseExecuteQuery 执行 SQL
 
 ## 上下文预算管理
 
