@@ -17,12 +17,36 @@ class OntologyStorageV2:
     ontology_store/
         {connection_name}/
             business_context.json  # 业务理解五问答案
-            ontology_v2.json       # V2格式本体（主格式）
+            ontology_v3.json       # V3格式本体（主格式，优先使用）
+            ontology_v2.json       # V2格式本体（兼容旧版）
             schema.json            # 数据库schema缓存
     """
 
     def __init__(self, base_path: str = "ontology_store"):
         self.base_path = Path(base_path)
+
+    def _get_ontology_file_path(self, connection_name: str, for_write: bool = False) -> Path:
+        """获取本体文件路径（内部方法）
+
+        Args:
+            connection_name: 数据库连接名
+            for_write: 是否用于写入（写入时总是使用最新版本 v3）
+
+        Returns:
+            本体文件路径
+        """
+        conn_dir = self.base_path / connection_name
+
+        if for_write:
+            # 写入时总是使用 v3
+            return conn_dir / "ontology_v3.json"
+
+        # 读取时优先使用 v3，回退到 v2
+        v3_path = conn_dir / "ontology_v3.json"
+        if v3_path.exists():
+            return v3_path
+
+        return conn_dir / "ontology_v2.json"
 
     def _ensure_connection_dir(self, connection_name: str) -> Path:
         """确保连接目录存在"""
@@ -141,7 +165,7 @@ class OntologyStorageV2:
         connection_name: str,
         ontology_data: Dict[str, Any]
     ) -> Path:
-        """保存新格式本体
+        """保存本体（自动使用最新版本格式）
 
         Args:
             connection_name: 数据库连接名
@@ -150,10 +174,12 @@ class OntologyStorageV2:
         Returns:
             保存的文件路径
         """
-        path = self._ensure_connection_dir(connection_name) / "ontology_v2.json"
+        self._ensure_connection_dir(connection_name)
+        path = self._get_ontology_file_path(connection_name, for_write=True)
 
-        # 自动注入元数据
-        ontology_data["version"] = "2.0"
+        # 自动注入元数据（保留原始 version 如果已存在）
+        if "version" not in ontology_data:
+            ontology_data["version"] = "3.0"
         ontology_data["updated_at"] = datetime.now().isoformat()
 
         with open(path, 'w', encoding='utf-8') as f:
@@ -165,7 +191,7 @@ class OntologyStorageV2:
         self,
         connection_name: str
     ) -> Optional[Dict[str, Any]]:
-        """加载新格式本体
+        """加载本体（优先 v3，回退到 v2）
 
         Args:
             connection_name: 数据库连接名
@@ -173,7 +199,7 @@ class OntologyStorageV2:
         Returns:
             本体数据，不存在时返回None
         """
-        path = self.base_path / connection_name / "ontology_v2.json"
+        path = self._get_ontology_file_path(connection_name, for_write=False)
         if not path.exists():
             return None
 
@@ -181,7 +207,7 @@ class OntologyStorageV2:
             return json.load(f)
 
     def ontology_v2_exists(self, connection_name: str) -> bool:
-        """检查新格式本体是否存在
+        """检查本体是否存在（v3 或 v2）
 
         Args:
             connection_name: 数据库连接名
@@ -189,8 +215,10 @@ class OntologyStorageV2:
         Returns:
             是否存在
         """
-        path = self.base_path / connection_name / "ontology_v2.json"
-        return path.exists()
+        conn_dir = self.base_path / connection_name
+        v3_path = conn_dir / "ontology_v3.json"
+        v2_path = conn_dir / "ontology_v2.json"
+        return v3_path.exists() or v2_path.exists()
 
     # ============ 工具方法 ============
 
@@ -228,7 +256,7 @@ class OntologyStorageV2:
             "exists": True,
             "connection_name": connection_name,
             "has_business_context": (conn_dir / "business_context.json").exists(),
-            "has_ontology_v2": (conn_dir / "ontology_v2.json").exists(),
+            "has_ontology_v2": self.ontology_v2_exists(connection_name),  # 检查 v3 或 v2
             "has_schema": (conn_dir / "schema.json").exists(),
             "business_context_completed": self.is_business_context_completed(connection_name)
         }

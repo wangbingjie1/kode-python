@@ -3,7 +3,7 @@
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Type
 
@@ -1423,13 +1423,168 @@ class DatabaseExecuteQueryTool(KodeTool):
 
     name: str = "DatabaseExecuteQuery"
     description: str = """Execute SQL queries on a database.
-    - SELECT queries: Read-only, returns results (limited by fetch_limit)
-    - INSERT/UPDATE/DELETE: Requires permission, returns affected row count
-    - Supports parameterized queries to prevent SQL injection
-    - Use :param_name syntax for parameters (e.g., 'SELECT * FROM users WHERE id = :id')"""
+
+**时间占位符（自动转换）**：
+格式: `@时间描述:格式@`，格式可选：ms(默认)、s、date、datetime
+
+支持的时间描述：
+- 绝对: @2025年10月@, @2025-10@, @2024年12月@
+- 相对: @本月@, @上月@, @今年@, @去年@, @今天@, @昨天@
+- 动态: @最近7天@, @最近30天@
+
+输出格式（后缀）：
+- 无后缀或 :ms → 毫秒时间戳 (1759248000000)
+- :s → 秒时间戳 (1759248000)
+- :date → 日期字符串 ('2025-10-01')
+- :datetime → 日期时间字符串 ('2025-10-01 00:00:00')
+
+示例：
+```sql
+-- 时间戳字段（毫秒）
+WHERE pay_at >= @2025年10月@ AND pay_at < @2025年11月@
+
+-- datetime 字段
+WHERE created_at >= @上月:datetime@ AND created_at < @本月:datetime@
+
+-- date 字段
+WHERE order_date >= @最近30天:date@
+```
+
+**其他功能**：
+- SELECT: 只读查询，返回结果（受 fetch_limit 限制）
+- INSERT/UPDATE/DELETE: 需要权限确认"""
 
     args_schema: Type[BaseModel] = DatabaseExecuteQueryInput
     requires_permission: bool = False  # Will check dynamically based on query type
+
+    def _parse_time_to_datetime(self, time_desc: str) -> datetime:
+        """
+        解析时间描述，返回 datetime 对象。
+
+        Args:
+            time_desc: 时间描述，如 "2025年10月"、"上月"、"最近7天"
+
+        Returns:
+            datetime 对象
+        """
+        now = datetime.now()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        time_desc = time_desc.strip()
+
+        # 绝对月份: 2025年10月, 2025-10
+        month_match = re.match(r'(\d{4})[-年](\d{1,2})月?', time_desc)
+        if month_match:
+            year = int(month_match.group(1))
+            month = int(month_match.group(2))
+            return datetime(year, month, 1)
+
+        # 相对月份
+        if time_desc in ['本月', '这个月']:
+            return today.replace(day=1)
+
+        if time_desc in ['上月', '上个月']:
+            if now.month == 1:
+                return today.replace(year=now.year - 1, month=12, day=1)
+            else:
+                return today.replace(month=now.month - 1, day=1)
+
+        # 年份
+        if time_desc in ['今年', '本年']:
+            return today.replace(month=1, day=1)
+
+        if time_desc in ['去年', '上年']:
+            return today.replace(year=now.year - 1, month=1, day=1)
+
+        # 日期
+        if time_desc in ['今天', '今日']:
+            return today
+
+        if time_desc in ['昨天', '昨日']:
+            return today - timedelta(days=1)
+
+        if time_desc in ['本周', '这周']:
+            return today - timedelta(days=today.weekday())
+
+        if time_desc in ['上周', '上一周']:
+            return today - timedelta(days=today.weekday() + 7)
+
+        # 最近N天
+        recent_match = re.match(r'最近(\d+)天', time_desc)
+        if recent_match:
+            days = int(recent_match.group(1))
+            return today - timedelta(days=days)
+
+        # 季度: 2025年Q1, 2025Q1
+        quarter_match = re.match(r'(\d{4})年?[Qq](\d)', time_desc)
+        if quarter_match:
+            year = int(quarter_match.group(1))
+            quarter = int(quarter_match.group(2))
+            month = (quarter - 1) * 3 + 1
+            return datetime(year, month, 1)
+
+        raise ValueError(f"无法解析时间: {time_desc}")
+
+    def _format_time_value(self, dt: datetime, fmt: str) -> str:
+        """
+        将 datetime 格式化为指定格式的字符串。
+
+        Args:
+            dt: datetime 对象
+            fmt: 格式类型 (ms, s, date, datetime)
+
+        Returns:
+            格式化后的字符串
+        """
+        if fmt in ['ms', '']:
+            return str(int(dt.timestamp() * 1000))
+        elif fmt == 's':
+            return str(int(dt.timestamp()))
+        elif fmt == 'date':
+            return f"'{dt.strftime('%Y-%m-%d')}'"
+        elif fmt == 'datetime':
+            return f"'{dt.strftime('%Y-%m-%d %H:%M:%S')}'"
+        else:
+            # 默认毫秒
+            return str(int(dt.timestamp() * 1000))
+
+    def _replace_time_placeholders(self, sql: str) -> tuple[str, list[dict]]:
+        """
+        替换 SQL 中的时间占位符 @时间描述:格式@。
+
+        格式支持: ms(默认), s, date, datetime
+
+        Returns:
+            (替换后的SQL, 替换记录列表)
+        """
+        replacements = []
+        # 匹配 @时间描述@ 或 @时间描述:格式@
+        pattern = r'@([^@:]+)(?::([^@]+))?@'
+
+        def replace_match(match):
+            time_desc = match.group(1).strip()
+            fmt = (match.group(2) or 'ms').strip().lower()
+            placeholder = match.group(0)
+
+            try:
+                dt = self._parse_time_to_datetime(time_desc)
+                value = self._format_time_value(dt, fmt)
+                replacements.append({
+                    "placeholder": placeholder,
+                    "value": value,
+                    "datetime": dt.strftime('%Y-%m-%d %H:%M:%S'),
+                    "format": fmt
+                })
+                return value
+            except ValueError as e:
+                # 无法解析的占位符保持原样
+                replacements.append({
+                    "placeholder": placeholder,
+                    "error": str(e)
+                })
+                return placeholder
+
+        replaced_sql = re.sub(pattern, replace_match, sql)
+        return replaced_sql, replacements
 
     def _run(
         self,
@@ -1463,6 +1618,12 @@ class DatabaseExecuteQueryTool(KodeTool):
                     },
                     indent=2,
                 )
+
+            # 替换时间占位符 @xxx@
+            original_sql = sql
+            time_replacements = []
+            if '@' in sql:
+                sql, time_replacements = self._replace_time_placeholders(sql)
 
             # Determine query type
             query_type = self._get_query_type(sql)
@@ -1512,38 +1673,40 @@ class DatabaseExecuteQueryTool(KodeTool):
                     # Check if more rows available
                     has_more = len(rows) == fetch_limit
 
-                    return json.dumps(
-                        {
-                            "status": "success",
-                            "query_type": query_type,
-                            "row_count": len(data),
-                            "has_more": has_more,
-                            "columns": columns,
-                            "data": data,
-                            "sql": sql,
-                            "connection_name": connection_name,
-                            "message": f"查询返回 {len(data)} 行" +
-                                      (f" (限制 {fetch_limit} 行，可能有更多)" if has_more else ""),
-                        },
-                        indent=2,
-                        ensure_ascii=False,
-                    )
+                    result_dict = {
+                        "status": "success",
+                        "query_type": query_type,
+                        "row_count": len(data),
+                        "has_more": has_more,
+                        "columns": columns,
+                        "data": data,
+                        "executed_sql": sql,  # 实际执行的 SQL（时间戳已替换）
+                        "connection_name": connection_name,
+                        "message": f"查询返回 {len(data)} 行" +
+                                  (f" (限制 {fetch_limit} 行，可能有更多)" if has_more else ""),
+                    }
+                    if time_replacements:
+                        result_dict["original_sql"] = original_sql  # AI 写的原始 SQL（带占位符）
+                        result_dict["time_replacements"] = time_replacements
+                    return json.dumps(result_dict, indent=2, ensure_ascii=False)
 
                 else:
                     # Write operation - commit and return affected rows
                     conn.commit()
                     affected_rows = result.rowcount if hasattr(result, 'rowcount') else 0
 
-                    return json.dumps(
-                        {
-                            "status": "success",
-                            "query_type": query_type,
-                            "affected_rows": affected_rows,
-                            "sql": sql,
-                            "connection_name": connection_name,
-                            "message": f"{query_type} 操作完成，影响 {affected_rows} 行",
-                        },
-                        indent=2,
+                    result_dict = {
+                        "status": "success",
+                        "query_type": query_type,
+                        "affected_rows": affected_rows,
+                        "executed_sql": sql,  # 实际执行的 SQL
+                        "connection_name": connection_name,
+                        "message": f"{query_type} 操作完成，影响 {affected_rows} 行",
+                    }
+                    if time_replacements:
+                        result_dict["original_sql"] = original_sql
+                        result_dict["time_replacements"] = time_replacements
+                    return json.dumps(result_dict, indent=2,
                         ensure_ascii=False,
                     )
 

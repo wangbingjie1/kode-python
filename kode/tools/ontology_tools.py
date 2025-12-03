@@ -169,14 +169,15 @@ class OntologyBuilderTool(KodeTool):
                     ensure_ascii=False,
                 )
 
-            # 🔍 检查本体是否已存在（仅当未强制重建时）- V2 格式
+            # 🔍 检查本体是否已存在（仅当未强制重建时）- 优先 V3，回退 V2
             if not force_rebuild:
                 ontology_path = config.get("storage.ontology_path", "./ontology_store")
-                existing_ontology_file = (
-                    Path(ontology_path)
-                    / get_safe_connection_path(connection_name)
-                    / "ontology_v2.json"
-                )
+                conn_path = Path(ontology_path) / get_safe_connection_path(connection_name)
+
+                # 优先查找 v3
+                existing_ontology_file = conn_path / "ontology_v3.json"
+                if not existing_ontology_file.exists():
+                    existing_ontology_file = conn_path / "ontology_v2.json"
 
                 if existing_ontology_file.exists():
                     # 读取现有本体的元数据
@@ -212,7 +213,7 @@ class OntologyBuilderTool(KodeTool):
                                 },
                                 "question": "是否要重新构建本体？这将覆盖现有的本体文件。",
                                 "suggestion": "如果要重新构建，请明确告诉我'重新构建本体'或'覆盖现有本体'。如果不需要重新构建，可以直接使用 OntologySearch 工具搜索现有本体。",
-                                "note": "重新构建会保留历史版本，但 ontology_v2.json 会被更新。",
+                                "note": "重新构建会保留历史版本，但本体文件会被更新。",
                             },
                             indent=2,
                             ensure_ascii=False,
@@ -472,257 +473,6 @@ class OntologyBuilderTool(KodeTool):
                 )
 
         return "\n".join(lines)
-
-    def _create_ontology_generation_prompt(
-        self, schema_summary: str, connection_name: str, database: str, db_schema: Optional[str]
-    ) -> str:
-        """创建用于本体生成的 AI prompt。"""
-        return f"""你是一位资深的 ERP 系统架构师和业务分析专家。请分析以下数据库 schema，构建一个完整的业务本体（Ontology）。
-
-# 数据库 Schema
-
-连接名称: {connection_name}
-数据库: {database}
-Schema: {db_schema or "默认"}
-
-{schema_summary}
-
-# 任务要求
-
-请深入理解这个数据库的业务语义，生成一个完整的业务本体，包括：
-
-1. **Concepts（概念/实体）**: 每个表代表的业务概念
-   - technical_name: 技术名称（表名）
-   - business_name_cn: 中文业务名称
-   - business_name_en: 英文业务名称
-   - description: 业务描述（100字以内，说清楚这个概念的业务含义）
-   - domain: 所属业务领域（如：用户管理、订单管理、财务管理等）
-   - importance: 重要性 (critical/high/medium/low)
-   - primary_key: 主键字段列表
-   - data_source: 数据来源信息
-     - connection_name: 数据库连接名称
-     - database: 数据库名称
-     - schema: Schema名称（可选）
-     - table_name: 表名
-
-2. **Properties（属性）**: 每个字段的业务含义
-   - technical_name: 技术名称（表名.字段名）
-   - business_name_cn: 中文业务名称
-   - business_name_en: 英文业务名称
-   - description: 业务含义描述
-   - data_type: 数据类型
-   - nullable: 是否可空
-   - concept: 所属概念（表名）
-   - data_source: 数据来源信息
-     - connection_name: 数据库连接名称
-     - database: 数据库名称
-     - schema: Schema名称（可选）
-     - table_name: 表名
-     - column_name: 字段名
-
-3. **Relationships（关系）**: 表之间的业务关系
-   - from_concept: 源概念
-   - to_concept: 目标概念
-   - relationship_type: 关系类型（foreign_key/one_to_many/many_to_many/composition/aggregation）
-   - cardinality: 基数（1:1, 1:N, N:M）
-   - business_meaning: 业务含义（如："订单属于用户"、"商品属于分类"）
-   - from_properties: 源字段
-   - to_properties: 目标字段
-
-4. **Hierarchies（层次结构）**: 识别树形/层级结构
-   - concept: 概念名称
-   - type: 类型（self_referencing/category_tree/organizational_tree等）
-   - parent_property: 父节点字段
-   - description: 业务描述
-
-5. **Domain Insights（领域洞察）**:
-   - primary_domain: 主要业务领域
-   - sub_domains: 子领域列表
-   - business_scenario: 业务场景描述
-   - architecture_pattern: 架构模式（单体/微服务/领域驱动）
-
-6. **Axioms（业务公理与规则）**: 从 schema 推断出的可验证业务约束
-   - id: 唯一标识（如 "AX001"）
-   - name: 公理名称
-   - type: 类型
-     * invariant: 恒定约束（数据必须始终满足，如"金额非负"）
-     * constraint: 状态约束（特定状态下的限制，如"已发货不可取消"）
-     * derivation: 派生规则（可计算的值，如"订单总额=明细金额之和"）
-     * validation: 校验规则（输入验证，如"手机号格式"）
-   - scope: 作用范围（entity/relationship/cross_entity）
-   - entities: 涉及的实体列表
-   - expression: 伪代码/逻辑表达式
-   - natural_language: 自然语言描述
-   - priority: 重要性（critical/high/medium/low）
-   - source: 推断来源（constraint/comment/naming/pattern）
-   - confidence: 置信度（high/medium/low，基于推断依据的充分性）
-
-7. **Uncertainties（不确定性列表）**: 基于 schema 分析得出的困扰点和不利于分析的因素
-   - type: 不确定性类型
-     * schema_ambiguity: 表/字段命名或结构不清晰
-     * missing_constraint: 缺少必要的约束
-     * naming_confusion: 命名不规范或含义不明
-     * business_logic_unclear: 业务逻辑不明确
-     * data_quality_concern: 数据质量问题
-     * axiom_unconfirmed: 推断的公理需要确认（对应 confidence=low 的公理）
-     * axiom_conflict: 公理之间可能存在冲突
-   - category: 分类（数据模型/业务逻辑/命名规范/数据质量/关系推断/业务规则）
-   - priority: 优先级（high/medium/low）
-   - entity: 相关实体（表名或 "整体"）
-   - question: 具体的疑问或困扰描述
-   - context: 产生困扰的上下文信息
-   - impact: 影响范围描述
-   - related_axiom_id: 关联的公理ID（仅 axiom_unconfirmed/axiom_conflict 类型需要）
-
-# 输出格式
-
-请严格按照以下 JSON 格式输出，不要有任何多余的文字解释，直接输出 JSON 字符串：
-
-```json
-{{
-  "concepts": {{
-    "table_name": {{
-      "technical_name": "table_name",
-      "business_name_cn": "中文名",
-      "business_name_en": "English Name",
-      "description": "详细的业务描述",
-      "domain": "业务领域",
-      "importance": "high",
-      "primary_key": ["id"],
-      "data_source": {{
-        "connection_name": "{connection_name}",
-        "database": "{database}",
-        "schema": "{db_schema or ""}",
-        "table_name": "table_name"
-      }}
-    }}
-  }},
-  "properties": {{
-    "table_name.column_name": {{
-      "technical_name": "table_name.column_name",
-      "business_name_cn": "中文属性名",
-      "business_name_en": "English Property Name",
-      "description": "属性的业务含义",
-      "data_type": "VARCHAR",
-      "nullable": false,
-      "concept": "table_name",
-      "data_source": {{
-        "connection_name": "{connection_name}",
-        "database": "{database}",
-        "schema": "{db_schema or ""}",
-        "table_name": "table_name",
-        "column_name": "column_name"
-      }}
-    }}
-  }},
-  "relationships": [
-    {{
-      "from_concept": "orders",
-      "to_concept": "users",
-      "relationship_type": "foreign_key",
-      "cardinality": "N:1",
-      "business_meaning": "订单属于用户",
-      "from_properties": ["user_id"],
-      "to_properties": ["id"]
-    }}
-  ],
-  "hierarchies": [
-    {{
-      "concept": "categories",
-      "type": "category_tree",
-      "parent_property": "parent_id",
-      "description": "商品分类形成树形结构"
-    }}
-  ],
-  "domain_insights": {{
-    "primary_domain": "电商平台",
-    "sub_domains": ["用户管理", "订单管理", "商品管理"],
-    "business_scenario": "B2C电商平台，支持用户注册、商品浏览、下单购买",
-    "architecture_pattern": "单体应用"
-  }},
-  "axioms": [
-    {{
-      "id": "AX001",
-      "name": "订单金额非负",
-      "type": "invariant",
-      "scope": "entity",
-      "entities": ["orders"],
-      "expression": "orders.total_amount >= 0",
-      "natural_language": "订单总金额必须大于等于零",
-      "priority": "critical",
-      "source": "constraint",
-      "confidence": "high"
-    }},
-    {{
-      "id": "AX002",
-      "name": "订单总额等于明细之和",
-      "type": "derivation",
-      "scope": "cross_entity",
-      "entities": ["orders", "order_items"],
-      "expression": "orders.total_amount = SUM(order_items.subtotal) WHERE order_items.order_id = orders.id",
-      "natural_language": "订单总金额应等于所有订单明细小计之和",
-      "priority": "high",
-      "source": "pattern",
-      "confidence": "medium"
-    }},
-    {{
-      "id": "AX003",
-      "name": "用户手机号格式",
-      "type": "validation",
-      "scope": "entity",
-      "entities": ["users"],
-      "expression": "users.phone MATCHES '^1[3-9]\\d{{9}}$'",
-      "natural_language": "用户手机号必须是有效的11位中国大陆手机号",
-      "priority": "medium",
-      "source": "naming",
-      "confidence": "medium"
-    }}
-  ],
-  "uncertainties": [
-    {{
-      "type": "missing_constraint",
-      "category": "数据模型",
-      "priority": "high",
-      "entity": "orders",
-      "question": "订单表有多个，无法区分",
-      "context": "订单表order，platform_trade_order",
-      "impact": "影响订单状态管理、订单查询、业务分析等核心功能"
-    }},
-    {{
-      "type": "axiom_unconfirmed",
-      "category": "业务规则",
-      "priority": "medium",
-      "entity": "orders",
-      "question": "订单总额=明细之和的规则是否正确？是否存在运费、折扣等其他因素？",
-      "context": "公理 AX002 推断订单总额等于明细小计之和，但可能存在额外费用",
-      "impact": "影响财务对账、订单金额计算的准确性",
-      "related_axiom_id": "AX002"
-    }}
-  ]
-}}
-```
-
-注意：
-- 必须为每个表生成 concept
-- 必须为每个字段生成 property
-- 充分利用字段注释（comment）来理解业务含义
-- 推断隐式关系（如字段名包含 _id 后缀）
-- 识别常见的业务模式（用户-订单、分类-商品等）
-- 描述要准确、专业，体现对业务的深入理解
-- **重点关注业务公理（axioms）**：
-  * 从数据库约束推断：NOT NULL、UNIQUE、CHECK、DEFAULT 值
-  * 从字段命名推断：amount/price/qty 通常非负，status 有有限状态集
-  * 从表关系推断：主表-明细表的汇总关系，父子表的完整性
-  * 从注释推断：字段注释中的枚举值、取值范围、业务规则
-  * 从常见模式推断：订单状态流转、库存扣减、金额计算等
-  * confidence 标注：有明确约束支撑的为 high，仅从命名/模式推断的为 medium/low
-- **重点关注不确定性（uncertainties）**：
-  * 仔细分析 schema 中的模糊点、缺失约束、命名不清晰等问题
-  * 从数据分析师/架构师的角度思考：哪些地方会让你困惑？哪些信息缺失会阻碍业务分析？
-  * 每个不确定性必须包含具体的 question（疑问）、context（上下文）、suggestions（解决建议）
-  * 优先级判断：high（严重影响数据分析和业务理解）、medium（有一定影响）、low（轻微影响）
-  * 对于置信度为 low 的公理，应生成对应的不确定性问题让用户确认
-"""
 
     def _extract_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
         """从 AI 输出中提取 JSON（优化版本，快速失败）。"""
@@ -1089,18 +839,32 @@ Schema: {db_schema or "默认"}
         business_tool = BusinessUnderstandingTool()
         business_answers = business_tool.get_answers(connection_name) or {}
 
+        # 构建业务描述（Input 1: 应然层）
         business_context_section = ""
         if business_answers:
             business_context_section = f"""
-# 业务上下文（应然层 - 用户业务理解）
+# Input 1: 业务描述（应然层）
 
-- **产品**: {business_answers.get('product_name', '未提供')}
-- **商业模式**: {business_answers.get('business_model', '未提供')}
-- **收入公式**: {business_answers.get('revenue_formula', '未提供')}
-- **转化路径**: {business_answers.get('conversion_path', '未提供')}
-- **核心指标**: {business_answers.get('key_metrics', '未提供')}
+**你的产品是什么？**
+{business_answers.get('product_name', '未提供')}
 
-**重要**: 根据以上业务上下文判断概念的重要性（critical/important/optional）。
+**你的商业模式是什么？**
+{business_answers.get('business_model', '未提供')}
+
+**你的收入公式是什么？**
+{business_answers.get('revenue_formula', '未提供')}
+
+**你的转化路径是什么？**
+{business_answers.get('conversion_path', '未提供')}
+
+**你最关心的3-5个指标是什么？**
+{business_answers.get('key_metrics', '未提供')}
+
+---
+
+**重要说明**：
+- 根据以上业务描述判断概念的 `importance`（critical/important/optional）
+- 判断标准：核心业务概念为 critical，支撑性概念为 important，辅助性概念为 optional
 """
 
         # 🔥 加载并注入不确定性的答案
@@ -1111,16 +875,25 @@ Schema: {db_schema or "默认"}
             uncertainty_section += uncertainty_rules
             uncertainty_section += "\n**重要**: 构建本体时必须严格遵循上述规则！\n"
 
-        # V3 格式 Prompt
-        prompt = f"""你是一名专业的语义层数据建模师（Semantic-Layer Modeling Agent）。你的任务是：
- 根据用户回答的业务问题 + 用户的数据库的schema， 构建一个语义清晰、可审计、可映射的数据本体（Ontology），并基于用户需求引导本体执行各种分析类需求，交付结果。
-# 当前域: {domain_name}
-数据库: {database}
-Schema: {db_schema or "默认"}
+        # 🔥 完全使用产品经理的提示词（V3 格式）
+        prompt = f"""你是一名专业的语义层数据建模师（Semantic-Layer Modeling Agent）。
+
+你的任务是：根据用户回答的业务问题 + 用户的数据库的 schema，构建一个语义清晰、可审计、可映射的数据本体（Ontology），并基于用户需求引导本体执行各种分析类需求，交付结果。
+
+---
+
+# 当前上下文
+
+**业务域**: {domain_name}
+**数据库**: {database}
+**Schema**: {db_schema or "默认"}
+
 {business_context_section}
 {uncertainty_section}
 
-# 数据库结构（实然层）
+---
+
+# Input 2: 数据库结构（实然层）
 
 {domain_schema_text}
 
@@ -1128,19 +901,99 @@ Schema: {db_schema or "默认"}
 
 # 核心处理逻辑：应然与实然的对齐
 
-## 四象限分析
+## 第一步：双向提取
 
-分析每个概念时，判断其属于哪个象限：
+### 从业务描述提取（应然）：
+- **核心实体**: 从名词提取，如"用户"、"订单"、"课程"
+- **关键动作**: 从动词提取，如"购买"、"发布"、"评论"
+- **业务规则**: 从约束提取，如"满100包邮"、"VIP专属"
+- **目标指标**: 从KPI提取，如"转化率"、"留存率"
 
-1. **应然有 ∩ 实然有**：业务需要且数据库有 → 直接建模
-2. **应然有 ∩ 实然无**：业务需要但数据库没有 → 记录到 uncertainties（type: missing_in_database）
-3. **应然无 ∩ 实然有**：数据库有但业务未提及 → 推断业务含义，标注 data_source: "inferred"
-4. **冲突/模糊**：定义不一致或含义不清 → 记录到 uncertainties
+### 从数据库结构提取（实然）：
+- **实体类**: 每个表 → 一个类
+- **属性**: 表的列 → 类的属性
+- **关系**: 外键 → belongs_to/has_many，关联表 → many_to_many
+- **约束**: NOT NULL, UNIQUE, CHECK → 业务规则
+- **生命周期**: 状态字段 → lifecycle_states
 
-根据业务上下文判断某个概念是否"核心功能"：
-- 如果与收入公式、转化路径、核心指标直接相关 → critical
-- 如果支撑核心功能但非直接 → important
-- 其他 → optional
+## 第二步：四象限对齐矩阵
+
+将提取的内容按以下逻辑分类：
+
+### 象限1：应然有 ∩ 实然有（完美对齐）✅
+**处理**: 直接建模，整合两边信息
+
+**示例**:
+- 业务描述："用户可以发布文章"
+- 数据库：有 users 表和 posts 表，posts.author_id 关联 users.id
+- **输出**: 完整的 User 类、Post 类和 Author_Post 关系
+
+### 象限2：应然有 ∩ 实然无（需求缺失）⚠️
+**处理**:
+- 如果是核心概念 → 记录到 uncertainties (severity: high, type: missing_in_database)
+- 如果是次要概念 → 记录到 uncertainties (severity: medium/low, type: missing_in_database)
+
+**示例**:
+- 业务描述："用户可以关注其他用户"
+- 数据库：没有 follows 表
+- **判断**: 如果这是核心功能 → severity: high
+- **输出**: 记录到 uncertainties，建议创建 follows 表
+
+### 象限3：应然无 ∩ 实然有（数据库有但业务没提）🤔
+**处理**: 分情况
+1. 可能是用户遗漏 → 推断业务含义，加入模型，标注 data_source: "inferred"
+2. 技术实现细节 → 记录但标注为 technical
+3. 冗余/废弃字段 → 标注 deprecated: true
+
+**示例**:
+- 数据库：posts 表有 view_count 字段
+- 业务描述：没提到浏览统计
+- **推断**: 这可能是重要的分析指标
+- **输出**: 加入 Post.view_count，标注 data_source: "inferred"
+
+### 象限4：应然无 ∩ 实然无（都没有）
+**处理**: 不处理（不存在的东西不建模）
+
+但如果是**领域常见概念**，可以主动建议：
+- **示例**: 电商平台通常需要购物车，即使数据库没有 carts 表，也可以记录到 uncertainties (type: missing_in_database, severity: low)
+
+## 第三步：冲突检测与决策
+
+### 1. 定义冲突（Definition Conflicts）
+
+**场景A：命名不一致**
+- 业务："文章状态有草稿、已发布"
+- 数据库：posts.status ENUM('draft', 'published', 'archived', 'deleted')
+- **冲突**: 业务只提了2种状态，数据库有4种
+- **处理**: 记录到 uncertainties (type: definition_conflict)
+
+**场景B：类型不一致**
+- 业务："价格精确到分"
+- 数据库：products.price INTEGER（存储的是"分"的整数值）
+- **处理**: 不冲突，但需要在 constraint 中说明："数据库存储整数，如1999=19.99元，应用层需要转换"
+
+### 2. 关系基数冲突
+
+**示例**:
+- 业务："一个订单属于一个用户"
+- 数据库：orders.user_id 有 UNIQUE 约束
+- **冲突**: UNIQUE约束意味着 1个用户只能有1个订单（1:1），但业务语义应该是1:N
+- **处理**: 记录到 uncertainties (type: definition_conflict, severity: high)
+
+### 3. 缺少外键
+
+**示例**:
+- 业务："评论属于文章"
+- 数据库：comments 表有 post_id 字段，但没有 FOREIGN KEY 约束
+- **处理**: 记录到 uncertainties (type: missing_constraint, severity: low)，但仍假设为外键关系
+
+### 4. 业务规则与数据约束不一致
+
+**示例**:
+- 业务："文章标题不能为空"
+- 数据库：posts.title VARCHAR(200) NULL
+- **冲突**: 业务规则要求title非空，但数据库允许NULL
+- **处理**: 记录到 uncertainties (type: definition_conflict, severity: medium)
 
 ---
 
@@ -1163,32 +1016,39 @@ Schema: {db_schema or "默认"}
 
 ### 2.1 classes（业务类）
 
-每个表转换为一个业务类，使用**对象格式**（key 为技术名）：
+每个表转换为一个业务类，使用**嵌套对象格式**（先按 domain 分组，再按表名）：
 
 ```json
 {{{{
   "classes": {{{{
-    "table_name": {{{{
-      "class_type": "concrete_class",
-      "description": "业务描述（100字以内）",
-      "why": "为什么这个类重要",
-      "importance": "critical/high/medium/low",
-      "lifecycle_states": ["状态1", "状态2"],
-      "attributes": {{{{
-        "column_name": {{{{
-          "type": "数据类型",
-          "example": "具体示例值",
-          "constraint": "约束描述",
-          "why": "为什么需要这个字段（关键字段填写）"
-        }}}}
-      }}}},
-      "relations": {{{{
-        "belongs_to": "ParentClass",
-        "has_many": ["ChildClass1", "ChildClass2"],
-        "many_to_many": {{{{
-          "TargetClass": {{{{
-            "through": "JunctionTable",
-            "why": "关系存在的原因"
+    "{domain_name}": {{{{
+      "orders": {{{{
+        "class_type": "concrete_class",
+        "description": "业务描述（100字以内）",
+        "why": "为什么这个类重要",
+        "importance": "critical/high/medium/low",
+        "lifecycle_states": ["状态1", "状态2"],
+        "attributes": {{{{
+          "id": {{{{
+            "type": "bigint",
+            "example": "10001",
+            "constraint": "主键，自增"
+          }}}},
+          "status": {{{{
+            "type": "varchar(20)",
+            "example": "pending",
+            "constraint": "非空，枚举值",
+            "why": "状态驱动订单流转"
+          }}}}
+        }}}},
+        "relations": {{{{
+          "belongs_to": "users",
+          "has_many": ["order_items"],
+          "many_to_many": {{{{
+            "products": {{{{
+              "through": "order_items",
+              "why": "订单包含多个商品"
+            }}}}
           }}}}
         }}}}
       }}}}
@@ -1196,6 +1056,8 @@ Schema: {db_schema or "默认"}
   }}}}
 }}}}
 ```
+
+**重要**: `classes` 的第一层 key 是当前域名（`{domain_name}`），第二层 key 才是表名。
 
 ### 2.2 relationships（关系定义）
 
@@ -1257,7 +1119,6 @@ Schema: {db_schema or "默认"}
           "actor": "User/System",
           "action": "动作描述",
           "validation": "Rule_Name（如果有）",
-          "system_behavior": "INSERT Post (status='draft', author_id=current_user)",
           "on_fail": "失败处理（如果有）"
         }}}}
       ]
@@ -1345,43 +1206,45 @@ Schema: {db_schema or "默认"}
 
   "schema": {{{{
     "classes": {{{{
-      "orders": {{{{
-        "class_type": "concrete_class",
-        "description": "订单实体，记录用户的购买交易",
-        "why": "订单是交易的核心载体，连接用户、商品、支付、物流",
-        "importance": "critical",
-        "lifecycle_states": ["pending", "paid", "shipped", "completed", "cancelled"],
-        "attributes": {{{{
-          "id": {{{{
-            "type": "bigint",
-            "example": "10001",
-            "constraint": "主键，自增"
+      "{domain_name}": {{{{
+        "orders": {{{{
+          "class_type": "concrete_class",
+          "description": "订单实体，记录用户的购买交易",
+          "why": "订单是交易的核心载体，连接用户、商品、支付、物流",
+          "importance": "critical",
+          "lifecycle_states": ["pending", "paid", "shipped", "completed", "cancelled"],
+          "attributes": {{{{
+            "id": {{{{
+              "type": "bigint",
+              "example": "10001",
+              "constraint": "主键，自增"
+            }}}},
+            "status": {{{{
+              "type": "varchar(20)",
+              "example": "paid",
+              "constraint": "非空，枚举值",
+              "why": "状态驱动订单流转和权限控制"
+            }}}},
+            "total_amount": {{{{
+              "type": "decimal(10,2)",
+              "example": "299.00",
+              "constraint": ">= 0",
+              "why": "核心财务字段，影响收入统计"
+            }}}},
+            "user_id": {{{{
+              "type": "bigint",
+              "example": "1001",
+              "constraint": "外键 → users.id"
+            }}}},
+            "created_at": {{{{
+              "type": "datetime",
+              "example": "2024-01-15T10:30:00Z"
+            }}}}
           }}}},
-          "status": {{{{
-            "type": "varchar(20)",
-            "example": "paid",
-            "constraint": "非空，枚举值",
-            "why": "状态驱动订单流转和权限控制"
-          }}}},
-          "total_amount": {{{{
-            "type": "decimal(10,2)",
-            "example": "299.00",
-            "constraint": ">= 0",
-            "why": "核心财务字段，影响收入统计"
-          }}}},
-          "user_id": {{{{
-            "type": "bigint",
-            "example": "1001",
-            "constraint": "外键 → users.id"
-          }}}},
-          "created_at": {{{{
-            "type": "datetime",
-            "example": "2024-01-15T10:30:00Z"
+          "relations": {{{{
+            "belongs_to": "users",
+            "has_many": ["order_items", "payments"]
           }}}}
-        }}}},
-        "relations": {{{{
-          "belongs_to": "users",
-          "has_many": ["order_items", "payments"]
         }}}}
       }}}}
     }}}},
@@ -1419,7 +1282,7 @@ Schema: {db_schema or "默认"}
         "steps": [
           {{{{"step": 1, "actor": "User", "action": "创建订单"}}}},
           {{{{"step": 2, "actor": "User", "action": "完成支付"}}}},
-          {{{{"step": 3, "actor": "System", "action": "更新状态为已支付","system_behavior": "update order status to paid"}}}},
+          {{{{"step": 3, "actor": "System", "action": "更新状态为已支付", "validation": "Rule_Order_Amount_NonNegative"}}}},
           {{{{"step": 4, "actor": "Warehouse", "action": "发货"}}}},
           {{{{"step": 5, "actor": "User", "action": "确认收货"}}}}
         ]
@@ -1688,15 +1551,24 @@ Schema: {db_schema or "默认"}
             classes = schema.get("classes", {})
             relationships = schema.get("relationships", {})
 
-            # 合并 classes（对象格式）
+            # 🔥 嵌套格式合并：classes 应该是 {domain_name: {table_name: {...}}}
             if isinstance(classes, dict):
-                merged_classes.update(classes)
+                # 检测是否已经是嵌套格式（AI 返回了 domain 分组）
+                if domain_name in classes:
+                    # AI 已经按 domain 分组，直接合并
+                    merged_classes.update(classes)
+                else:
+                    # AI 返回的是扁平格式（旧版），我们手动包装
+                    merged_classes[domain_name] = classes
             elif isinstance(classes, list):
-                # 兼容旧格式（数组）
+                # 兼容旧格式（数组），转换为嵌套格式
+                domain_classes = {}
                 for c in classes:
                     key = c.get("technical_name", c.get("name", ""))
                     if key:
-                        merged_classes[key] = c
+                        domain_classes[key] = c
+                if domain_classes:
+                    merged_classes[domain_name] = domain_classes
 
             # 合并 relationships
             if isinstance(relationships, dict):
@@ -1738,7 +1610,13 @@ Schema: {db_schema or "默认"}
         # 🚀 基于业务五问生成核心指标
         # 将 merged_metrics 转为列表格式供 _generate_core_metrics 使用
         metrics_list = [{"name": k, **v} for k, v in merged_metrics.items()]
-        classes_list = [{"technical_name": k, **v} for k, v in merged_classes.items()]
+
+        # 🔥 嵌套格式：遍历所有 domain 的所有 classes
+        classes_list = []
+        for domain_classes in merged_classes.values():
+            if isinstance(domain_classes, dict):
+                for table_name, class_data in domain_classes.items():
+                    classes_list.append({"technical_name": table_name, **class_data})
 
         core_metrics = self._generate_core_metrics(
             business_answers=business_answers,
@@ -1747,20 +1625,28 @@ Schema: {db_schema or "默认"}
             model_manager=model_manager,
         )
 
-        # 📊 计算统计信息
-        classes_with_lifecycle = sum(
-            1 for c in merged_classes.values() if c.get("lifecycle_states")
-        )
-        classes_with_why = sum(1 for c in merged_classes.values() if c.get("why"))
-        critical_classes = sum(
-            1 for c in merged_classes.values() if c.get("importance") == "critical"
-        )
+        # 📊 计算统计信息（嵌套格式）
+        classes_with_lifecycle = 0
+        classes_with_why = 0
+        critical_classes = 0
+        total_attributes = 0
+        total_class_count = 0
+
+        for domain_classes in merged_classes.values():
+            if isinstance(domain_classes, dict):
+                for class_data in domain_classes.values():
+                    total_class_count += 1
+                    if class_data.get("lifecycle_states"):
+                        classes_with_lifecycle += 1
+                    if class_data.get("why"):
+                        classes_with_why += 1
+                    if class_data.get("importance") == "critical":
+                        critical_classes += 1
+                    total_attributes += len(class_data.get("attributes", {}))
+
         high_confidence_rules = sum(
             1 for r in merged_rules.values() if r.get("confidence") == "high"
         )
-
-        # 统计属性数量
-        total_attributes = sum(len(c.get("attributes", {})) for c in merged_classes.values())
 
         # 构建 V3 格式输出
         return {
@@ -1802,7 +1688,8 @@ Schema: {db_schema or "默认"}
             "core_metrics": core_metrics,
             "uncertainties": all_uncertainties,
             "statistics": {
-                "class_count": len(merged_classes),
+                "domain_count": len(merged_classes),  # 嵌套格式：domain 数量
+                "class_count": total_class_count,  # 总表数量
                 "attribute_count": total_attributes,
                 "relationship_count": len(merged_relationships),
                 "rule_count": len(merged_rules),
@@ -1810,7 +1697,6 @@ Schema: {db_schema or "默认"}
                 "metric_count": len(merged_metrics),
                 "core_metric_count": len(core_metrics),
                 "uncertainty_count": len(all_uncertainties),
-                "domain_count": len(domain_ontologies),
                 "quality": {
                     "classes_with_lifecycle": classes_with_lifecycle,
                     "classes_with_why": classes_with_why,
@@ -2108,30 +1994,59 @@ class OntologySearchTool(KodeTool):
             # 提取 uncertainties（完整列表）
             uncertainties = ontology.get("uncertainties", [])
 
-            # 筛选与查询相关的不确定性（基于 entity 和 question）
-            related_uncertainties = []
-            unrelated_uncertainties = []
+            # 从搜索结果中提取实体 key 列表
+            matched_class_keys = set()
+            for cls in results.get("classes", []):
+                class_key = cls.get("key", "")
+                if class_key:
+                    matched_class_keys.add(class_key)
+                    # 也提取表名部分（去掉 domain 前缀）
+                    if "." in class_key:
+                        table_name = class_key.split(".", 1)[1]
+                        matched_class_keys.add(table_name)
 
-            query_lower = query.lower()
+            # 筛选与搜索结果实体相关的不确定性
+            entity_related_uncertainties = []
             for uncertainty in uncertainties:
-                entity = uncertainty.get("entity", "").lower()
-                question = uncertainty.get("question", "").lower()
-                context = uncertainty.get("context", "").lower()
+                # 跳过已解决的
+                if uncertainty.get("status") == "resolved":
+                    continue
 
-                # 判断是否相关（实体名匹配 OR 问题描述包含查询词）
-                is_related = (
-                    entity in query_lower
-                    or query_lower in entity
-                    or query_lower in question
-                    or query_lower in context
-                )
+                entity = uncertainty.get("entity", "")
+                domain = uncertainty.get("domain", "")
+
+                # 检查是否与搜索到的 class 相关
+                is_related = False
+                for class_key in matched_class_keys:
+                    # 1. entity 完全匹配表名
+                    if entity == class_key:
+                        is_related = True
+                        break
+                    # 2. entity 包含表名（如 "platform_user.id vs platform_user_account.user_id"）
+                    if class_key in entity:
+                        is_related = True
+                        break
+                    # 3. class_key 是 domain.table 格式，检查 domain 匹配
+                    if "." in class_key:
+                        cls_domain, cls_table = class_key.split(".", 1)
+                        if domain == cls_domain and cls_table in entity:
+                            is_related = True
+                            break
 
                 if is_related:
-                    related_uncertainties.append(uncertainty)
-                else:
-                    unrelated_uncertainties.append(uncertainty)
+                    # 返回精简版不确定性（去掉冗余字段）
+                    entity_related_uncertainties.append({
+                        "id": uncertainty.get("id", ""),
+                        "type": uncertainty.get("type", ""),
+                        "category": uncertainty.get("category", ""),
+                        "priority": uncertainty.get("priority", ""),
+                        "entity": entity,
+                        "question": uncertainty.get("question", ""),
+                        "impact": uncertainty.get("impact", ""),
+                        "suggestions": uncertainty.get("suggestions", []),
+                    })
 
-            # Return lightweight summary (save tokens)
+            # Return with related uncertainties content
             ontology_version = ontology.get("version", "2.0")
             return json.dumps(
                 {
@@ -2142,7 +2057,8 @@ class OntologySearchTool(KodeTool):
                     "ontology_version": ontology_version,
                     "ontology_file": str(ontology_file),
                     "uncertainties": {
-                        "related_count": len(related_uncertainties),
+                        "related_to_results": entity_related_uncertainties,  # 与搜索结果实体相关的不确定性
+                        "related_count": len(entity_related_uncertainties),
                         "unresolved_count": len(
                             [u for u in uncertainties if u.get("status") != "resolved"]
                         ),
@@ -2150,7 +2066,6 @@ class OntologySearchTool(KodeTool):
                         "resolved_count": len(
                             [u for u in uncertainties if u.get("status") == "resolved"]
                         ),
-                        "message": "Use FileRead to view full uncertainties from ontology file if needed",
                     },
                 },
                 indent=2,
@@ -2275,6 +2190,89 @@ class OntologySearchTool(KodeTool):
 
         return score
 
+    def _expand_query(self, query: str) -> str:
+        """
+        业务术语同义词扩展，提高语义搜索召回率。
+
+        Args:
+            query: 原始查询
+
+        Returns:
+            扩展后的查询
+        """
+        # 业务同义词映射
+        synonyms = {
+            'GMV': '交易金额 成交额 订单金额 payment_price revenue',
+            '订单': 'order 交易 购买',
+            '支付': 'payment pay 付款 paid',
+            '用户': 'user 会员 customer',
+            '充值': 'recharge top_up 续费',
+            '收入': 'revenue income MRR ARR',
+            '金额': 'amount price money',
+            '交易': 'transaction trade order',
+        }
+
+        expanded = query
+        query_lower = query.lower()
+        for term, expansion in synonyms.items():
+            if term.lower() in query_lower or term in query:
+                expanded += f" {expansion}"
+
+        return expanded
+
+    def _rerank_by_keywords(
+        self,
+        result_ids: List[str],
+        result_distances: List[float],
+        query: str,
+        class_by_key: Dict[str, Any]
+    ) -> List[str]:
+        """
+        使用关键词匹配对语义搜索结果重排序。
+
+        Args:
+            result_ids: ChromaDB 返回的 ID 列表
+            result_distances: ChromaDB 返回的距离列表
+            query: 原始查询
+            class_by_key: 类索引
+
+        Returns:
+            重排后的 ID 列表
+        """
+        query_terms = set(query.lower().split())
+        scored = []
+
+        for class_id, distance in zip(result_ids, result_distances):
+            # 语义分数（距离越小越好，转换为分数）
+            semantic_score = 1 - distance
+
+            # 关键词匹配分数
+            keyword_score = 0
+            class_text = class_id.lower()
+
+            # 检查 class_id 是否包含查询词
+            for term in query_terms:
+                if term in class_text:
+                    keyword_score += 0.3
+
+            # 检查 description 是否包含查询词
+            if class_id in class_by_key:
+                desc = class_by_key[class_id].get('description', '').lower()
+                why = class_by_key[class_id].get('why', '').lower()
+                for term in query_terms:
+                    if term in desc:
+                        keyword_score += 0.2
+                    if term in why:
+                        keyword_score += 0.15
+
+            # 综合分数
+            total_score = semantic_score + keyword_score
+            scored.append((class_id, total_score))
+
+        # 按分数排序
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [s[0] for s in scored]
+
     def _semantic_search(
         self, ontology: Dict[str, Any], query: str, top_k: int, ontology_path: str
     ) -> Dict[str, List]:
@@ -2315,17 +2313,57 @@ class OntologySearchTool(KodeTool):
                 name="ontology_properties", metadata={"hnsw:space": "cosine"}
             )
 
-            # Check if we need to index (collection is empty)
+            # 🔥 检查索引版本，如果是旧版本则重建
+            # 使用 collection metadata 存储版本号
+            CURRENT_INDEX_VERSION = "v2_with_why"  # 增加版本号以强制重建索引
+            needs_reindex = False
+
             if concepts_collection.count() == 0:
-                self._index_ontology_to_chroma(ontology, concepts_collection, properties_collection)
+                needs_reindex = True
+            else:
+                # 检查版本标记（通过尝试获取第一个文档的 metadata）
+                try:
+                    peek = concepts_collection.peek(limit=1)
+                    if peek and peek.get("metadatas") and peek["metadatas"]:
+                        first_meta = peek["metadatas"][0]
+                        if first_meta.get("index_version") != CURRENT_INDEX_VERSION:
+                            needs_reindex = True
+                            logger.info(f"Index version mismatch, will reindex")
+                except Exception:
+                    needs_reindex = True
+
+            if needs_reindex:
+                # 删除旧的 collections 并重建
+                try:
+                    client.delete_collection("ontology_concepts")
+                    client.delete_collection("ontology_properties")
+                except Exception:
+                    pass
+
+                concepts_collection = client.get_or_create_collection(
+                    name="ontology_concepts", metadata={"hnsw:space": "cosine"}
+                )
+                properties_collection = client.get_or_create_collection(
+                    name="ontology_properties", metadata={"hnsw:space": "cosine"}
+                )
+                self._index_ontology_to_chroma(
+                    ontology, concepts_collection, properties_collection, CURRENT_INDEX_VERSION
+                )
+
+            # 🔥 查询扩展：添加业务同义词
+            expanded_query = self._expand_query(query)
+
+            # 🔥 获取 2 倍候选用于重排
+            search_k = min(top_k * 2, 30)  # 最多获取 30 个候选
 
             # Search concepts
-            # ✨ 增大召回范围：从 top_k 增加到 top_k*3，提高复杂查询的召回率
             concept_count = concepts_collection.count()
             concept_results = None
             if concept_count > 0:
                 concept_results = concepts_collection.query(
-                    query_texts=[query], n_results=min(top_k * 3, concept_count)
+                    query_texts=[expanded_query],
+                    n_results=min(search_k, concept_count),
+                    include=["distances"]  # 需要距离用于重排
                 )
 
             # Search properties
@@ -2333,7 +2371,9 @@ class OntologySearchTool(KodeTool):
             property_results = None
             if property_count > 0:
                 property_results = properties_collection.query(
-                    query_texts=[query], n_results=min(top_k * 3, property_count)
+                    query_texts=[expanded_query],
+                    n_results=min(search_k, property_count),
+                    include=["distances"]
                 )
 
             # Parse results and retrieve full ontology data
@@ -2359,14 +2399,38 @@ class OntologySearchTool(KodeTool):
                 is_dict_format = isinstance(classes_data, dict)
 
             if classes_data:
+                # 🔥 检测是否是嵌套格式（domain → table_name）
+                is_nested = False
+                if is_dict_format and classes_data:
+                    # 检查第一个 key 的 value 是否也是 dict of classes
+                    first_val = next(iter(classes_data.values()), None)
+                    if isinstance(first_val, dict) and any(
+                        isinstance(v, dict) and "attributes" in v for v in first_val.values()
+                    ):
+                        is_nested = True
+
                 # 构建 class 索引（用于快速查找）
-                if is_dict_format:
-                    # V3 对象格式：key 是表名
+                class_by_key = {}
+                class_by_name = {}
+
+                if is_nested:
+                    # 🔥 嵌套格式：遍历所有 domain 的所有 classes
+                    for domain_name, domain_classes in classes_data.items():
+                        if isinstance(domain_classes, dict):
+                            for table_name, class_data in domain_classes.items():
+                                # ID 格式: "domain_name.table_name"
+                                class_id = f"{domain_name}.{table_name}"
+                                class_by_key[class_id] = class_data
+                                if class_data.get("description"):
+                                    class_by_name[class_data.get("description", "")[:50]] = (
+                                        class_id,
+                                        class_data,
+                                    )
+                elif is_dict_format:
+                    # 扁平对象格式：key 是表名
                     class_by_key = classes_data
-                    class_by_name = {}
                     for key, val in classes_data.items():
-                        # 尝试多种方式索引
-                        if val.get("description"):
+                        if isinstance(val, dict) and val.get("description"):
                             class_by_name[val.get("description", "")[:50]] = (key, val)
                 else:
                     # V2 数组格式
@@ -2378,35 +2442,81 @@ class OntologySearchTool(KodeTool):
                 # ✨ 使用集合去重，避免重复添加同一个类
                 added_class_ids = set()
 
-                # Add classes from concept results
+                # 🔥 重排序：使用关键词匹配对语义搜索结果重排
+                reranked_concept_ids = []
                 if concept_results and concept_results["ids"] and concept_results["ids"][0]:
-                    for class_id in concept_results["ids"][0]:
-                        if class_id not in added_class_ids:
-                            if class_id in class_by_key:
-                                if is_dict_format:
-                                    results["classes"].append(
-                                        {"key": class_id, **class_by_key[class_id]}
-                                    )
-                                else:
-                                    results["classes"].append(class_by_key[class_id])
-                                added_class_ids.add(class_id)
+                    distances = concept_results.get("distances", [[]])[0]
+                    if distances:
+                        reranked_concept_ids = self._rerank_by_keywords(
+                            concept_results["ids"][0],
+                            distances,
+                            query,
+                            class_by_key
+                        )
+                    else:
+                        reranked_concept_ids = concept_results["ids"][0]
+
+                # Add classes from concept results (after reranking)
+                for class_id in reranked_concept_ids[:top_k]:
+                    if class_id not in added_class_ids:
+                        if class_id in class_by_key:
+                            # 精简返回结果，传入 query 用于相关性过滤
+                            slim_class = self._slim_class_for_search(
+                                class_id, class_by_key[class_id], query
+                            )
+                            results["classes"].append(slim_class)
+                            added_class_ids.add(class_id)
 
                 # Add classes from property results (find parent class)
                 if property_results and property_results["ids"] and property_results["ids"][0]:
                     for prop_id in property_results["ids"][0]:
-                        # prop_id 格式: "class_name.property_name" 或 "technical_name.column"
-                        parts = prop_id.split(".", 1)
-                        if len(parts) >= 1:
-                            class_name = parts[0]
-                            if class_name not in added_class_ids:
-                                if class_name in class_by_key:
-                                    if is_dict_format:
-                                        results["classes"].append(
-                                            {"key": class_name, **class_by_key[class_name]}
-                                        )
-                                    else:
-                                        results["classes"].append(class_by_key[class_name])
-                                    added_class_ids.add(class_name)
+                        # 🔥 嵌套格式 prop_id: "domain.table.column"
+                        # 扁平格式 prop_id: "table.column"
+                        parts = prop_id.split(".")
+
+                        if is_nested and len(parts) >= 2:
+                            # 嵌套格式：domain.table.column → class_id = "domain.table"
+                            class_id = f"{parts[0]}.{parts[1]}"
+                        elif len(parts) >= 1:
+                            # 扁平格式：table.column → class_id = "table"
+                            class_id = parts[0]
+                        else:
+                            continue
+
+                        if class_id not in added_class_ids:
+                            if class_id in class_by_key:
+                                # 精简返回结果，传入 query 用于相关性过滤
+                                slim_class = self._slim_class_for_search(
+                                    class_id, class_by_key[class_id], query
+                                )
+                                results["classes"].append(slim_class)
+                                added_class_ids.add(class_id)
+                                if len(results["classes"]) >= top_k:
+                                    break
+
+                # 🔥 精确匹配兜底：确保关键词直接匹配的表不被漏掉
+                query_terms = set(query.lower().split())
+                for class_id in class_by_key:
+                    if len(results["classes"]) >= top_k:
+                        break
+                    if class_id in added_class_ids:
+                        continue
+
+                    class_data = class_by_key[class_id]
+                    class_text = class_id.lower()
+                    desc = class_data.get('description', '').lower()
+
+                    # 检查 class_id 或 description 是否包含查询关键词
+                    matched = False
+                    for term in query_terms:
+                        if len(term) >= 2 and (term in class_text or term in desc):
+                            matched = True
+                            break
+
+                    if matched:
+                        slim_class = self._slim_class_for_search(class_id, class_data, query)
+                        results["classes"].append(slim_class)
+                        added_class_ids.add(class_id)
 
             # V1 格式：concepts/properties 字典
             elif "concepts" in ontology:
@@ -2428,8 +2538,106 @@ class OntologySearchTool(KodeTool):
             logger.warning(f"Semantic search failed: {e}, falling back to fuzzy search")
             return self._fuzzy_search(ontology, query.lower(), top_k)
 
+    def _slim_class_for_search(
+        self, class_id: str, class_data: Dict[str, Any], query: str = ""
+    ) -> Dict[str, Any]:
+        """
+        精简 class 返回结果，大幅减少 token 消耗。
+
+        策略：
+        1. 与查询相关的字段：保留 type + why（完整信息）
+        2. 主键/外键：只显示 "字段名(类型)" 格式
+        3. 其他字段：只显示总数量
+        """
+        slim = {
+            "key": class_id,
+            "description": class_data.get("description", ""),
+        }
+
+        # 只在重要时显示 importance
+        importance = class_data.get("importance", "")
+        if importance in ("critical", "important"):
+            slim["importance"] = importance
+
+        # 构建查询关键词集合（支持中英文）
+        query_keywords = set()
+        if query:
+            query_lower = query.lower()
+            for word in query_lower.split():
+                if len(word) >= 2:
+                    query_keywords.add(word)
+
+        if "attributes" in class_data and class_data["attributes"]:
+            related_attrs = {}  # 与查询相关的字段
+            pk_fk_list = []  # 主键/外键列表（紧凑格式）
+            other_count = 0  # 其他字段数量
+
+            for attr_name, attr_info in class_data["attributes"].items():
+                if not isinstance(attr_info, dict):
+                    other_count += 1
+                    continue
+
+                attr_name_lower = attr_name.lower()
+                attr_why = attr_info.get("why", "").lower()
+                constraint = attr_info.get("constraint", "")
+                attr_type = attr_info.get("type", "unknown")
+
+                # 判断是否与查询相关
+                is_related = False
+                for kw in query_keywords:
+                    if kw in attr_name_lower or kw in attr_why:
+                        is_related = True
+                        break
+
+                # 判断是否是主键/外键
+                is_pk = "主键" in constraint or "primary" in constraint.lower()
+                is_fk = "外键" in constraint or "→" in constraint
+
+                if is_related:
+                    # 查询相关：保留完整信息
+                    related_attrs[attr_name] = {
+                        "type": attr_type,
+                        "why": attr_info.get("why", ""),
+                    }
+                elif is_pk or is_fk:
+                    # 主键/外键：紧凑格式
+                    if is_pk:
+                        pk_fk_list.append(f"{attr_name}(PK)")
+                    elif "→" in constraint:
+                        fk_ref = constraint.split("→")[-1].strip().split(",")[0].strip()
+                        pk_fk_list.append(f"{attr_name}→{fk_ref}")
+                    else:
+                        pk_fk_list.append(f"{attr_name}(FK)")
+                else:
+                    other_count += 1
+
+            # 组装精简的 attributes
+            if related_attrs or pk_fk_list or other_count > 0:
+                slim["attributes"] = {}
+                if related_attrs:
+                    slim["attributes"]["related"] = related_attrs
+                if pk_fk_list:
+                    slim["attributes"]["keys"] = pk_fk_list
+                if other_count > 0:
+                    slim["attributes"]["other_fields_count"] = other_count
+
+        # relations 也精简
+        if "relations" in class_data and class_data["relations"]:
+            relations = class_data["relations"]
+            slim_relations = []
+            for rel_type, rel_target in relations.items():
+                if isinstance(rel_target, list):
+                    slim_relations.append(f"{rel_type}: {', '.join(rel_target)}")
+                else:
+                    slim_relations.append(f"{rel_type}: {rel_target}")
+            if slim_relations:
+                slim["relations"] = slim_relations
+
+        return slim
+
     def _index_ontology_to_chroma(
-        self, ontology: Dict[str, Any], concepts_collection, properties_collection
+        self, ontology: Dict[str, Any], concepts_collection, properties_collection,
+        index_version: str = "v1"
     ):
         """
         Index ontology data into ChromaDB collections.
@@ -2439,6 +2647,7 @@ class OntologySearchTool(KodeTool):
             ontology: Ontology data structure
             concepts_collection: ChromaDB collection for concepts/classes
             properties_collection: ChromaDB collection for properties
+            index_version: 索引版本号，用于判断是否需要重建索引
         """
         concept_ids = []
         concept_docs = []
@@ -2461,9 +2670,27 @@ class OntologySearchTool(KodeTool):
             is_dict_format = isinstance(classes_data, dict)
 
         if classes_data:
+            # 🔥 检测是否是嵌套格式（domain → table_name）
+            is_nested = False
+            if is_dict_format and classes_data:
+                first_val = next(iter(classes_data.values()), None)
+                if isinstance(first_val, dict) and any(
+                    isinstance(v, dict) and "attributes" in v for v in first_val.values()
+                ):
+                    is_nested = True
+
             # 统一处理：转换为 (key, data) 对的列表
-            if is_dict_format:
-                # V3 对象格式：key 是表名
+            class_items = []
+            if is_nested:
+                # 🔥 嵌套格式：遍历所有 domain 的所有 classes
+                for domain_name, domain_classes in classes_data.items():
+                    if isinstance(domain_classes, dict):
+                        for table_name, class_data in domain_classes.items():
+                            # ID 格式: "domain_name.table_name"
+                            class_id = f"{domain_name}.{table_name}"
+                            class_items.append((class_id, class_data))
+            elif is_dict_format:
+                # V3 扁平对象格式：key 是表名
                 class_items = list(classes_data.items())
             else:
                 # V2 数组格式
@@ -2495,14 +2722,24 @@ class OntologySearchTool(KodeTool):
                             if isinstance(v, dict) and v.get("constraint")
                         ]
                     )
+                    # 🔥 提取关键业务字段的 why（用于提高语义搜索召回率）
+                    key_attr_whys = []
+                    importance_keywords = ['核心', '关键', '重要', '收入', '订单', 'GMV', 'MRR', '金额', '支付', '交易']
+                    for attr_name, attr_data in attributes.items():
+                        if isinstance(attr_data, dict):
+                            why = attr_data.get('why', '')
+                            if why and any(kw in why for kw in importance_keywords):
+                                key_attr_whys.append(f"{attr_name}:{why[:50]}")
+                    key_whys_text = " ".join(key_attr_whys[:5])  # 限制最多 5 个关键字段
                 else:
                     # V2: properties 是数组
                     attr_names = " ".join([p.get("name", "") for p in properties])
                     attr_descs = " ".join(
                         [p.get("description", "")[:30] for p in properties if p.get("description")]
                     )
+                    key_whys_text = ""
 
-                doc_text = f"{class_key} {class_data.get('description', '')} {class_data.get('why', '')} {attr_names} {attr_descs}"
+                doc_text = f"{class_key} {class_data.get('description', '')} {class_data.get('why', '')} {attr_names} {attr_descs} {key_whys_text}"
                 concept_docs.append(doc_text)
 
                 concept_metadatas.append(
@@ -2510,6 +2747,7 @@ class OntologySearchTool(KodeTool):
                         "key": class_key,
                         "description": class_data.get("description", "")[:100],
                         "importance": class_data.get("importance", ""),
+                        "index_version": index_version,  # 🔥 添加版本号用于判断是否需要重建
                     }
                 )
 
@@ -2524,7 +2762,9 @@ class OntologySearchTool(KodeTool):
                         property_ids.append(prop_id)
 
                         attr_info = attr_data if isinstance(attr_data, dict) else {}
-                        doc_text = f"{attr_name} {attr_info.get('type', '')} {attr_info.get('constraint', '')} {class_key}"
+                        # 🔥 加入 why 字段，提高业务语义召回率
+                        attr_why = attr_info.get('why', '')[:60] if attr_info.get('why') else ''
+                        doc_text = f"{attr_name} {attr_info.get('type', '')} {attr_info.get('constraint', '')} {attr_why} {class_key}"
                         property_docs.append(doc_text)
 
                         property_metadatas.append(

@@ -507,28 +507,50 @@ async def list_ontologies():
             if not conn_dir.is_dir():
                 continue
 
-            # Look for ontology_v2.json
+            # Look for ontology file (v3 first, then v2)
+            v3_file = conn_dir / "ontology_v3.json"
             v2_file = conn_dir / "ontology_v2.json"
-            if v2_file.exists():
+            ontology_file = v3_file if v3_file.exists() else v2_file
+            if ontology_file.exists():
                 try:
-                    with open(v2_file, "r", encoding="utf-8") as f:
+                    with open(ontology_file, "r", encoding="utf-8") as f:
                         data = json.load(f)
 
-                        # V2 格式：直接是本体数据，无嵌套的 "ontology" 字段
-                        classes = data.get("classes", [])
+                        version = data.get("version", "2.0")
+
+                        # V3 格式：schema.classes.{domain}.{class_name}
+                        # V2 格式：classes 是列表
+                        if version.startswith("3"):
+                            schema_classes = data.get("schema", {}).get("classes", {})
+                            class_count = sum(len(domain_classes) for domain_classes in schema_classes.values())
+                            # V3 中 attributes 在每个 class 的 attributes 字段
+                            property_count = sum(
+                                len(cls.get("attributes", {}))
+                                for domain_classes in schema_classes.values()
+                                for cls in domain_classes.values()
+                            )
+                        else:
+                            classes = data.get("classes", [])
+                            class_count = len(classes)
+                            property_count = sum(len(cls.get("properties", [])) for cls in classes)
+
+                        # 从 meta 获取创建时间
+                        meta = data.get("meta", {})
+                        created_at = meta.get("created_at") or data.get("created_at")
+
                         ontologies.append({
-                            "connection_name": data.get("connection_name", conn_dir.name),
-                            "version": data.get("version", "2.0"),
-                            "created_at": data.get("created_at"),
-                            "class_count": len(classes),
-                            "property_count": sum(len(cls.get("properties", [])) for cls in classes),
+                            "connection_name": meta.get("source_connection") or data.get("connection_name", conn_dir.name),
+                            "version": version,
+                            "created_at": created_at,
+                            "class_count": class_count,
+                            "property_count": property_count,
                             "relationship_count": len(data.get("relationships", [])),
                             "business_rule_count": len(data.get("business_rules", [])),
                             "uncertainty_count": len(data.get("uncertainties", [])),
-                            "has_domain_insights": bool(data.get("domains")),
+                            "has_domain_insights": bool(data.get("domains") or meta.get("domains")),
                         })
                 except Exception as e:
-                    logger.warning(f"Error reading ontology file {v2_file}: {e}")
+                    logger.warning(f"Error reading ontology file {ontology_file}: {e}")
                     continue
 
         return ontologies
@@ -563,8 +585,14 @@ async def get_ontology(name: str, version: str = "latest"):
 
         ontology_path = Path("./ontology_store") / name
 
-        # 仅支持 V2 格式
-        if version == "latest" or version == "v2":
+        # 优先使用 v3，回退到 v2
+        if version == "latest":
+            v3_path = ontology_path / "ontology_v3.json"
+            v2_path = ontology_path / "ontology_v2.json"
+            file_path = v3_path if v3_path.exists() else v2_path
+        elif version == "v3":
+            file_path = ontology_path / "ontology_v3.json"
+        elif version == "v2":
             file_path = ontology_path / "ontology_v2.json"
         else:
             file_path = ontology_path / f"ontology_{version}.json"

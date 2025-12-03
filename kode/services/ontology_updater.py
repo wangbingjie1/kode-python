@@ -310,8 +310,11 @@ class OntologyDescriptionUpdater:
                     "message": f"无法解析实体: {entity_str}",
                 }
 
-            # 2. 加载本体文件
-            ontology_file = Path("ontology_store") / connection_name / "ontology_v2.json"
+            # 2. 加载本体文件（优先 v3，回退到 v2）
+            ontology_base = Path("ontology_store") / connection_name
+            ontology_file = ontology_base / "ontology_v3.json"
+            if not ontology_file.exists():
+                ontology_file = ontology_base / "ontology_v2.json"
             logger.info(f"[OntologyUpdater] 加载本体文件: {ontology_file}")
 
             if not ontology_file.exists():

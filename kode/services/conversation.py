@@ -119,9 +119,7 @@ class AsyncConversationService:
                     MappingValidatorTool(),  # 映射验证工具
                 ]
             )
-            logger.info(
-                "Database and ontology tools loaded (includes OntologyUpdateTool)"
-            )
+            logger.info("Database and ontology tools loaded (includes OntologyUpdateTool)")
 
             # Load existing database connections from persistence FIRST
             self._load_database_connections()
@@ -272,6 +270,19 @@ SchemaQuery(connection_name="yanfa", table_name="order")
 - 支持复杂查询：JOIN、聚合、分组、子查询等
 - 识别数据质量问题
 - **禁止**只输出 SQL 代码块让用户自己执行，你必须代替用户执行查询
+
+**⚠️ 时间查询（重要）**:
+- **禁止**自己计算时间戳！使用占位符 `@时间描述:格式@`，工具自动转换
+- 格式: 无后缀=毫秒时间戳, :s=秒, :date=日期, :datetime=日期时间
+- 示例：
+  ```sql
+  -- 时间戳字段（毫秒）
+  WHERE pay_at >= @2025年10月@ AND pay_at < @2025年11月@
+  -- datetime 字段
+  WHERE created_at >= @上月:datetime@ AND created_at < @本月:datetime@
+  -- date 字段
+  WHERE order_date >= @最近30天:date@
+  ```
 
 ### 4. AI 原生可视化分析 ⭐ 核心能力
 - **自动生成图表**：查询数据后，**必须**使用 ChartGenerator 工具生成图表
@@ -448,7 +459,7 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
 ## 数据查询流程
 
 1. 使用 OntologySearch 搜索业务术语
-2. 从结果获取 table_mapping 和 column_mapping
+2. 从结果获取 table_mapping 和 column_mapping，如果返回了uncertainties内容，并且发现干扰你分析正确的答案，请调用AskUserTool
 3. 使用 DatabaseExecuteQuery 执行 SQL
 
 ## 上下文预算管理
@@ -557,10 +568,19 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
                             )
                         except Exception as e:
                             context_parts.append(f"  (领域索引加载失败: {e})")
-        # Check ontology cache
+        # Check ontology cache (v3 优先，回退到 v2)
         ontology_dir = Path(ontology_path)
         if ontology_dir.exists():
-            cached_ontologies = list(ontology_dir.glob("*/ontology_v2.json"))
+            # 优先查找 v3，如果没有再查找 v2
+            cached_ontologies_v3 = list(ontology_dir.glob("*/ontology_v3.json"))
+            cached_ontologies_v2 = list(ontology_dir.glob("*/ontology_v2.json"))
+
+            # 合并，v3 优先（同一个连接只保留 v3）
+            v3_conns = {f.parent.name for f in cached_ontologies_v3}
+            cached_ontologies = cached_ontologies_v3 + [
+                f for f in cached_ontologies_v2 if f.parent.name not in v3_conns
+            ]
+
             context_parts.append(f"业务本体文件所在路径: {ontology_path}")
             if cached_ontologies:
                 context_parts.append("\n## 已缓存的业务本体(Ontology)")

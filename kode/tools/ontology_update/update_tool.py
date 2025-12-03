@@ -112,8 +112,11 @@ class OntologyUpdateTool(KodeTool):
 
         with _GLOBAL_LOCK:
             if connection_name not in _GLOBAL_MANAGERS:
-                # 确定本体文件路径（修正：使用正确的目录结构）
-                ontology_path = Path(f"ontology_store/{connection_name}/ontology_v2.json")
+                # 确定本体文件路径（优先 v3，回退到 v2）
+                ontology_base = Path(f"ontology_store/{connection_name}")
+                ontology_path = ontology_base / "ontology_v3.json"
+                if not ontology_path.exists():
+                    ontology_path = ontology_base / "ontology_v2.json"
 
                 if not ontology_path.exists():
                     logger.warning(f"⚠️ 本体文件不存在: {ontology_path}，将创建新本体")

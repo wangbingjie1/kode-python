@@ -36,10 +36,18 @@ router = APIRouter()
 
 
 def _get_ontology_file(connection_name: str) -> Path:
-    """获取本体文件路径"""
+    """获取本体文件路径（优先 v3，回退到 v2）"""
     config = ConfigManager()
     ontology_path = config.get("storage.ontology_path", "./ontology_store")
-    return Path(ontology_path) / connection_name / "ontology_v2.json"
+    base_path = Path(ontology_path) / connection_name
+
+    # 优先使用 v3 版本
+    v3_file = base_path / "ontology_v3.json"
+    if v3_file.exists():
+        return v3_file
+
+    # 回退到 v2 版本
+    return base_path / "ontology_v2.json"
 
 
 def _load_ontology(ontology_file: Path) -> Dict[str, Any]:

@@ -343,10 +343,10 @@ function isTableData(data: any): boolean {
 
 // 提取并反转义SQL语句
 const extractedSQL = computed(() => {
-  if (!parsedResult.value || !parsedResult.value.sql) return null
+  if (!parsedResult.value || !parsedResult.value.executed_sql) return null
 
   // 反转义SQL字符串：\n → 换行, \t → 制表符
-  const sql = parsedResult.value.sql
+  const sql = parsedResult.value.executed_sql
   const unescaped = sql
     .replace(/\\n/g, '\n')
     .replace(/\\t/g, '\t')

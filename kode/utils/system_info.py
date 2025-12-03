@@ -104,7 +104,7 @@ def format_system_info_static() -> str:
 
 def format_system_info_dynamic() -> str:
     """
-    格式化动态系统信息（当前时间等）
+    格式化动态系统信息（当前时间）
 
     这部分会每次变化，应该注入到 user message 而非 system prompt。
 
