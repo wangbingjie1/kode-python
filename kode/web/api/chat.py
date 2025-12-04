@@ -144,16 +144,13 @@ async def create_conversation(
             )
             total_conversations = conversation_count_result.scalar() or 0
 
-            # 更新使用量记录中的会话计数
-            await BillingService.increment_usage(
-                db=db,
-                user_id=current_user.id,
-                conversation_count=total_conversations,
-            )
-            logger.info(f"Updated conversation count to {total_conversations} for user {current_user.id}")
+            # ❌ 移除错误的 usage 更新调用
+            # increment_usage 不支持 conversation_count 参数
+            # 会话计数不计入配额，只用于统计展示
+            logger.info(f"Created conversation {db_conversation.id} for user {current_user.id} (total: {total_conversations})")
     except Exception as e:
-        # 使用量更新失败不应该影响主流程
-        logger.warning(f"Failed to update conversation count: {e}")
+        # 会话计数统计失败不应该影响主流程
+        logger.warning(f"Failed to count conversations: {e}")
 
     return db_conversation
 
@@ -231,16 +228,12 @@ async def delete_conversation(
             )
             total_conversations = conversation_count_result.scalar() or 0
 
-            # 更新使用量记录中的会话计数
-            await BillingService.increment_usage(
-                db=db,
-                user_id=current_user.id,
-                conversation_count=total_conversations,
-            )
-            logger.info(f"Updated conversation count to {total_conversations} after deletion for user {current_user.id}")
+            # ❌ 移除错误的 usage 更新调用
+            # increment_usage 不支持 conversation_count 参数
+            logger.info(f"Deleted conversation for user {current_user.id} (remaining: {total_conversations})")
     except Exception as e:
-        # 使用量更新失败不应该影响主流程
-        logger.warning(f"Failed to update conversation count after deletion: {e}")
+        # 会话计数统计失败不应该影响主流程
+        logger.warning(f"Failed to count conversations after deletion: {e}")
 
 
 @router.get("/projects/{project_id}/conversations", response_model=List[ConversationResponse])

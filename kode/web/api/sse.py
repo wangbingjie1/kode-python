@@ -624,6 +624,9 @@ async def event_generator(
             await db.commit()
 
             # ✨ 更新使用量统计（使用真实的 Anthropic API token 数据）
+            # ⚠️ 关键说明：actual_tokens 已经包含了所有 token 类型
+            # total_input_tokens = regular_input + cache_creation + cache_read
+            # 所以 actual_tokens = total_input_tokens + total_output_tokens 是正确的
             actual_tokens = total_input_tokens + total_output_tokens
 
             # 💰 计算真实成本（Anthropic 定价，< 200K tokens）
@@ -653,12 +656,29 @@ async def event_generator(
             savings_percentage = (cost_savings / no_cache_cost * 100) if no_cache_cost > 0 else 0
 
             try:
+                # ✅ 验证：actual_tokens 应该等于 Anthropic API 返回的总 token 数
+                # 因为 total_input_tokens 是 API 返回的完整输入计数（已包含缓存 token）
+                if actual_tokens == 0:
+                    logger.warning(
+                        f"[Token Billing WARNING] Billing 0 tokens! This may indicate:\n"
+                        f"  1. Stream ended before first API response (network issue)\n"
+                        f"  2. Token counting logic error\n"
+                        f"  Conversation: {conversation_id}"
+                    )
+                else:
+                    logger.info(
+                        f"[Token Billing] Billable tokens: {actual_tokens:,} "
+                        f"(input={total_input_tokens:,}, output={total_output_tokens:,})"
+                    )
+
                 await BillingService.increment_usage(
                     db=db,
                     user_id=user_id,
-                    token_count=actual_tokens,
+                    token_count=actual_tokens,  # ✅ 这是正确的，已包含所有 token
                     database_query_count=0,
                 )
+
+                logger.info(f"[Token Billing] Successfully updated usage for user {user_id}")
 
                 # 详细的开发日志（包含成本信息）
                 logger.info(
@@ -695,8 +715,16 @@ async def event_generator(
                 )
 
             except Exception as e:
-                # 使用量更新失败不应该影响主流程
-                logger.warning(f"[SSE] Failed to update usage: {e}")
+                # 使用量更新失败不应该影响主流程，但需要详细记录
+                logger.error(
+                    f"[Token Billing ERROR] Failed to update usage!\n"
+                    f"  User: {user_id}\n"
+                    f"  Conversation: {conversation_id}\n"
+                    f"  Attempted to bill: {actual_tokens:,} tokens\n"
+                    f"  Error: {str(e)}\n"
+                    f"  ⚠️ User will NOT be charged for this conversation!",
+                    exc_info=True
+                )
 
         # 标记消息已保存
         messages_saved = True
@@ -765,16 +793,18 @@ async def event_generator(
                         if 'assistant_metadata' in locals():
                             final_metadata.update(assistant_metadata)
 
+                        # ✅ 修复：所有 token 变量在顶部已初始化为 0，不需要 locals() 检查
+                        # 这样即使在首次迭代前中断，也能保存正确的 0 值而非 None
                         final_msg = Message(
                             conversation_id=conversation_id,
                             role="assistant",
                             content="",  # 内容为空，只用于记录 token 和 metadata
                             sequence=message_sequence,
                             message_metadata=final_metadata,
-                            input_tokens=total_input_tokens,
-                            output_tokens=total_output_tokens,
-                            cache_creation_tokens=total_cache_creation_tokens if 'total_cache_creation_tokens' in locals() else 0,
-                            cache_read_tokens=total_cache_read_tokens if 'total_cache_read_tokens' in locals() else 0,
+                            input_tokens=total_input_tokens,  # 已在 L315 初始化
+                            output_tokens=total_output_tokens,  # 已在 L316 初始化
+                            cache_creation_tokens=total_cache_creation_tokens,  # 已在 L317 初始化
+                            cache_read_tokens=total_cache_read_tokens,  # 已在 L318 初始化
                         )
                         db.add(final_msg)
                         await db.commit()

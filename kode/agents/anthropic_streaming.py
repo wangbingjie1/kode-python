@@ -87,9 +87,16 @@ class AnthropicStreamingAgent:
         self.anthropic_tools = self._prepare_tools()
 
     def _prepare_tools(self) -> List[Dict]:
-        """Convert Kode tools to Anthropic tool format."""
+        """Convert Kode tools to Anthropic tool format.
+
+        按照 Anthropic Prompt Caching 最佳实践，在最后一个 tool 上添加 cache_control。
+        缓存层级顺序: tools → system → messages
+        参考: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+        """
         anthropic_tools = []
-        for tool in self.tools:
+        total_tools = len(self.tools)
+
+        for i, tool in enumerate(self.tools):
             tool_schema = {
                 "name": tool.name,
                 "description": tool.description,
@@ -102,61 +109,54 @@ class AnthropicStreamingAgent:
                     "properties": schema.get("properties", {}),
                     "required": schema.get("required", []),
                 }
+
+            # 在最后一个 tool 上添加 cache_control，标记 tools 定义的缓存边界
+            if i == total_tools - 1:
+                tool_schema["cache_control"] = {"type": "ephemeral"}
+
             anthropic_tools.append(tool_schema)
 
         return anthropic_tools
 
-    def _build_context_budget_info(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        cache_creation_tokens: int,
-        cache_read_tokens: int,
-        iteration: int,
-    ) -> str:
-        """
-        Build context budget information for the agent.
+    def _add_cache_control_to_messages(self, messages: List[Dict]) -> List[Dict]:
+        """在最后一条消息的最后一个 content block 上添加 cache_control。
 
-        This provides the agent with awareness of its token usage and remaining capacity.
-        Also includes current time (dynamic info that should not be cached).
+        按照 Anthropic 最佳实践，在对话末尾设置缓存断点以最大化缓存命中率。
 
         Args:
-            input_tokens: Total input tokens used so far
-            output_tokens: Total output tokens used so far
-            cache_creation_tokens: Total cache creation tokens
-            cache_read_tokens: Total cache read tokens
-            iteration: Current iteration number
+            messages: 原始消息列表
 
         Returns:
-            Formatted budget information string (including time)
+            添加了 cache_control 的消息列表（深拷贝）
         """
-        from kode.utils.system_info import format_system_info_dynamic
+        if not messages:
+            return messages
 
-        # Get current time (dynamic info)
-        time_info = format_system_info_dynamic()
+        # 深拷贝避免修改原始数据
+        import copy
+        messages_copy = copy.deepcopy(messages)
 
-        # Calculate totals
-        total_tokens_used = input_tokens + output_tokens
-        context_limit = 2000000  # Anthropic's context window for Claude Sonnet 4.5
-        remaining_tokens = context_limit - total_tokens_used
+        # 找到最后一条消息
+        last_msg = messages_copy[-1]
+        content = last_msg.get("content")
 
-        # Calculate percentage used
-        usage_percentage = (total_tokens_used / context_limit) * 100 if context_limit > 0 else 0
+        # 处理不同的 content 类型
+        if isinstance(content, str):
+            # 字符串类型 → 转换为 content block 格式并添加 cache_control
+            last_msg["content"] = [
+                {
+                    "type": "text",
+                    "text": content,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
+        elif isinstance(content, list) and len(content) > 0:
+            # 列表类型 → 在最后一个 block 上添加 cache_control
+            last_block = content[-1]
+            if isinstance(last_block, dict):
+                last_block["cache_control"] = {"type": "ephemeral"}
 
-        # Build budget info message
-        budget_lines = [time_info, "", f"## 🔋你的剩余注意力百分比：{100 - usage_percentage:.1f}%"]
-
-        # Add warnings based on usage
-        if usage_percentage >= 70:
-            budget_lines.append("⚠️ **注意**: 注意力上下文使用已超过70%，你的注意力已经开始涣散。")
-
-        budget_lines.append("")
-        budget_lines.append("**重要**: 你需要自主管理自己的上下文使用情况，并在必要时采取措施：")
-        budget_lines.append("- 剩余30%时候，调用上下文工具压缩上下文")
-        budget_lines.append("- 剩余10%时候，提醒用户开启新对话")
-        budget_lines.append("")
-
-        return "\n".join(budget_lines)
+        return messages_copy
 
     def _trim_messages_for_context(
         self, messages: List[Dict], max_context_tokens: int = 150000
@@ -465,29 +465,12 @@ class AnthropicStreamingAgent:
                 else:
                     self.on_iteration(iteration)
 
-            # Calculate and inject context budget information
-            # ⚠️ IMPORTANT: 不要修改 system prompt，否则会破坏缓存
-            # 将 budget info 作为独立的 user message 注入
-            context_budget_info = self._build_context_budget_info(
-                total_input_tokens,
-                total_output_tokens,
-                total_cache_creation_tokens,
-                total_cache_read_tokens,
-                iteration,
-            )
-
-            # 在对话历史的最后插入 budget info（作为 user message）
-            if context_budget_info.strip():
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"<system_info>\n{context_budget_info}\n</system_info>",
-                    }
-                )
-
             # ===== Prompt Caching Support =====
             # 使用 Anthropic 的 Prompt Caching 功能来缓存系统提示词和工具定义
             # 参考: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+            #
+            # 缓存层级顺序: tools → system → messages
+            # 最佳实践: "Always set an explicit cache breakpoint at the end of your conversation"
 
             # 将 system prompt 转换为支持缓存的格式（保持静态）
             system_with_cache = [
@@ -497,6 +480,10 @@ class AnthropicStreamingAgent:
                     "cache_control": {"type": "ephemeral"},  # 标记为可缓存
                 }
             ]
+
+            # 在最后一条消息的最后一个 content block 上添加 cache_control
+            # 这样可以让对话历史也被缓存，实现增量缓存
+            messages_with_cache = self._add_cache_control_to_messages(messages)
 
             # Stream response from Anthropic (with retry for network errors)
             full_text = ""
@@ -559,7 +546,7 @@ class AnthropicStreamingAgent:
                         max_tokens=output_tokens,
                         temperature=1.0,  # Required for Extended Thinking
                         system=system_with_cache,  # ← 使用缓存优化的系统提示词
-                        messages=messages,
+                        messages=messages_with_cache,  # ← 使用添加了 cache_control 的消息
                         tools=self.anthropic_tools if self.anthropic_tools else anthropic.NOT_GIVEN,
                         thinking={"type": "enabled", "budget_tokens": thinking_budget},
                     ) as stream:
