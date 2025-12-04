@@ -624,31 +624,24 @@ async def event_generator(
             await db.commit()
 
             # ✨ 更新使用量统计（使用真实的 Anthropic API token 数据）
-            # ⚠️ 关键说明：actual_tokens 已经包含了所有 token 类型
-            # total_input_tokens = regular_input + cache_creation + cache_read
-            # 所以 actual_tokens = total_input_tokens + total_output_tokens 是正确的
-            actual_tokens = total_input_tokens + total_output_tokens
+            # ⚠️ 关键说明：Anthropic API 的 input_tokens 是总输入（已包含所有类型）
+            # input_tokens = 常规输入 + cache_creation_input_tokens + cache_read_input_tokens
+            # 所以 true_total_input_tokens 就是 input_tokens 本身
+            true_total_input_tokens = total_input_tokens  # ✅ 总输入（已包含缓存）
+            regular_input_tokens = total_input_tokens - total_cache_creation_tokens - total_cache_read_tokens  # 常规输入
+            actual_tokens = true_total_input_tokens + total_output_tokens
 
             # 💰 计算真实成本（Anthropic 定价，< 200K tokens）
             # 参考: https://www.anthropic.com/pricing
-            regular_input_tokens = (
-                total_input_tokens - total_cache_creation_tokens - total_cache_read_tokens
-            )
             regular_input_cost = regular_input_tokens * 3 / 1_000_000  # $3/MTok
-            cache_creation_cost = (
-                total_cache_creation_tokens * 3.75 / 1_000_000
-            )  # $3.75/MTok (1.25×)
+            cache_creation_cost = total_cache_creation_tokens * 3.75 / 1_000_000  # $3.75/MTok (1.25×)
             cache_read_cost = total_cache_read_tokens * 0.30 / 1_000_000  # $0.30/MTok (节省90%)
             output_cost = total_output_tokens * 15 / 1_000_000  # $15/MTok
 
             actual_cost = regular_input_cost + cache_creation_cost + cache_read_cost + output_cost
 
             # 计算无缓存的成本（对比）
-            no_cache_input_cost = (
-                (regular_input_tokens + total_cache_creation_tokens + total_cache_read_tokens)
-                * 3
-                / 1_000_000
-            )
+            no_cache_input_cost = true_total_input_tokens * 3 / 1_000_000
             no_cache_cost = no_cache_input_cost + output_cost
 
             # 节省的成本和百分比
@@ -656,8 +649,7 @@ async def event_generator(
             savings_percentage = (cost_savings / no_cache_cost * 100) if no_cache_cost > 0 else 0
 
             try:
-                # ✅ 验证：actual_tokens 应该等于 Anthropic API 返回的总 token 数
-                # 因为 total_input_tokens 是 API 返回的完整输入计数（已包含缓存 token）
+                # ✅ 验证：actual_tokens 是完整计数（常规 + 缓存 + 输出）
                 if actual_tokens == 0:
                     logger.warning(
                         f"[Token Billing WARNING] Billing 0 tokens! This may indicate:\n"
@@ -668,13 +660,16 @@ async def event_generator(
                 else:
                     logger.info(
                         f"[Token Billing] Billable tokens: {actual_tokens:,} "
-                        f"(input={total_input_tokens:,}, output={total_output_tokens:,})"
+                        f"(regular_input={regular_input_tokens:,}, "
+                        f"cache_creation={total_cache_creation_tokens:,}, "
+                        f"cache_read={total_cache_read_tokens:,}, "
+                        f"output={total_output_tokens:,})"
                     )
 
                 await BillingService.increment_usage(
                     db=db,
                     user_id=user_id,
-                    token_count=actual_tokens,  # ✅ 这是正确的，已包含所有 token
+                    token_count=actual_tokens,  # ✅ 完整计数
                     database_query_count=0,
                 )
 
@@ -691,7 +686,7 @@ async def event_generator(
                     f"  缓存读取:   {total_cache_read_tokens:>8,} tokens × $0.30/MTok  = ${cache_read_cost:>8.6f}\n"
                     f"  输出生成:   {total_output_tokens:>8,} tokens × $15.00/MTok = ${output_cost:>8.6f}\n"
                     f"  ─────────────────────────────────────────────────────────────\n"
-                    f"  总输入:     {total_input_tokens:>8,} tokens\n"
+                    f"  总输入:     {true_total_input_tokens:>8,} tokens (常规 + 缓存创建 + 缓存读取)\n"
                     f"  总输出:     {total_output_tokens:>8,} tokens\n"
                     f"  总计:       {actual_tokens:>8,} tokens\n"
                     f"\n"
@@ -728,6 +723,53 @@ async def event_generator(
 
         # 标记消息已保存
         messages_saved = True
+
+        # ✅ 在 done 之前发送完整的 token 统计和成本分析
+        # 这样前端可以直接使用,不需要再查询数据库
+
+        # ⚠️ 关键说明：Anthropic API 的 input_tokens 是总输入（已包含所有类型）
+        # input_tokens = 常规输入 + cache_creation_input_tokens + cache_read_input_tokens
+        true_total_input_tokens = total_input_tokens  # ✅ 总输入（已包含缓存）
+        regular_input_tokens = total_input_tokens - total_cache_creation_tokens - total_cache_read_tokens  # 常规输入
+
+        # 成本计算（Anthropic 定价 < 200K tokens）
+        regular_input_cost = regular_input_tokens * 3 / 1_000_000  # $3/MTok
+        cache_creation_cost = total_cache_creation_tokens * 3.75 / 1_000_000  # $3.75/MTok (1.25×)
+        cache_read_cost = total_cache_read_tokens * 0.30 / 1_000_000  # $0.30/MTok (节省90%)
+        output_cost = total_output_tokens * 15 / 1_000_000  # $15/MTok
+
+        actual_cost = regular_input_cost + cache_creation_cost + cache_read_cost + output_cost
+
+        # 无缓存成本对比
+        no_cache_input_cost = true_total_input_tokens * 3 / 1_000_000
+        no_cache_cost = no_cache_input_cost + output_cost
+        cache_savings = no_cache_cost - actual_cost
+
+        final_token_stats = {
+            "type": "final_token_stats",
+            "content": "",
+            "metadata": {
+                "total_input_tokens": true_total_input_tokens,  # ✅ 真实总输入
+                "total_output_tokens": total_output_tokens,
+                "total_tokens": true_total_input_tokens + total_output_tokens,
+                "cache_creation_tokens": total_cache_creation_tokens,
+                "cache_read_tokens": total_cache_read_tokens,
+                "regular_input_tokens": regular_input_tokens,  # ✅ 常规输入（非缓存）
+                # 成本分析（USD）
+                "cost_breakdown": {
+                    "regular_input_cost": regular_input_cost,
+                    "cache_creation_cost": cache_creation_cost,
+                    "cache_read_cost": cache_read_cost,
+                    "output_cost": output_cost,
+                },
+                "total_cost": actual_cost,
+                "cache_savings": cache_savings,
+                "savings_percentage": (cache_savings / no_cache_cost * 100) if no_cache_cost > 0 else 0,
+                "iteration_count": len(api_traces),
+            }
+        }
+        yield f"data: {json.dumps(final_token_stats, ensure_ascii=False)}\n\n"
+        logger.info(f"[SSE] Sent final_token_stats to frontend: {true_total_input_tokens + total_output_tokens:,} tokens")
 
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done', 'content': '', 'metadata': {}}, ensure_ascii=False)}\n\n"

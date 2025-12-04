@@ -26,35 +26,26 @@
       </button>
     </div>
 
-    <div v-if="loading" class="loading-state">
-      <div class="spinner"></div>
-      <span>加载成本数据...</span>
-    </div>
-
-    <div v-else-if="error" class="error-state">
-      <p>{{ error }}</p>
-    </div>
-
-    <div v-else-if="!isCollapsed && costData" class="card-body">
+    <div v-if="!isCollapsed" class="card-body">
       <!-- 总览统计 -->
       <div class="section summary">
         <div class="stats-grid">
           <div class="stat-item">
-            <div class="stat-label">API 调用次数</div>
-            <div class="stat-value">{{ costData.summary.total_calls }}</div>
+            <div class="stat-label">迭代次数</div>
+            <div class="stat-value">{{ stats.iterations }}</div>
           </div>
           <div class="stat-item">
             <div class="stat-label">总 Tokens</div>
-            <div class="stat-value">{{ formatNumber(costData.summary.total_tokens) }}</div>
+            <div class="stat-value">{{ formatNumber(stats.total) }}</div>
           </div>
           <div class="stat-item highlight">
             <div class="stat-label">总成本</div>
-            <div class="stat-value cost">${{ costData.summary.total_cost_usd.toFixed(6) }}</div>
-            <div class="stat-sublabel">¥{{ (costData.summary.total_cost_usd * 7.3).toFixed(4) }}</div>
+            <div class="stat-value cost">${{ stats.totalCost.toFixed(6) }}</div>
+            <div class="stat-sublabel">¥{{ (stats.totalCost * 7.3).toFixed(4) }}</div>
           </div>
-          <div class="stat-item savings" v-if="costData.summary.total_savings_usd > 0">
+          <div class="stat-item savings" v-if="stats.totalSavings > 0">
             <div class="stat-label">缓存节省</div>
-            <div class="stat-value success">${{ costData.summary.total_savings_usd.toFixed(6) }}</div>
+            <div class="stat-value success">${{ stats.totalSavings.toFixed(6) }}</div>
             <div class="stat-sublabel">约 {{ savingsPercentage }}% 成本</div>
           </div>
         </div>
@@ -75,65 +66,40 @@
           <tbody>
             <tr>
               <td>常规输入</td>
-              <td>{{ formatNumber(regularInputTokens) }}</td>
+              <td>{{ formatNumber(stats.regularInput) }}</td>
               <td>$3.00/MTok</td>
-              <td>${{ regularInputCost.toFixed(6) }}</td>
+              <td>${{ stats.regularInputCost.toFixed(6) }}</td>
             </tr>
             <tr class="cache-creation">
               <td>缓存创建</td>
-              <td>{{ formatNumber(costData.summary.total_cache_creation_tokens) }}</td>
+              <td>{{ formatNumber(stats.cacheCreation) }}</td>
               <td>$3.75/MTok (1.25×)</td>
-              <td>${{ cacheCreationCost.toFixed(6) }}</td>
+              <td>${{ stats.cacheCreationCost.toFixed(6) }}</td>
             </tr>
             <tr class="cache-read">
               <td>缓存读取</td>
-              <td>{{ formatNumber(costData.summary.total_cache_read_tokens) }}</td>
+              <td>{{ formatNumber(stats.cacheRead) }}</td>
               <td>$0.30/MTok (节省90%)</td>
-              <td>${{ cacheReadCost.toFixed(6) }}</td>
+              <td>${{ stats.cacheReadCost.toFixed(6) }}</td>
             </tr>
             <tr class="output">
               <td>输出生成</td>
-              <td>{{ formatNumber(costData.summary.total_output_tokens) }}</td>
+              <td>{{ formatNumber(stats.output) }}</td>
               <td>$15.00/MTok</td>
-              <td>${{ outputCost.toFixed(6) }}</td>
+              <td>${{ stats.outputCost.toFixed(6) }}</td>
             </tr>
           </tbody>
         </table>
-      </div>
-
-      <!-- API 调用明细 (可选展开) -->
-      <div class="section" v-if="showDetails">
-        <h4 class="section-title">
-          API 调用明细
-          <button @click="showTraceDetails = !showTraceDetails" class="toggle-details-btn">
-            {{ showTraceDetails ? '收起' : '展开' }}
-          </button>
-        </h4>
-        <div v-if="showTraceDetails" class="traces-list">
-          <div v-for="trace in costData.traces" :key="trace.id" class="trace-item">
-            <div class="trace-header">
-              <span class="trace-iteration">迭代 #{{ trace.iteration }}</span>
-              <span class="trace-model">{{ trace.model_name }}</span>
-              <span class="trace-cost">${{ trace.costs.total.toFixed(6) }}</span>
-            </div>
-            <div class="trace-stats">
-              <span>输入: {{ formatNumber(trace.tokens.input) }}</span>
-              <span>输出: {{ formatNumber(trace.tokens.output) }}</span>
-              <span v-if="trace.tokens.cache_read > 0">缓存: {{ formatNumber(trace.tokens.cache_read) }}</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import api from '@/services/api'
+import { ref, computed } from 'vue'
+import { useChatStore } from '@/stores/chat'
 
 interface Props {
-  conversationId: string
   showDetails?: boolean
 }
 
@@ -141,72 +107,69 @@ const props = withDefaults(defineProps<Props>(), {
   showDetails: false
 })
 
+const chatStore = useChatStore()
+
 const isCollapsed = ref(false)
-const showTraceDetails = ref(false)
-const loading = ref(false)
-const error = ref<string | null>(null)
-const costData = ref<any>(null)
 
-const showCost = computed(() => !!props.conversationId)
+// ✅ 直接使用 chat store 的实时数据（来自 SSE 流）
+const tokenUsage = computed(() => chatStore.conversationTokenUsage)
+const showCost = computed(() =>
+  tokenUsage.value.total_tokens > 0 ||
+  tokenUsage.value.total_input_tokens > 0
+)
 
-// 计算各类 token 成本
-const regularInputTokens = computed(() => {
-  if (!costData.value) return 0
-  return costData.value.summary.total_input_tokens -
-         costData.value.summary.total_cache_creation_tokens -
-         costData.value.summary.total_cache_read_tokens
-})
+// ✅ 使用 SSE 实时数据计算统计
+const stats = computed(() => {
+  const usage = tokenUsage.value
 
-const regularInputCost = computed(() => regularInputTokens.value * 3 / 1_000_000)
-const cacheCreationCost = computed(() => {
-  if (!costData.value) return 0
-  return costData.value.summary.total_cache_creation_tokens * 3.75 / 1_000_000
-})
-const cacheReadCost = computed(() => {
-  if (!costData.value) return 0
-  return costData.value.summary.total_cache_read_tokens * 0.30 / 1_000_000
-})
-const outputCost = computed(() => {
-  if (!costData.value) return 0
-  return costData.value.summary.total_output_tokens * 15 / 1_000_000
+  // 计算常规输入：从 total_input_tokens 减去缓存部分
+  // ⚠️ 注意：后端的 total_input_tokens 已经是完整计数（包含所有输入）
+  const regularInput = usage.total_input_tokens -
+                      (usage.cache_creation_input_tokens || 0) -
+                      (usage.cache_read_input_tokens || 0)
+  const cacheCreation = usage.cache_creation_input_tokens || 0
+  const cacheRead = usage.cache_read_input_tokens || 0
+  const output = usage.total_output_tokens || 0
+
+  // 成本计算（Anthropic 定价）
+  const regularInputCost = regularInput * 3 / 1_000_000
+  const cacheCreationCost = cacheCreation * 3.75 / 1_000_000
+  const cacheReadCost = cacheRead * 0.30 / 1_000_000
+  const outputCost = output * 15 / 1_000_000
+  const totalCost = regularInputCost + cacheCreationCost + cacheReadCost + outputCost
+
+  // 无缓存成本对比
+  const noCacheCost = usage.total_input_tokens * 3 / 1_000_000 + outputCost
+  const totalSavings = noCacheCost - totalCost
+
+  return {
+    regularInput,
+    cacheCreation,
+    cacheRead,
+    output,
+    totalInput: usage.total_input_tokens,
+    totalOutput: output,
+    total: usage.total_tokens,
+    regularInputCost,
+    cacheCreationCost,
+    cacheReadCost,
+    outputCost,
+    totalCost,
+    totalSavings,
+    noCacheCost,
+    iterations: usage.iterations || 0
+  }
 })
 
 const savingsPercentage = computed(() => {
-  if (!costData.value || costData.value.summary.total_cost_usd === 0) return '0.0'
-  const noCacheCost = costData.value.summary.total_cost_usd + costData.value.summary.total_savings_usd
-  const percentage = (costData.value.summary.total_savings_usd / noCacheCost) * 100
+  if (stats.value.noCacheCost === 0) return '0.0'
+  const percentage = (stats.value.totalSavings / stats.value.noCacheCost) * 100
   return percentage.toFixed(1)
 })
 
 const formatNumber = (num: number): string => {
   return num.toLocaleString('zh-CN')
 }
-
-const fetchCostData = async () => {
-  if (!props.conversationId) return
-
-  loading.value = true
-  error.value = null
-
-  try {
-    const response = await api.get(`/chat/conversations/${props.conversationId}/api_traces`)
-    costData.value = response.data
-  } catch (err: any) {
-    console.error('Failed to fetch cost data:', err)
-    error.value = err.response?.data?.detail || '加载成本数据失败'
-  } finally {
-    loading.value = false
-  }
-}
-
-// 监听会话 ID 变化
-watch(() => props.conversationId, () => {
-  fetchCostData()
-}, { immediate: true })
-
-onMounted(() => {
-  fetchCostData()
-})
 </script>
 
 <style scoped>

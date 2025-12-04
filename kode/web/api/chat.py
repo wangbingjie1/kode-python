@@ -280,10 +280,16 @@ async def get_conversation_api_traces(
     traces = result.scalars().all()
 
     # 计算汇总统计
-    total_input_tokens = sum(t.input_tokens for t in traces)
-    total_output_tokens = sum(t.output_tokens for t in traces)
+    # ⚠️ 关键说明：trace.input_tokens 只是常规输入，不包含缓存
+    # 真实总输入 = regular + cache_creation + cache_read
+    regular_input_tokens = sum(t.input_tokens for t in traces)
     total_cache_creation = sum(t.cache_creation_input_tokens for t in traces)
     total_cache_read = sum(t.cache_read_input_tokens for t in traces)
+    total_output_tokens = sum(t.output_tokens for t in traces)
+
+    # ✅ 完整输入计数
+    true_total_input_tokens = regular_input_tokens + total_cache_creation + total_cache_read
+    true_total_tokens = true_total_input_tokens + total_output_tokens
 
     total_cost = sum(t.total_cost for t in traces)
     total_savings = sum(t.cost_savings for t in traces)
@@ -292,8 +298,8 @@ async def get_conversation_api_traces(
         "conversation_id": conversation_id,
         "summary": {
             "total_calls": len(traces),
-            "total_tokens": total_input_tokens + total_output_tokens,
-            "total_input_tokens": total_input_tokens,
+            "total_tokens": true_total_tokens,  # ✅ 完整计数
+            "total_input_tokens": true_total_input_tokens,  # ✅ 完整输入
             "total_output_tokens": total_output_tokens,
             "total_cache_creation_tokens": total_cache_creation,
             "total_cache_read_tokens": total_cache_read,

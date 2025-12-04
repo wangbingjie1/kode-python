@@ -110,14 +110,18 @@ class APICallTraceRecord:
         cache_creation_tokens: int = 0,
         cache_read_tokens: int = 0,
     ):
-        """设置token使用量并计算成本"""
+        """设置token使用量并计算成本
+
+        ⚠️ 关键说明：Anthropic API 的 input_tokens 只包含常规输入，不包含缓存
+        """
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.cache_creation_input_tokens = cache_creation_tokens
         self.cache_read_input_tokens = cache_read_tokens
 
         # 计算成本（Anthropic Claude Sonnet 4.5 定价）
-        regular_input = input_tokens - cache_creation_tokens - cache_read_tokens
+        # ✅ input_tokens 本身就是常规输入（非缓存）
+        regular_input = input_tokens
         self.regular_input_cost = regular_input * 3.0 / 1_000_000  # $3/MTok
         self.cache_creation_cost = cache_creation_tokens * 3.75 / 1_000_000  # $3.75/MTok
         self.cache_read_cost = cache_read_tokens * 0.30 / 1_000_000  # $0.30/MTok

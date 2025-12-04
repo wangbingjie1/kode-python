@@ -1,6 +1,6 @@
 {
-  "version": "v20251127_164606",
-  "created_at": "2025-11-27T16:46:06.708857",
+  "version": "v20251204_140533",
+  "created_at": "2025-12-04T14:05:33.684814",
   "connection_name": "yanfa",
   "schema": {
     "status": "success",
@@ -6197,58 +6197,58 @@
           "row_count": 5,
           "rows": [
             {
-              "id": 4602919,
-              "uuid": "c1ab760f-72bd-4f8e-87f1-73e64bc1dd51",
-              "user_id": 1080393,
-              "page_name": "mobile_subscribe_4008",
-              "event_name": "pageview",
-              "dom_name": "",
-              "created_at": "2025-10-27T11:15:36",
-              "updated_at": "2025-10-27T11:15:36",
-              "channel": "glbgpt"
-            },
-            {
-              "id": 4602920,
-              "uuid": "061bdcd2-21f0-4615-b3e9-6ef2b836992f",
-              "user_id": 1080392,
+              "id": 4694678,
+              "uuid": "90fa9e6a-0d45-4069-ba67-f11b80ca5552",
+              "user_id": 1095638,
               "page_name": "pc_subscribe_4008",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-27T11:15:36",
-              "updated_at": "2025-10-27T11:15:36",
+              "created_at": "2025-11-03T11:15:26",
+              "updated_at": "2025-11-03T11:15:26",
               "channel": "glbgpt"
             },
             {
-              "id": 4602921,
-              "uuid": "41381acc-f614-4c14-9553-86479930a572",
-              "user_id": 0,
-              "page_name": "mobile_click_subscription",
+              "id": 4694679,
+              "uuid": "541ce84e-b4ee-4e49-85d8-488f8d88c496",
+              "user_id": 1095640,
+              "page_name": "pc_subscribe_4008",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-27T11:16:39",
-              "updated_at": "2025-10-27T11:16:39",
+              "created_at": "2025-11-03T11:16:10",
+              "updated_at": "2025-11-03T11:16:10",
               "channel": "glbgpt"
             },
             {
-              "id": 4602922,
-              "uuid": "41381acc-f614-4c14-9553-86479930a572",
-              "user_id": 0,
-              "page_name": "mobile_visit_subscription",
+              "id": 4694680,
+              "uuid": "d8414f2e-3a64-4531-b302-c4bfc1e629f5",
+              "user_id": 1095639,
+              "page_name": "mobile_subscribe_4008",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-27T11:16:40",
-              "updated_at": "2025-10-27T11:16:40",
+              "created_at": "2025-11-03T11:16:11",
+              "updated_at": "2025-11-03T11:16:11",
               "channel": "glbgpt"
             },
             {
-              "id": 4602923,
-              "uuid": "1f991818-8308-459c-9ff6-2587db67fb52",
-              "user_id": 0,
-              "page_name": "pc_visit_subscription",
+              "id": 4694681,
+              "uuid": "541ce84e-b4ee-4e49-85d8-488f8d88c496",
+              "user_id": 1095640,
+              "page_name": "pc_subscribe_4009_perplexity_research",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-10-27T11:16:41",
-              "updated_at": "2025-10-27T11:16:41",
+              "created_at": "2025-11-03T11:16:15",
+              "updated_at": "2025-11-03T11:16:15",
+              "channel": "glbgpt"
+            },
+            {
+              "id": 4694682,
+              "uuid": "68d39ff0-8254-4557-ad01-c4d908011ad2",
+              "user_id": 1095403,
+              "page_name": "pc_subscribe_4002",
+              "event_name": "pageview",
+              "dom_name": "",
+              "created_at": "2025-11-03T11:16:42",
+              "updated_at": "2025-11-03T11:16:42",
               "channel": "glbgpt"
             }
           ],
@@ -10963,6 +10963,13 @@
             "comment": "相关问题列表，存储为JSON数组"
           },
           {
+            "name": "user_uploaded_images",
+            "type": "text",
+            "nullable": true,
+            "default": null,
+            "comment": "用户上传的图片列表（JSON 数组格式）"
+          },
+          {
             "name": "create_at",
             "type": "bigint",
             "nullable": true,
@@ -10984,11 +10991,77 @@
             "id"
           ]
         },
-        "column_count": 10,
+        "column_count": 11,
         "sample_data": {
-          "row_count": 0,
-          "rows": [],
-          "note": "前 0 行样例数据（快速采样，无排序）"
+          "row_count": 5,
+          "rows": [
+            {
+              "id": 1,
+              "message_id": "c4977293-8249-40ee-86ef-f6eec69e9b3f",
+              "conversation_id": "c6636b5e-6c79-4648-b446-99d07e1564d6",
+              "citations": "[\"https://www.argentinaforestal.com/2020/10/29/clones-de-eucalipto-un-capricho-o-una-valiosa-herramienta-para-la-silvicultura-de-precision/\", \"https://www.fao.org/4/ac459s/ac459s08.htm\", \"https://revista.infor.cl/index.php/infor/article/download/201/200\", \"https://goldentreeflorestal.com.br/espanhol/florestal-espanhol/\", \"https://www.floresyplantas.net/planteles-de-eucaliptus/\", \"https://www.europapress.es/andalucia/huelva-00354/noticia-vivero-ence-huelva-produce-ocho-millones-plantas-eucalipto-2010-20110127184418.html\", \"https://www.youtube.com/watch?v=5T0BRkQImmw\", \"https://www.20minutos.es/noticia/838926/0/\"]",
+              "search_results": "[{\"url\": \"https://www.argentinaforestal.com/2020/10/29/clones-de-eucalipto-un-capricho-o-una-valiosa-herramienta-para-la-silvicultura-de-precision/\", \"title\": \"Clones de eucalipto: ¿un capricho o una valiosa ...\", \"source\": \"web\", \"snippet\": \"Actualmente, el empleo de miniestacas apicales, recolectadas de plantas madres bajo un manejo intensivo, es el sistema predominante para la ...\", \"last_updated\": \"2023-10-26\"}, {\"url\": \"https://www.fao.org/4/ac459s/ac459s08.htm\", \"title\": \"El eucalipto en la repoblacion forestal\", \"source\": \"web\", \"snippet\": \"En los viveros, los eucaliptos pueden sembrarse en bandejas y las plantitas apenas germinadas repicarse en recipientes, en los cuales se llevarán al terreno, ...\", \"last_updated\": \"2025-10-27\"}, {\"url\": \"https://revista.infor.cl/index.php/infor/article/download/201/200\", \"title\": \"PROPAGACION VEGETATIVA Y SILVICULTURA CLONAL ...\", \"source\": \"web\", \"snippet\": \"La silvicultura clonal es la utilización masiva de genotipos sobresalientes, a través de plantas obtenidas por enraizamiento de esquejes (estaquillas, estacas) ...\", \"last_updated\": \"2025-04-13\"}, {\"url\": \"https://goldentreeflorestal.com.br/espanhol/florestal-espanhol/\", \"title\": \"FLORESTAL - Golden Tree\", \"source\": \"web\", \"snippet\": \"El vivero forestal Golden Tree es el mayor productor mundial de Eucalipto benthamii, ¡con una calidad extrema! Producción propia de semilla Eucalipto benthamii.\"}, {\"url\": \"https://www.floresyplantas.net/planteles-de-eucaliptus/\", \"title\": \"Planteles de eucaliptus | Floresyplantas.net - Flores y Plantas\", \"source\": \"web\", \"snippet\": \"El cultivo del Eucalyptus forestal está presente por todo el mundo: Ecuador, Chile, Argentina, … Argelia, Marruecos, Túnez, Etiopia, ...\"}, {\"url\": \"https://www.europapress.es/andalucia/huelva-00354/noticia-vivero-ence-huelva-produce-ocho-millones-plantas-eucalipto-2010-20110127184418.html\", \"title\": \"El vivero de Ence en Huelva produce ocho millones de ...\", \"source\": \"web\", \"snippet\": \"El 86 por ciento de la producción de eucalipto blanco a través de esquejes fue destinado durante 2010 a cultivo de madera en patrimonio ...\"}, {\"url\": \"https://www.youtube.com/watch?v=5T0BRkQImmw\", \"title\": \"Vivero Eucalyptus Clonal - Primera Parte.\", \"source\": \"web\", \"snippet\": \"vivero de eucalipto con mejora genetica. Viveros Mañente•19K views · 16:01. Go to channel · An invention that shocked the world – Every home ...\"}, {\"url\": \"https://www.20minutos.es/noticia/838926/0/\", \"title\": \"Los viveros de Ence \\\"son los únicos\\\" que proveen ...\", \"source\": \"web\", \"snippet\": \"El grupo empresarial Ence ha asegurado que 'es una empresa pionera' a nivel mundial en investigación de la mejora genética de eucalipto, ...\"}]",
+              "images": "[{\"title\": \"El eucalipto de Viveiro considerado el más alto de Europa encogió ...\", \"width\": 1280, \"height\": 720, \"image_url\": \"https://www.lavozdegalicia.es/default/2017/08/04/00121501877701879204528/Foto/XG5C2F2_221316.jpg\", \"origin_url\": \"https://www.lavozdegalicia.es/noticia/amarina/2017/08/05/eucalipto-viveiro-considerado-alto-europa-encogio-6-metros/0003_201708X5C1991.htm\"}, {\"title\": \"Sudamérica: una región plantadora de árboles, pero solo de dos ...\", \"width\": 2560, \"height\": 1440, \"image_url\": \"https://dialogue.earth/content/uploads/2023/09/plantacion-eucaliptos-brasil_DC_Alamy_MMP3CA-1024x683-1-scaled.jpg\", \"origin_url\": \"https://dialogue.earth/es/bosques/379847-sudamerica-planta-arboles-dos-especies/\"}, {\"title\": \"Clones de eucalipto: ¿un capricho o una valiosa herramienta para ...\", \"width\": 1024, \"height\": 768, \"image_url\": \"https://www.argentinaforestal.com/wp-content/uploads/2020/10/HSP-VS-GC-27_5-anos.jpg\", \"origin_url\": \"https://www.argentinaforestal.com/2020/10/29/clones-de-eucalipto-un-capricho-o-una-valiosa-herramienta-para-la-silvicultura-de-precision/\"}, {\"title\": \"Planteles de eucaliptus | Floresyplantas.net\", \"width\": 700, \"height\": 469, \"image_url\": \"https://www.floresyplantas.net/wp-content/uploads/planteles-de-eucaliptus-en-alveolos.jpg\", \"origin_url\": \"https://www.floresyplantas.net/planteles-de-eucaliptus/\"}, {\"title\": \"Planteles de eucaliptus | Floresyplantas.net\", \"width\": 700, \"height\": 413, \"image_url\": \"https://www.floresyplantas.net/wp-content/uploads/planton-de-eucaliptus.jpg\", \"origin_url\": \"https://www.floresyplantas.net/planteles-de-eucaliptus/\"}]",
+              "videos": "[{\"url\": \"https://www.youtube.com/watch?v=W4_7RKbpdiU\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=W4_7RKbpdiU\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=8PiVdjpKNW8\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=8PiVdjpKNW8\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=B25CeMo9Wgo\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=B25CeMo9Wgo\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=24lNYfmJ1fM\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=24lNYfmJ1fM\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=QQgLwDYsrio\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=QQgLwDYsrio\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}]",
+              "related_questions": "[\"¿Cuáles son los mejores viveros de eucalipto en América Latina\", \"¿Qué técnicas de enraizamiento de estacas son más efectivas para el eucalipto\", \"¿Existen viveros especializados en eucalipto en África\", \"¿Qué países tienen las mayores plantaciones de eucalipto a través de estacas\", \"¿Cómo afecta el clima extremo a las plantaciones de eucalipto producidas por estacas\"]",
+              "user_uploaded_images": null,
+              "create_at": 1764245246695,
+              "update_at": null
+            },
+            {
+              "id": 2,
+              "message_id": "e0d22f04-f702-413a-80ce-c5ac1e3f7ec7",
+              "conversation_id": "4c037abb-8483-4567-a349-49bd8e759efc",
+              "citations": "[\"http://gioiphien.thanhphoyenbai.yenbai.gov.vn/mot-so-bien-phap-dam-bao-an-toan-khi-su-dung-mang-xa-hoi/\", \"https://laodong.vn/kinh-doanh/an-toan-tren-facebook-qua-7-cach-don-gian-638754.ldo\", \"https://mst.gov.vn/tham-gia-mang-xa-hoi-an-toan-nhung-tiem-an-va-cach-bao-ve-chinh-minh-197150186.htm\", \"https://www.youtube.com/watch?v=EIGWIOCfb2Y\"]",
+              "search_results": "[{\"url\": \"http://gioiphien.thanhphoyenbai.yenbai.gov.vn/mot-so-bien-phap-dam-bao-an-toan-khi-su-dung-mang-xa-hoi/\", \"date\": \"2023-03-09\", \"title\": \"Một số biện pháp đảm bảo an toàn khi sử dụng mạng xã hội\", \"source\": \"web\", \"snippet\": \"Tại Việt Nam, mạng xã hội được ưu dùng nhất là Facebook. Theo số liệu thống kê, tính đến tháng 6/2020, Việt Nam có 69.280.000 người dùng sử dụng mạng xã hội này ...\", \"last_updated\": \"2025-07-23\"}, {\"url\": \"https://laodong.vn/kinh-doanh/an-toan-tren-facebook-qua-7-cach-don-gian-638754.ldo\", \"date\": \"2018-10-30\", \"title\": \"An toàn trên Facebook qua 7 cách đơn giản - Báo Lao Động\", \"source\": \"web\", \"snippet\": \"An toàn trên Facebook qua 7 cách đơn giản · 1.Luôn là BẢN SAO của CHÍNH MÌNH: - Dùng danh tính thật · 2. Xác định BẠN BÈ của mình: · 3. Biết “NGƯỜI ...\"}, {\"url\": \"https://mst.gov.vn/tham-gia-mang-xa-hoi-an-toan-nhung-tiem-an-va-cach-bao-ve-chinh-minh-197150186.htm\", \"date\": \"2021-11-10\", \"title\": \"Tham gia mạng xã hội an toàn: Những tiềm ẩn và cách bảo vệ chính ...\", \"source\": \"web\", \"snippet\": \"Facebook cấm triệt để các nội dung 18+ và đặc biệt là liên quan đến trẻ em. Chính vì vậy, người dùng Facebook tuyệt đối không nên chia sẻ những ...\"}, {\"url\": \"https://www.youtube.com/watch?v=EIGWIOCfb2Y\", \"date\": \"2024-09-24\", \"title\": \"Sử dụng mạng xã hội an toàn, hiệu quả: Làm thế nào? - YouTube\", \"source\": \"web\", \"snippet\": \"Với những tính năng vượt trội, mạng xã hội đã góp phần lan tỏa những điều tốt đẹp trong cuộc sống, song cũng có mặt trái là mang đến không ...\", \"last_updated\": \"2025-09-03\"}]",
+              "images": "[{\"title\": \"An toàn thông tin khi sử dụng mạng xã hội\", \"width\": 1244, \"height\": 790, \"image_url\": \"https://vpubnd.daklak.gov.vn/CMS/Content/HinhTinTuc/NAM%202021/thang%207/mxh.JPG\", \"origin_url\": \"https://vpubnd.daklak.gov.vn/an-toan-thong-tin-khi-su-dung-mang-xa-hoi-15102.html\"}, {\"title\": \"Sử dụng Facebook: Thiết lập vùng an toàn, tự bảo vệ trước cám dỗ ...\", \"width\": 2971, \"height\": 1861, \"image_url\": \"https://clu.1cdn.vn/2021/10/07/media.congluan.vn-files-content-2021-10-07-_su-dung-facebook-can-thiet-lap-vung-an-toan-tu-bao-ve-truoc-cam-do-tu-mang-xa-hoi-132612990.jpg\", \"origin_url\": \"https://congluan.vn/su-dung-facebook-thiet-lap-vung-an-toan-tu-bao-ve-truoc-cam-do-tu-mang-xa-hoi-10138682.html\"}, {\"title\": \"HIỆU ỨNG FACEBOOK VÀ CUỘC CÁCH MẠNG TOÀN CẦU CỦA MẠNG XÃ...\", \"width\": 360, \"height\": 522, \"image_url\": \"https://thuviendulichsaigon.edu.vn/upload/files/Khoa-Lu-Hanh/Sach-Kinh-Te-KLH/34_hieu-ung-facebook-va-cuoc-cach-mang-toan-cau-cua-mang-xa-hoi_1_360x522.jpg\", \"origin_url\": \"https://thuviendulichsaigon.edu.vn/hieu-ung-facebook-va-cuoc-cach-mang-toan-cau-cua-mang-xa-hoi.html\"}, {\"title\": \"TOP những cách bảo vệ tài khoản mạng xã hội - Công ty TNHH Tập ...\", \"width\": 2000, \"height\": 1467, \"image_url\": \"https://vegastar.com.vn/wp-media/2022/01/an-toan-3.jpg\", \"origin_url\": \"https://vegastar.com.vn/top-nhung-cach-bao-ve-tai-khoan-mang-xa-hoi.html\"}, {\"title\": \"Đảm bảo an toàn khi sử dụng mạng xã hội - Cổng Thông Tin Hội Liên ...\", \"width\": 700, \"height\": 539, \"image_url\": \"https://vwu.vn/documents/20182/2445521/22_Apr_2020_032103_GMTmang_xh_1.jpg/1d2d3efc-c7b7-40d6-ad72-75269b219409\", \"origin_url\": \"https://vwu.vn/web/guest/tin-chi-tiet/-/chi-tiet/%C4%91am-bao-an-toan-khi-su-dung-mang-xa-hoi-33664-4.html\"}]",
+              "videos": "[{\"url\": \"https://www.youtube.com/watch?v=EIGWIOCfb2Y\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=EIGWIOCfb2Y\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=24UP8VpZu_Y\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=24UP8VpZu_Y\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}]",
+              "related_questions": "[\"Làm thế nào để thiết lập an toàn cho tài khoản Facebook\", \"Các biện pháp đơn giản để đảm bảo an toàn trên Facebook\", \"Những tiềm ẩn nguy hiểm khi sử dụng Facebook và cách phòng tránh\", \"Làm thế nào để kiểm tra và bảo vệ thông tin cá nhân trên Facebook\", \"Các tính năng an toàn trên Facebook mà người dùng nên biết\"]",
+              "user_uploaded_images": null,
+              "create_at": 1764245281026,
+              "update_at": null
+            },
+            {
+              "id": 3,
+              "message_id": "543a9d67-3094-4de7-abe9-000853f216a6",
+              "conversation_id": "c6636b5e-6c79-4648-b446-99d07e1564d6",
+              "citations": "[\"https://goldentreeflorestal.com.br\", \"https://goldentreeflorestal.com.br/nossos-produtos/florestal/\", \"https://goldentreeflorestal.com.br/english/forest/\", \"https://www.celso-foelkel.com.br/artigos/outros/O%20Eucalipto_Duratex.pdf\", \"https://goldentreeflorestal.com.br/o-viveiro-florestal-golden-tree-e-o-maior-produtor-mundial-de-eucalyptus-benthamii-com-extrema-qualidade/\", \"https://goldentreeflorestal.com.br/golden-tree-forest-nursery-is-the-worlds-largest-producer-of-world-class-eucalyptus-benthamii/\", \"https://www.youtube.com/watch?v=8PiVdjpKNW8\", \"https://www.ipef.br/publicacoes/scientia/nr118/cap11.pdf\", \"https://www.scielo.br/j/rarv/i/2024.v48/\", \"https://www.infoteca.cnptia.embrapa.br/infoteca/bitstream/doc/1128348/1/Livro-Doc-347-1863-final-2.pdf\"]",
+              "search_results": "[{\"url\": \"https://goldentreeflorestal.com.br\", \"date\": \"2022-08-01\", \"title\": \"Golden Tree - Viveiro Florestal\", \"source\": \"web\", \"snippet\": \"A Golden Tree tem produção própria de Sementes de Eucalyptus benthamii, sendo considerada a maior produtora mundial desta espécie. No município de Candói – ...\", \"last_updated\": \"2025-10-05\"}, {\"url\": \"https://goldentreeflorestal.com.br/nossos-produtos/florestal/\", \"date\": \"2022-05-24\", \"title\": \"Eucalipto - Golden Tree - Viveiro Florestal\", \"source\": \"web\", \"snippet\": \"Com uma produção em torno de 106.366 toneladas anual, o Brasil é o segundo maior exportador de goma-resina. Genótipos geneticamente melhorados. Quando ...\", \"last_updated\": \"2025-04-21\"}, {\"url\": \"https://goldentreeflorestal.com.br/english/forest/\", \"date\": \"2022-08-05\", \"title\": \"FOREST - Golden Tree - Viveiro Florestal\", \"source\": \"web\", \"snippet\": \"The original plant showed an average production of 12 kg of biomass (leaves and branches smaller than 7mm) per plant at five years every one and a half years of ...\", \"last_updated\": \"2025-07-24\"}, {\"url\": \"https://www.celso-foelkel.com.br/artigos/outros/O%20Eucalipto_Duratex.pdf\", \"title\": \"[PDF] O Eucalipto - celso-foelkel.com.br\", \"source\": \"web\", \"snippet\": \"O campo para o crescimento da produção é muito grande, pois o Brasil participa no mundo com produção ainda inferior à da Finlândia, no que diz respeito a ...\", \"last_updated\": \"2024-05-08\"}, {\"url\": \"https://goldentreeflorestal.com.br/o-viveiro-florestal-golden-tree-e-o-maior-produtor-mundial-de-eucalyptus-benthamii-com-extrema-qualidade/\", \"title\": \"O viveiro florestal Golden Tree é o maior produtor mundial de ...\", \"source\": \"web\", \"snippet\": \"A Golden Tree possui produção própria de E. benthamii no munícipio de Candói-PR em uma área de 7,6 hectares, com cerca de 1360 árvores rigorosamente ...\"}, {\"url\": \"https://goldentreeflorestal.com.br/golden-tree-forest-nursery-is-the-worlds-largest-producer-of-world-class-eucalyptus-benthamii/\", \"title\": \"Golden Tree forest nursery is the world's largest producer of world ...\", \"source\": \"web\", \"snippet\": \"Golden Tree produces its own E. benthamii in the city of Candói, state of Paraná, in an area of 7.6 hectares, containing about 1,360 rigorously selected trees.\"}, {\"url\": \"https://www.youtube.com/watch?v=8PiVdjpKNW8\", \"date\": \"2025-06-06\", \"title\": \"EUCALYPTUS: The most planted EXOTIC tree in BRAZIL! - YouTube\", \"source\": \"web\", \"snippet\": \"vídeo, Arthur Brasil explora os dois lados dessa espécie tão presente no Brasil. Você vai descobrir como o eucalipto é usado na produção de ...\", \"last_updated\": \"2025-07-28\"}, {\"url\": \"https://www.ipef.br/publicacoes/scientia/nr118/cap11.pdf\", \"title\": \"[PDF] Scientia Forestalis Arquitetura foliar de miniestacas e aplicação de ...\", \"source\": \"web\", \"snippet\": \"Resumo. Esse trabalho teve como objetivo avaliar a influência da arquitetura foliar de miniestacas associadas a formas de aplicação de biofertilizante à ...\", \"last_updated\": \"2024-04-18\"}, {\"url\": \"https://www.scielo.br/j/rarv/i/2024.v48/\", \"date\": \"2024-12-16\", \"title\": \"Revista Árvore, Volume: 48, Publicado: 2024 - SciELO\", \"source\": \"web\", \"snippet\": \"são tolerantes à maioria das pragas, doenças e estresses abióticos que afetam as plantações de eucalipto, incluindo distúrbios fisiológicos, déficit hídrico e ...\", \"last_updated\": \"2025-05-01\"}, {\"url\": \"https://www.infoteca.cnptia.embrapa.br/infoteca/bitstream/doc/1128348/1/Livro-Doc-347-1863-final-2.pdf\", \"title\": \"[PDF] contribuições para a espécie Eucalyptus benthamii - Infoteca Embrapa\", \"source\": \"web\", \"snippet\": \"Nessa mesma linha, sementes da ACS-MS de Colombo, PR originaram um plantio de 7,6 ha es- tabelecido em 2000, no município de Candói, PR (Latitude 25°37'46”S, ...\"}]",
+              "images": "[{\"title\": \"O Brasil é líder na produção mundial de eucalipto: produzimos e ...\", \"width\": 640, \"height\": 457, \"image_url\": \"https://blog.ofitexto.com.br/wp-content/uploads/2023/05/2022_09_20-O-Brasil-e-lider-na-producao-mundial-de-eucalipto-AGRICULTURA.jpeg\", \"origin_url\": \"https://blog.ofitexto.com.br/agronomia/brasil-lider-na-producao-mundial-de-eucalipto/\"}, {\"title\": \"El vivero forestal Golden Tree es el mayor productor mundial de ...\", \"width\": 332, \"height\": 183, \"image_url\": \"https://goldentreeflorestal.com.br/wp-content/uploads/2022/08/golden-tree-viveiro-florestal.png\", \"origin_url\": \"https://goldentreeflorestal.com.br/el-vivero-forestal-golden-tree-es-el-mayor-productor-mundial-de-eucalipto-benthamii-con-una-calidad-extrema/\"}, {\"title\": \"El vivero forestal Golden Tree es el mayor productor mundial de ...\", \"width\": 1280, \"height\": 720, \"image_url\": \"https://i.ytimg.com/vi/KVTgi2gULgg/maxresdefault.jpg\", \"origin_url\": \"https://goldentreeflorestal.com.br/el-vivero-forestal-golden-tree-es-el-mayor-productor-mundial-de-eucalipto-benthamii-con-una-calidad-extrema/\"}, {\"title\": \"El vivero forestal Golden Tree es el mayor productor mundial de ...\", \"width\": 1170, \"height\": 400, \"image_url\": \"https://goldentreeflorestal.com.br/wp-content/uploads/2022/06/mapa2.png\", \"origin_url\": \"https://goldentreeflorestal.com.br/el-vivero-forestal-golden-tree-es-el-mayor-productor-mundial-de-eucalipto-benthamii-con-una-calidad-extrema/\"}, {\"title\": \"English - Golden Tree\", \"width\": 877, \"height\": 349, \"image_url\": \"https://goldentreeflorestal.com.br/wp-content/uploads/2022/03/quem-somos.jpg\", \"origin_url\": \"https://goldentreeflorestal.com.br/english/\"}]",
+              "videos": "[{\"url\": \"https://www.youtube.com/watch?v=EnMEH4Bbvu8\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=EnMEH4Bbvu8\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=hltJJTyQxeI\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=hltJJTyQxeI\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=l3r_XDMHta0\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=l3r_XDMHta0\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=8PiVdjpKNW8\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=8PiVdjpKNW8\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=0bU2wAsYCqc\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=0bU2wAsYCqc\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}]",
+              "related_questions": "[\"Quais são os principais tipos de clones de eucalipto produzidos na Golden Tree\", \"Como a Golden Tree seleciona as matrizes para produção de sementes\", \"Quais são as características do clone BRS 409\", \"Quanta madeira é produzida anualmente com as mudas do viveiro\", \"Como a produção de eucalipto na Golden Tree contribui para a redução do carbono\"]",
+              "user_uploaded_images": null,
+              "create_at": 1764245319725,
+              "update_at": null
+            },
+            {
+              "id": 4,
+              "message_id": "b0ac94c6-3517-4027-a330-da9dc22e5cb6",
+              "conversation_id": "bcba437f-a717-495d-be1e-b0aaa608e178",
+              "citations": "[\"https://www.classpop.com/magazine/80th-birthday-party-ideas\", \"https://www.cheryls.com/articles/holiday-occasions/birthday-party-ideas-for-seniors\", \"https://alwaysbestcare.com/greenwood/resources/4-awesome-birthday-party-ideas-for-seniors/\", \"https://www.etsy.com/market/turning_81_gift\"]",
+              "search_results": "[{\"url\": \"https://www.classpop.com/magazine/80th-birthday-party-ideas\", \"date\": \"2025-09-02\", \"title\": \"35 Unforgettable 80th Birthday Ideas to Mark the Day in 2025\", \"source\": \"web\", \"snippet\": \"Celebrate a milestone with 80th birthday party ideas that feel personal, meaningful and full of joy for your favorite octogenarian.\", \"last_updated\": \"2025-11-26\"}, {\"url\": \"https://www.cheryls.com/articles/holiday-occasions/birthday-party-ideas-for-seniors\", \"date\": \"2025-07-21\", \"title\": \"10 Birthday Party Ideas for Seniors - Cheryl's Cookies\", \"source\": \"web\", \"snippet\": \"'50s sock hop · '60s Top 40 songs · Hunting or fishing · Vintage cars · Hollywood hits · Travel (focusing on places the honoree has visited) ...\", \"last_updated\": \"2025-11-24\"}, {\"url\": \"https://alwaysbestcare.com/greenwood/resources/4-awesome-birthday-party-ideas-for-seniors/\", \"date\": \"2020-05-29\", \"title\": \"4 Awesome Birthday Party Ideas For Seniors\", \"source\": \"web\", \"snippet\": \"4 Awesome Birthday Party Ideas for Seniors · #1 — Keep It Simple · #2 — Learn What Your Senior Loved One Wants · #3 — Find the Right Music · #4 — The Perfect Guest ...\", \"last_updated\": \"2025-10-17\"}, {\"url\": \"https://www.etsy.com/market/turning_81_gift\", \"date\": \"2025-01-01\", \"title\": \"Turning 81 Gift - 60+ Gift Ideas for 2025 - Etsy\", \"source\": \"web\", \"snippet\": \"Check out our turning 81 gift selection for the very best in unique or custom, handmade pieces from our mugs shops.\", \"last_updated\": \"2025-05-21\"}]",
+              "images": "[{\"title\": \"Happy 81st Birthday, 8x10, 16x20, 24x36, Cheers to 81 Years, 81st Birthday  Sign, Gold confetti Birthday Party Decor, 81st Birthday décor\", \"width\": 570, \"height\": 429, \"image_url\": \"https://i.etsystatic.com/15638656/r/il/a08f3a/3082443799/il_570xN.3082443799_5aj5.jpg\", \"origin_url\": \"https://www.etsy.com/listing/992570406/happy-81st-birthday-8x10-16x20-24x36\"}]",
+              "videos": "[{\"url\": \"https://www.youtube.com/watch?v=drfESbFcAPs\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=drfESbFcAPs\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.lemon8-app.com/@karenagrant/7481334287803892266?region=us\", \"thumbnail_url\": \"https://www.lemon8-app.com/@karenagrant/7481334287803892266?region=us\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}]",
+              "related_questions": "[\"What are some unique ways to incorporate the \\\"81 is new 18\\\" theme into the party decorations\", \"How can we personalize the party activities to reflect the chairman's lifetime achievements\", \"What are some creative gift ideas that align with the \\\"81 is new 18\\\" theme\", \"How can we use music from different decades to enhance the celebration\", \"What are some memorable ways to honor the chairman's legacy during the party\"]",
+              "user_uploaded_images": null,
+              "create_at": 1764245357699,
+              "update_at": null
+            },
+            {
+              "id": 5,
+              "message_id": "9e5fea56-9cd0-48e2-9cda-350e2df5406f",
+              "conversation_id": "813af7dc-7c1a-42c2-a3a8-ddb89eb5b8b3",
+              "citations": "[\"https://www.youtube.com/watch?v=QZMoKV947Es\", \"https://www.youtube.com/watch?v=0NOsgBBgKEs\", \"https://m.xiachufang.com/recipe/106689021/\", \"https://www.youtube.com/watch?v=w3MtvP0DZ5s\", \"https://www.youtube.com/watch?v=2-bexVlEXxg\", \"https://icook.tw/search/%E5%8C%97%E4%BA%AC%E7%82%B8%E9%86%AC%E9%BA%B5/\"]",
+              "search_results": "[{\"url\": \"https://www.youtube.com/watch?v=QZMoKV947Es\", \"date\": \"2019-09-13\", \"title\": \"原来最正宗的老北京炸酱面这样做！史上最详细的炸酱面教程来了！\", \"source\": \"web\", \"snippet\": \"炸酱： 五花肉500g，干黄酱135g，黄豆酱135g，甜面酱180g，大葱1根185g，冰糖40g，花生油2大勺（25g ），去皮生姜10g，花雕200g，洋葱120g，八角2个菜码： 黄豆100g， ...\", \"last_updated\": \"2025-07-29\"}, {\"url\": \"https://www.youtube.com/watch?v=0NOsgBBgKEs\", \"date\": \"2023-05-06\", \"title\": \"费尽心机就为了吃上一碗最讲究的老北京炸酱面 - YouTube\", \"source\": \"web\", \"snippet\": \"... 面还没开始做就赢在起跑线上了。 2. 传统做法会用到北京产的甜面酱和黄酱，我这里用的是山东产的甜面酱和黄豆酱。无论什么酱都要经过高温油炸，去除 ...\", \"last_updated\": \"2025-11-27\"}, {\"url\": \"https://m.xiachufang.com/recipe/106689021/\", \"date\": \"2022-02-22\", \"title\": \"老北京炸酱的做法步骤 - 下厨房\", \"source\": \"web\", \"snippet\": \"【老北京炸酱】01.首先来做葱油，适当多放一些油，全程中小火，加入葱（一半）、姜、蒜、八角一起煸炸。这时候把五花肉去皮切成1.5厘米肉丁。\", \"last_updated\": \"2025-10-21\"}, {\"url\": \"https://www.youtube.com/watch?v=w3MtvP0DZ5s\", \"date\": \"2018-06-16\", \"title\": \"美食台| 老北京炸醬，老師傅這做法道地！ - YouTube\", \"source\": \"web\", \"snippet\": \"炸醬是北京人的靈魂醬料，老舍就曾說過，北京人的夏天少不了炸醬。對講究的北京人來說，炸醬的做法也格外講究。今兒個老北京傅爺教大家帶正宗北京肉丁炸 ...\", \"last_updated\": \"2025-08-03\"}, {\"url\": \"https://www.youtube.com/watch?v=2-bexVlEXxg\", \"date\": \"2021-02-03\", \"title\": \"【國宴大師•蔥油肉丁炸醬】三醬合一的蔥油肉丁炸醬全步驟 - YouTube\", \"source\": \"web\", \"snippet\": \"... 炸酱面#老饭骨#国宴#大师的菜#laofangu#炸酱面做法#StateDinner#吃货#家常菜#做菜#美食#TikTok#TikTokFood#抖音美食#Recipe#Dimsum #抖音老 ... 北京炸酱面.\", \"last_updated\": \"2025-07-01\"}, {\"url\": \"https://icook.tw/search/%E5%8C%97%E4%BA%AC%E7%82%B8%E9%86%AC%E9%BA%B5/\", \"date\": \"2010-08-20\", \"title\": \"《北京炸醬麵》食譜與做法 - 愛料理\", \"source\": \"web\", \"snippet\": \"北京炸醬麵料理怎麼做？愛料理精選15篇簡易食譜做法與步驟，有最新的老北京炸醬麵、北京炸醬拌鳳梨、炸醬麵（老北京）、北京炸醬麵。以及炸醬麵等相關料理做法。\", \"last_updated\": \"2025-10-11\"}]",
+              "images": "[{\"title\": \"老北京炸醬麵 by fumibox\", \"width\": 2016, \"height\": 1512, \"image_url\": \"https://tokyo-kitchen.icook.network/uploads/recipe/cover/385677/d0d3250f4a2602f1.jpg\", \"origin_url\": \"https://icook.tw/recipes/385677\"}, {\"title\": \"原来最正宗的老北京炸酱面这样做！史上最详细的炸酱面教程来了！\", \"width\": 1280, \"height\": 720, \"image_url\": \"https://i.ytimg.com/vi/QZMoKV947Es/maxresdefault.jpg\", \"origin_url\": \"https://www.youtube.com/watch?v=QZMoKV947Es\"}, {\"title\": \"老北京人自家的【炸酱面】炸酱 面条 配码都有讲究 | 手工面条的最佳配比｜尚食厨房\", \"width\": 1280, \"height\": 720, \"image_url\": \"https://i.ytimg.com/vi/EAoyUgPCIIE/maxresdefault.jpg\", \"origin_url\": \"https://www.youtube.com/watch?v=EAoyUgPCIIE\"}, {\"title\": \"自制老北京炸酱面的炸酱～ | 社区美食精选\", \"width\": 1280, \"height\": 960, \"image_url\": \"https://imgcache.dealmoon.com/fsvrugccache.dealmoon.com/ugc/35d/f84/940/6025ca3fb3a0dc56619eba8.jpg_1280_1280_3_5be9.jpg\", \"origin_url\": \"https://www.dealmoon.com/post/1067614\"}, {\"title\": \"炸酱面｜费尽心机就为了吃上一碗最讲究的老北京炸酱面\", \"width\": 1280, \"height\": 720, \"image_url\": \"https://i.ytimg.com/vi/0NOsgBBgKEs/maxresdefault.jpg\", \"origin_url\": \"https://www.youtube.com/watch?v=0NOsgBBgKEs\"}]",
+              "videos": "[{\"url\": \"https://www.youtube.com/watch?v=QZMoKV947Es\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=QZMoKV947Es\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=uft6HFMSaAs\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=uft6HFMSaAs\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=0NOsgBBgKEs\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=0NOsgBBgKEs\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=Pk9ozJZeuRo\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=Pk9ozJZeuRo\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}, {\"url\": \"https://www.youtube.com/watch?v=EAoyUgPCIIE\", \"thumbnail_url\": \"https://www.youtube.com/watch?v=EAoyUgPCIIE\", \"thumbnail_width\": 480, \"thumbnail_height\": 360}]",
+              "related_questions": "[\"老北京炸酱面需要哪些特定的调料\", \"如何选择适合做炸酱面的面材\", \"-炸酱面做法中最容易出错的步骤是什么\", \"有没有简化版的炸酱面做法\", \"老北京炸酱面和其他地区的炸酱面有何区别\"]",
+              "user_uploaded_images": null,
+              "create_at": 1764245389585,
+              "update_at": null
+            }
+          ],
+          "note": "前 5 行样例数据（快速采样，无排序）"
         }
       },
       "platform_ai_model": {
@@ -19745,17 +19818,17 @@
             {
               "id": 5,
               "name": null,
-              "email": "richardlegalnow@gmail.com",
+              "email": "",
               "password": "8186f37f028ba5967babfb8fb03e8ce2",
-              "balance": "40.897589",
+              "balance": "-1.314748",
               "block_amount": "0.000000",
               "chain_account": null,
               "source": "Email",
-              "assign_chain_account": "0xeea94c776336208532c183be7217abef55c3d3b2",
+              "assign_chain_account": "",
               "private_key": "735bbba1115ed55683bd54a532a75b80ef0b01f32d617c854eb3f54efeca180c",
               "inviter_account": null,
               "created_at": "2024-03-04T11:14:35",
-              "updated_at": "2025-10-02T17:43:45",
+              "updated_at": "2025-12-02T11:08:20",
               "telegram_id": null,
               "nal_protocol_wallet_address": null,
               "channel": "direct",
@@ -19938,6 +20011,6 @@
       }
     },
     "relationships": [],
-    "extraction_time": "2025-11-27T16:46:06.708330"
+    "extraction_time": "2025-12-04T14:05:33.683597"
   }
 }

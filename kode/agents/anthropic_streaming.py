@@ -645,7 +645,9 @@ class AnthropicStreamingAgent:
 
                             # 缓存效果
                             if cache_read > 0:
-                                savings_pct = (cache_read / input_tokens) * 90  # 90% 节省
+                                # 使用 total_input_tokens 避免除零错误
+                                total_for_calc = total_input_tokens if total_input_tokens > 0 else cache_read
+                                savings_pct = (cache_read / total_for_calc) * 90  # 90% 节省
                                 logger.info(
                                     f"\n缓存节省: ~{savings_pct:.1f}% (读取了 {cache_read:,} tokens)"
                                 )

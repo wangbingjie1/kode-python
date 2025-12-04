@@ -695,7 +695,7 @@ export const useChatStore = defineStore('chat', () => {
         break
 
       case 'token_usage': {
-        // 处理每次 API 调用的 token 统计
+        // 处理每次 API 调用的 token 统计（增量累加，最终会被 final_token_stats 覆盖）
         const usage: TokenUsage = {
           input_tokens: chunk.metadata?.input_tokens || 0,
           output_tokens: chunk.metadata?.output_tokens || 0,
@@ -708,10 +708,17 @@ export const useChatStore = defineStore('chat', () => {
         // 累加到会话总计
         conversationTokenUsage.value.total_input_tokens += usage.input_tokens
         conversationTokenUsage.value.total_output_tokens += usage.output_tokens
-        conversationTokenUsage.value.total_tokens += usage.total_tokens
+        // ✅ total_tokens 不需要累加，直接计算（避免重复）
+        conversationTokenUsage.value.total_tokens =
+          conversationTokenUsage.value.total_input_tokens +
+          conversationTokenUsage.value.total_output_tokens
         conversationTokenUsage.value.cache_creation_input_tokens += usage.cache_creation_input_tokens || 0
         conversationTokenUsage.value.cache_read_input_tokens += usage.cache_read_input_tokens || 0
-        conversationTokenUsage.value.iterations = usage.iteration || 0
+        // ✅ iterations 使用最大值（而非赋值）
+        conversationTokenUsage.value.iterations = Math.max(
+          conversationTokenUsage.value.iterations || 0,
+          usage.iteration || 0
+        )
 
         console.log('[ChatStore] Token usage:', usage)
         console.log('[ChatStore] Conversation total:', conversationTokenUsage.value)
@@ -898,6 +905,26 @@ export const useChatStore = defineStore('chat', () => {
         // 恢复 typing 状态（Agent 继续执行）
         isTyping.value = true
 
+        break
+      }
+
+      case 'final_token_stats': {
+        // ✅ 处理最终的 token 统计和成本分析
+        const finalStats = chunk.metadata
+        console.log('[ChatStore] Final token stats received:', finalStats)
+
+        // 更新会话级别的 token 统计（使用后端计算的准确数据）
+        conversationTokenUsage.value = {
+          total_input_tokens: finalStats.total_input_tokens || 0,
+          total_output_tokens: finalStats.total_output_tokens || 0,
+          total_tokens: finalStats.total_tokens || 0,
+          cache_creation_input_tokens: finalStats.cache_creation_tokens || 0,
+          cache_read_input_tokens: finalStats.cache_read_tokens || 0,
+          iterations: finalStats.iteration_count || 0,
+          tool_calls_count: conversationTokenUsage.value.tool_calls_count // 保持之前的工具调用计数
+        }
+
+        console.log('[ChatStore] Updated conversation token usage:', conversationTokenUsage.value)
         break
       }
 
