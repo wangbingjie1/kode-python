@@ -591,6 +591,44 @@ class OntologyBuilderTool(KodeTool):
             lines.append("")
         return "\n".join(lines)
 
+    def _load_business_questions(
+        self,
+        connection_name: str,
+        business_tool
+    ) -> Dict[str, str]:
+        """
+        加载业务问题列表（key -> 问题文本）
+
+        优先从 business_context.json 读取（完成后保存的），
+        其次从 InteractiveTool 的状态文件读取（问卷进行中）。
+
+        Args:
+            connection_name: 数据库连接名
+            business_tool: BusinessUnderstandingTool 实例
+
+        Returns:
+            {问题key: 问题文本} 的映射
+        """
+        questions_map = {}
+
+        # 1. 优先从 business_context.json 读取（问卷完成后的完整数据）
+        context = business_tool.storage.load_business_context(connection_name)
+        if context and "questions" in context:
+            # questions 格式: {key: question_text}
+            questions_map = context["questions"]
+            return questions_map
+
+        # 2. 其次从 interaction_state 缓存读取（问卷进行中）
+        state = business_tool._load_state(connection_name)
+        if state and "questions" in state:
+            # questions 格式: [(key, question_text, hint), ...]
+            for item in state["questions"]:
+                if isinstance(item, (list, tuple)) and len(item) >= 2:
+                    key, question_text = item[0], item[1]
+                    questions_map[key] = question_text
+
+        return questions_map
+
     def _merge_ontologies(
         self,
         domain_ontologies: Dict[str, Dict[str, Any]],
@@ -833,32 +871,22 @@ class OntologyBuilderTool(KodeTool):
         # 准备领域 schema 文本
         domain_schema_text = self._prepare_domain_schema(domain_schema)
 
-        # 🔥 加载业务理解五问答案（用于判断核心功能）
+        # 🔥 加载业务理解问答（直接嵌入提示词）
         from kode.tools.business_understanding import BusinessUnderstandingTool
 
         business_tool = BusinessUnderstandingTool()
-        business_answers = business_tool.get_answers(connection_name) or {}
+        business_context = business_tool.storage.load_business_context(connection_name) or {}
+
+        # 🔑 直接使用 qa_text（纯文本问答，无需解析）
+        qa_text = business_context.get("qa_text", "")
 
         # 构建业务描述（Input 1: 应然层）
         business_context_section = ""
-        if business_answers:
+        if qa_text:
             business_context_section = f"""
 # Input 1: 业务描述（应然层）
 
-**你的产品是什么？**
-{business_answers.get('product_name', '未提供')}
-
-**你的商业模式是什么？**
-{business_answers.get('business_model', '未提供')}
-
-**你的收入公式是什么？**
-{business_answers.get('revenue_formula', '未提供')}
-
-**你的转化路径是什么？**
-{business_answers.get('conversion_path', '未提供')}
-
-**你最关心的3-5个指标是什么？**
-{business_answers.get('key_metrics', '未提供')}
+{qa_text}
 
 ---
 

@@ -338,6 +338,20 @@ async def event_generator(
             cancel_event=cancel_event,  # ← 传入取消事件
             message_queue=message_queue,  # ← 传入消息队列
         ):
+            # 🛑 在 SSE 层也检查取消状态（双重保险）
+            if cancel_event.is_set():
+                logger.info(f"[SSE] Cancel detected in SSE loop, stopping stream")
+                cancel_data = json.dumps(
+                    {
+                        "type": "cancelled",
+                        "content": "用户已终止响应",
+                        "metadata": {"reason": "user_cancelled"},
+                    },
+                    ensure_ascii=False,
+                )
+                yield f"data: {cancel_data}\n\n"
+                break
+
             # Format as SSE event
             chunk_type = chunk.get("type")
             logger.info(f"[SSE] Sending chunk: type={chunk_type}")

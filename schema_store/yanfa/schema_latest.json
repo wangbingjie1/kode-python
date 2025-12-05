@@ -1,6 +1,6 @@
 {
-  "version": "v20251204_140533",
-  "created_at": "2025-12-04T14:05:33.684814",
+  "version": "v20251205_104029",
+  "created_at": "2025-12-05T10:40:29.429332",
   "connection_name": "yanfa",
   "schema": {
     "status": "success",
@@ -6197,58 +6197,58 @@
           "row_count": 5,
           "rows": [
             {
-              "id": 4694678,
-              "uuid": "90fa9e6a-0d45-4069-ba67-f11b80ca5552",
-              "user_id": 1095638,
-              "page_name": "pc_subscribe_4008",
+              "id": 4704505,
+              "uuid": "6ae79b0e-12da-4eca-8060-c4d512fc7a9a",
+              "user_id": 1098138,
+              "page_name": "mobile_subscribe_4009",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-11-03T11:15:26",
-              "updated_at": "2025-11-03T11:15:26",
+              "created_at": "2025-11-04T11:15:59",
+              "updated_at": "2025-11-04T11:15:59",
               "channel": "glbgpt"
             },
             {
-              "id": 4694679,
-              "uuid": "541ce84e-b4ee-4e49-85d8-488f8d88c496",
-              "user_id": 1095640,
-              "page_name": "pc_subscribe_4008",
+              "id": 4704506,
+              "uuid": "d759466f-2633-4449-ae5a-2421ee55aeb1",
+              "user_id": 1098130,
+              "page_name": "mobile_subscribe_4002",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-11-03T11:16:10",
-              "updated_at": "2025-11-03T11:16:10",
+              "created_at": "2025-11-04T11:16:03",
+              "updated_at": "2025-11-04T11:16:03",
               "channel": "glbgpt"
             },
             {
-              "id": 4694680,
-              "uuid": "d8414f2e-3a64-4531-b302-c4bfc1e629f5",
-              "user_id": 1095639,
-              "page_name": "mobile_subscribe_4008",
+              "id": 4704507,
+              "uuid": "d759466f-2633-4449-ae5a-2421ee55aeb1",
+              "user_id": 1098130,
+              "page_name": "mobile_subscribe_4002",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-11-03T11:16:11",
-              "updated_at": "2025-11-03T11:16:11",
+              "created_at": "2025-11-04T11:16:05",
+              "updated_at": "2025-11-04T11:16:05",
               "channel": "glbgpt"
             },
             {
-              "id": 4694681,
-              "uuid": "541ce84e-b4ee-4e49-85d8-488f8d88c496",
-              "user_id": 1095640,
-              "page_name": "pc_subscribe_4009_perplexity_research",
+              "id": 4704508,
+              "uuid": "49650a6d-4e52-469d-8fc3-6cbae37432ce",
+              "user_id": 365022,
+              "page_name": "pc_subscribe_4009",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-11-03T11:16:15",
-              "updated_at": "2025-11-03T11:16:15",
+              "created_at": "2025-11-04T11:16:06",
+              "updated_at": "2025-11-04T11:16:06",
               "channel": "glbgpt"
             },
             {
-              "id": 4694682,
-              "uuid": "68d39ff0-8254-4557-ad01-c4d908011ad2",
-              "user_id": 1095403,
-              "page_name": "pc_subscribe_4002",
+              "id": 4704509,
+              "uuid": "d759466f-2633-4449-ae5a-2421ee55aeb1",
+              "user_id": 1098130,
+              "page_name": "mobile_subscribe_4002",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-11-03T11:16:42",
-              "updated_at": "2025-11-03T11:16:42",
+              "created_at": "2025-11-04T11:16:17",
+              "updated_at": "2025-11-04T11:16:17",
               "channel": "glbgpt"
             }
           ],
@@ -12453,23 +12453,9 @@
         },
         "column_count": 11,
         "sample_data": {
-          "row_count": 1,
-          "rows": [
-            {
-              "id": 1,
-              "agent_id": 6068,
-              "sort": 0,
-              "is_del": 0,
-              "create_at": null,
-              "create_by": null,
-              "create_name": null,
-              "update_at": null,
-              "update_by": null,
-              "update_name": null,
-              "product_no": "glbgpt"
-            }
-          ],
-          "note": "前 1 行样例数据（快速采样，无排序）"
+          "row_count": 0,
+          "rows": [],
+          "note": "前 0 行样例数据（快速采样，无排序）"
         }
       },
       "platform_ai_tag": {
@@ -20011,6 +19997,6 @@
       }
     },
     "relationships": [],
-    "extraction_time": "2025-12-04T14:05:33.683597"
+    "extraction_time": "2025-12-05T10:40:29.420265"
   }
 }

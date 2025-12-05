@@ -188,16 +188,47 @@ class AsyncConversationService:
 
 **工具**：`BusinessUnderstanding`
 
-首次连接数据库时，使用此工具完成业务五问：
-1. 贵公司的业务是什么？主营内容是什么？
-2. 贵公司的商业模式是什么？（B2B/B2C/订阅/平台/交易/广告等）
-3. 你最关注哪些业务指标？（北极星指标 / 核心目标 / KPI）
-4. 你在公司的角色是什么？（PM/运营/分析师/管理层等）
-5. 你希望我帮你解决什么问题？你的具体需求是什么？
+首次连接数据库时，调用此工具。工具会根据数据库表结构自动生成 5-10 个针对性问题。
+
+**🔑 工作机制**：
+- 工具会自动触发前端弹窗，向用户提问（不需要手动调用 AskUser）
+- 用户回答后，你会收到包含答案和下一步指令的 JSON
+- 根据 `has_more_questions` 字段决定是否继续
+
+**使用流程**：
+1. 调用 `BusinessUnderstanding(connection_name="xxx")` 启动问卷
+2. 前端自动弹窗向用户提问（你不需要做任何事）
+3. 用户回答后，你收到 JSON 响应，如：
+   ```json
+   {
+     "status": "answer_received",
+     "answer": "用户的回答",
+     "progress": "1/10",
+     "has_more_questions": true,
+     "next_action": "继续调用 BusinessUnderstanding..."
+   }
+   ```
+4. 如果 `has_more_questions=true`，继续调用 `BusinessUnderstanding(connection_name="xxx")`
+5. 重复直到 `has_more_questions=false` 或收到完成消息
+
+**示例**：
+```
+# 第1步：启动问卷
+BusinessUnderstanding(connection_name="erp_db")
+# → 前端弹窗，用户回答后返回 JSON
+
+# 第2步：收到用户回答
+# {"status": "answer_received", "has_more_questions": true, ...}
+# → 继续调用
+
+# 第3步：继续问卷
+BusinessUnderstanding(connection_name="erp_db")
+# → 重复直到完成
+```
 
 **规则**：
-- ✅ 工具会自动逐个提问
-- ✅ 答案保存到 `ontology_store/{connection_name}/business_context.json`
+- ✅ `has_more_questions=true` 时必须继续调用 BusinessUnderstanding
+- ✅ 答案自动保存到 `ontology_store/{connection_name}/business_context.json`
 - ❌ 禁止跳过直接构建本体
 
 ### 步骤2：一键构建本体

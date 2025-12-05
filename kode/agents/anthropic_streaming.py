@@ -907,6 +907,16 @@ class AnthropicStreamingAgent:
             # Execute tools
             tool_results = []
             for tool_use in tool_uses:
+                # 🛑 在每个工具执行前检查取消状态
+                if self.cancel_event and self.cancel_event.is_set():
+                    logger.info(f"[Cancel] Stream cancelled before tool execution")
+                    yield {
+                        "type": "cancelled",
+                        "content": "用户取消了请求",
+                        "metadata": {"cancelled_at": "before_tool_execution"},
+                    }
+                    return
+
                 tool_name = tool_use.name
                 tool_args = tool_use.input
                 tool_use_id = tool_use.id
@@ -1034,6 +1044,16 @@ class AnthropicStreamingAgent:
                                 "result": str(result)[:500],
                             }
                         )
+
+                        # 🛑 工具执行完成后检查取消状态（不执行后续工具）
+                        if self.cancel_event and self.cancel_event.is_set():
+                            logger.info(f"[Cancel] Stream cancelled after tool '{tool_name}' execution")
+                            yield {
+                                "type": "cancelled",
+                                "content": "用户取消了请求",
+                                "metadata": {"cancelled_at": "after_tool_execution", "last_tool": tool_name},
+                            }
+                            return
 
                     except Exception as e:
                         # Special handling for UserInputRequired exception
