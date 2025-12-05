@@ -6,6 +6,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <span class="title">真实成本分析</span>
+        <span v-if="isLoading" class="badge badge-loading">统计中…</span>
       </div>
       <button
         type="button"
@@ -122,34 +123,32 @@ const showCost = computed(() =>
 const stats = computed(() => {
   const usage = tokenUsage.value
 
-  // 计算常规输入：从 total_input_tokens 减去缓存部分
-  // ⚠️ 注意：后端的 total_input_tokens 已经是完整计数（包含所有输入）
-  const regularInput = usage.total_input_tokens -
-                      (usage.cache_creation_input_tokens || 0) -
-                      (usage.cache_read_input_tokens || 0)
   const cacheCreation = usage.cache_creation_input_tokens || 0
   const cacheRead = usage.cache_read_input_tokens || 0
+  const regularInput = usage.regular_input_tokens ??
+    Math.max((usage.total_input_tokens || 0) - cacheCreation - cacheRead, 0)
+  const totalInput = usage.total_input_tokens || (regularInput + cacheCreation + cacheRead)
   const output = usage.total_output_tokens || 0
+  const totalTokens = usage.total_tokens || (totalInput + output)
 
-  // 成本计算（Anthropic 定价）
-  const regularInputCost = regularInput * 3 / 1_000_000
-  const cacheCreationCost = cacheCreation * 3.75 / 1_000_000
-  const cacheReadCost = cacheRead * 0.30 / 1_000_000
-  const outputCost = output * 15 / 1_000_000
-  const totalCost = regularInputCost + cacheCreationCost + cacheReadCost + outputCost
+  const regularInputCost = usage.cost_breakdown?.regular_input_cost ?? (regularInput * 3 / 1_000_000)
+  const cacheCreationCost = usage.cost_breakdown?.cache_creation_cost ?? (cacheCreation * 3.75 / 1_000_000)
+  const cacheReadCost = usage.cost_breakdown?.cache_read_cost ?? (cacheRead * 0.30 / 1_000_000)
+  const outputCost = usage.cost_breakdown?.output_cost ?? (output * 15 / 1_000_000)
+  const totalCost = usage.total_cost ?? (regularInputCost + cacheCreationCost + cacheReadCost + outputCost)
 
-  // 无缓存成本对比
-  const noCacheCost = usage.total_input_tokens * 3 / 1_000_000 + outputCost
-  const totalSavings = noCacheCost - totalCost
+  const noCacheCost = totalInput * 3 / 1_000_000 + outputCost
+  const totalSavings = usage.cache_savings ?? (noCacheCost - totalCost)
+  const savingsPercentage = usage.savings_percentage ?? (noCacheCost === 0 ? 0 : (totalSavings / noCacheCost) * 100)
 
   return {
     regularInput,
     cacheCreation,
     cacheRead,
     output,
-    totalInput: usage.total_input_tokens,
+    totalInput,
     totalOutput: output,
-    total: usage.total_tokens,
+    total: totalTokens,
     regularInputCost,
     cacheCreationCost,
     cacheReadCost,
@@ -157,14 +156,15 @@ const stats = computed(() => {
     totalCost,
     totalSavings,
     noCacheCost,
-    iterations: usage.iterations || 0
+    iterations: usage.iterations || 0,
+    savingsPercentage
   }
 })
 
 const savingsPercentage = computed(() => {
-  if (stats.value.noCacheCost === 0) return '0.0'
-  const percentage = (stats.value.totalSavings / stats.value.noCacheCost) * 100
-  return percentage.toFixed(1)
+  return stats.value.savingsPercentage?.toFixed
+    ? stats.value.savingsPercentage.toFixed(1)
+    : '0.0'
 })
 
 const formatNumber = (num: number): string => {
@@ -196,6 +196,29 @@ const formatNumber = (num: number): string => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.badge-loading::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  border-top-color: transparent;
+  border-radius: 999px;
+  display: inline-block;
+  animation: spin 0.6s linear infinite;
 }
 
 .icon {

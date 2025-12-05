@@ -624,11 +624,11 @@ async def event_generator(
             await db.commit()
 
             # ✨ 更新使用量统计（使用真实的 Anthropic API token 数据）
-            # ⚠️ 关键说明：Anthropic API 的 input_tokens 是总输入（已包含所有类型）
-            # input_tokens = 常规输入 + cache_creation_input_tokens + cache_read_input_tokens
-            # 所以 true_total_input_tokens 就是 input_tokens 本身
-            true_total_input_tokens = total_input_tokens  # ✅ 总输入（已包含缓存）
-            regular_input_tokens = total_input_tokens - total_cache_creation_tokens - total_cache_read_tokens  # 常规输入
+            # ⚠️ 关键说明：根据 Anthropic 官方文档 https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+            # input_tokens = 未被缓存的输入 tokens（cache breakpoint 之后的部分）
+            # total_input_tokens = cache_read_input_tokens + cache_creation_input_tokens + input_tokens
+            regular_input_tokens = total_input_tokens  # 未被缓存的常规输入
+            true_total_input_tokens = total_input_tokens + total_cache_creation_tokens + total_cache_read_tokens  # 真实总输入
             actual_tokens = true_total_input_tokens + total_output_tokens
 
             # 💰 计算真实成本（Anthropic 定价，< 200K tokens）
@@ -727,10 +727,11 @@ async def event_generator(
         # ✅ 在 done 之前发送完整的 token 统计和成本分析
         # 这样前端可以直接使用,不需要再查询数据库
 
-        # ⚠️ 关键说明：Anthropic API 的 input_tokens 是总输入（已包含所有类型）
-        # input_tokens = 常规输入 + cache_creation_input_tokens + cache_read_input_tokens
-        true_total_input_tokens = total_input_tokens  # ✅ 总输入（已包含缓存）
-        regular_input_tokens = total_input_tokens - total_cache_creation_tokens - total_cache_read_tokens  # 常规输入
+        # ⚠️ 关键说明：根据 Anthropic 官方文档 https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+        # input_tokens = 未被缓存的输入 tokens（cache breakpoint 之后的部分）
+        # total_input_tokens = cache_read_input_tokens + cache_creation_input_tokens + input_tokens
+        regular_input_tokens = total_input_tokens  # 未被缓存的常规输入
+        true_total_input_tokens = total_input_tokens + total_cache_creation_tokens + total_cache_read_tokens  # 真实总输入
 
         # 成本计算（Anthropic 定价 < 200K tokens）
         regular_input_cost = regular_input_tokens * 3 / 1_000_000  # $3/MTok

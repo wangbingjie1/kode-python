@@ -43,6 +43,7 @@ export interface TokenUsage {
 }
 
 export interface ConversationTokenUsage {
+  regular_input_tokens: number
   total_input_tokens: number
   total_output_tokens: number
   total_tokens: number
@@ -50,6 +51,15 @@ export interface ConversationTokenUsage {
   cache_read_input_tokens: number
   iterations: number
   tool_calls_count: number
+  cost_breakdown?: {
+    regular_input_cost?: number
+    cache_creation_cost?: number
+    cache_read_cost?: number
+    output_cost?: number
+  }
+  total_cost?: number
+  cache_savings?: number
+  savings_percentage?: number
 }
 
 export interface UserInputQuestion {
@@ -82,14 +92,25 @@ export const useChatStore = defineStore('chat', () => {
   const isConnected = ref(false)
   const isTyping = ref(false)
   const currentStreamingMessage = ref<ChatMessage | null>(null)
+  const tokenStatsStatus = ref<'idle' | 'pending' | 'final'>('idle')
   const conversationTokenUsage = ref<ConversationTokenUsage>({
+    regular_input_tokens: 0,
     total_input_tokens: 0,
     total_output_tokens: 0,
     total_tokens: 0,
     cache_creation_input_tokens: 0,
     cache_read_input_tokens: 0,
     iterations: 0,
-    tool_calls_count: 0
+    tool_calls_count: 0,
+    cost_breakdown: {
+      regular_input_cost: 0,
+      cache_creation_cost: 0,
+      cache_read_cost: 0,
+      output_cost: 0
+    },
+    total_cost: 0,
+    cache_savings: 0,
+    savings_percentage: 0
   })
 
   // 用户输入状态
@@ -474,6 +495,9 @@ export const useChatStore = defineStore('chat', () => {
       throw new Error('Not connected to conversation')
     }
 
+    // 标记 Token 统计生成中，避免 UI 闪跳
+    tokenStatsStatus.value = 'pending'
+
     // Add user message to UI
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -695,7 +719,7 @@ export const useChatStore = defineStore('chat', () => {
         break
 
       case 'token_usage': {
-        // 处理每次 API 调用的 token 统计（增量累加，最终会被 final_token_stats 覆盖）
+        // 每次 API 调用的 token 统计，前端累积，最终会被 final_token_stats 覆盖
         const usage: TokenUsage = {
           input_tokens: chunk.metadata?.input_tokens || 0,
           output_tokens: chunk.metadata?.output_tokens || 0,
@@ -705,27 +729,12 @@ export const useChatStore = defineStore('chat', () => {
           iteration: chunk.metadata?.iteration
         }
 
-        // 累加到会话总计
-        conversationTokenUsage.value.total_input_tokens += usage.input_tokens
-        conversationTokenUsage.value.total_output_tokens += usage.output_tokens
-        // ✅ total_tokens 不需要累加，直接计算（避免重复）
-        conversationTokenUsage.value.total_tokens =
-          conversationTokenUsage.value.total_input_tokens +
-          conversationTokenUsage.value.total_output_tokens
-        conversationTokenUsage.value.cache_creation_input_tokens += usage.cache_creation_input_tokens || 0
-        conversationTokenUsage.value.cache_read_input_tokens += usage.cache_read_input_tokens || 0
-        // ✅ iterations 使用最大值（而非赋值）
-        conversationTokenUsage.value.iterations = Math.max(
-          conversationTokenUsage.value.iterations || 0,
-          usage.iteration || 0
-        )
-
-        console.log('[ChatStore] Token usage:', usage)
-        console.log('[ChatStore] Conversation total:', conversationTokenUsage.value)
+        // 不实时灌入 UI，等待 final_token_stats 统一覆盖，避免突变
+        console.log('[ChatStore] Token usage (streaming, not applied to UI):', usage)
         break
       }
 
-      case 'complete':
+      case 'complete': {
         // Finalize message
         if (currentStreamingMessage.value) {
           currentStreamingMessage.value.isStreaming = false
@@ -734,22 +743,34 @@ export const useChatStore = defineStore('chat', () => {
         currentStreamingMessage.value = null
         isTyping.value = false
 
-        // 从 complete 元数据中获取总计（如果有）
+        // 从 complete 元数据里获取总计（兜底校验）
         if (chunk.metadata?.token_usage) {
           const finalUsage = chunk.metadata.token_usage
+          const cacheCreation = finalUsage.cache_creation_input_tokens || 0
+          const cacheRead = finalUsage.cache_read_input_tokens || 0
+          const regularInput = finalUsage.regular_input_tokens ??
+            finalUsage.input_tokens ??
+            Math.max((finalUsage.total_input_tokens || 0) - cacheCreation - cacheRead, 0)
+          const totalInput = finalUsage.total_input_tokens ||
+            regularInput + cacheCreation + cacheRead
+          const outputTokens = finalUsage.total_output_tokens || finalUsage.output_tokens || 0
+          const totalTokens = finalUsage.total_tokens || totalInput + outputTokens
+
           conversationTokenUsage.value = {
-            total_input_tokens: finalUsage.total_input_tokens || 0,
-            total_output_tokens: finalUsage.total_output_tokens || 0,
-            total_tokens: finalUsage.total_tokens || 0,
-            cache_creation_input_tokens: finalUsage.cache_creation_input_tokens || 0,
-            cache_read_input_tokens: finalUsage.cache_read_input_tokens || 0,
+            regular_input_tokens: regularInput,
+            total_input_tokens: totalInput,
+            total_output_tokens: outputTokens,
+            total_tokens: totalTokens,
+            cache_creation_input_tokens: cacheCreation,
+            cache_read_input_tokens: cacheRead,
             iterations: chunk.metadata.iterations || 0,
             tool_calls_count: chunk.metadata.tool_calls?.length || 0
           }
           console.log('[ChatStore] Final conversation token usage:', conversationTokenUsage.value)
+          tokenStatsStatus.value = 'final'
         }
 
-        // 刷新配额信息（异步，不阻塞）
+        // 刷新计费信息（异步，不阻塞 UI）
         ;(async () => {
           try {
             const { useBillingStore } = await import('@/stores/billing')
@@ -760,6 +781,7 @@ export const useChatStore = defineStore('chat', () => {
           }
         })()
         break
+      }
 
       case 'chart': {
         // 处理图表消息
@@ -909,19 +931,47 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       case 'final_token_stats': {
-        // ✅ 处理最终的 token 统计和成本分析
+        // ⚠ 收到后端最终 token / 成本统计
         const finalStats = chunk.metadata
         console.log('[ChatStore] Final token stats received:', finalStats)
 
-        // 更新会话级别的 token 统计（使用后端计算的准确数据）
+        const cacheCreation = finalStats.cache_creation_tokens || 0
+        const cacheRead = finalStats.cache_read_tokens || 0
+        const totalInput = finalStats.total_input_tokens || (cacheCreation + cacheRead)
+        const regularInput = finalStats.regular_input_tokens ??
+          Math.max(totalInput - cacheCreation - cacheRead, 0)
+        const outputTokens = finalStats.total_output_tokens || 0
+        const totalTokens = finalStats.total_tokens || (totalInput + outputTokens)
+
+        const costBreakdown = finalStats.cost_breakdown || {}
+        const regularInputCost = costBreakdown.regular_input_cost ?? (regularInput * 3 / 1_000_000)
+        const cacheCreationCost = costBreakdown.cache_creation_cost ?? (cacheCreation * 3.75 / 1_000_000)
+        const cacheReadCost = costBreakdown.cache_read_cost ?? (cacheRead * 0.30 / 1_000_000)
+        const outputCost = costBreakdown.output_cost ?? (outputTokens * 15 / 1_000_000)
+        const totalCost = finalStats.total_cost ?? (regularInputCost + cacheCreationCost + cacheReadCost + outputCost)
+
+        const noCacheCost = totalInput * 3 / 1_000_000 + outputCost
+        const cacheSavings = finalStats.cache_savings ?? (noCacheCost - totalCost)
+        const savingsPct = finalStats.savings_percentage ?? (noCacheCost > 0 ? (cacheSavings / noCacheCost * 100) : 0)
+
         conversationTokenUsage.value = {
-          total_input_tokens: finalStats.total_input_tokens || 0,
-          total_output_tokens: finalStats.total_output_tokens || 0,
-          total_tokens: finalStats.total_tokens || 0,
-          cache_creation_input_tokens: finalStats.cache_creation_tokens || 0,
-          cache_read_input_tokens: finalStats.cache_read_tokens || 0,
+          regular_input_tokens: regularInput,
+          total_input_tokens: totalInput,
+          total_output_tokens: outputTokens,
+          total_tokens: totalTokens,
+          cache_creation_input_tokens: cacheCreation,
+          cache_read_input_tokens: cacheRead,
           iterations: finalStats.iteration_count || 0,
-          tool_calls_count: conversationTokenUsage.value.tool_calls_count // 保持之前的工具调用计数
+          tool_calls_count: conversationTokenUsage.value.tool_calls_count, // 保持之前的工具调用计数
+          cost_breakdown: {
+            regular_input_cost: regularInputCost,
+            cache_creation_cost: cacheCreationCost,
+            cache_read_cost: cacheReadCost,
+            output_cost: outputCost
+          },
+          total_cost: totalCost,
+          cache_savings: cacheSavings,
+          savings_percentage: savingsPct
         }
 
         console.log('[ChatStore] Updated conversation token usage:', conversationTokenUsage.value)
@@ -957,6 +1007,7 @@ export const useChatStore = defineStore('chat', () => {
         }
         currentStreamingMessage.value = null
         isTyping.value = false
+        tokenStatsStatus.value = 'idle'
         break
     }
   }
@@ -1053,6 +1104,8 @@ export const useChatStore = defineStore('chat', () => {
 
       // 立即停止 typing 状态
       isTyping.value = false
+      tokenStatsStatus.value = 'idle'
+      tokenStatsStatus.value = 'idle'
 
       // 如果有正在流式输出的消息,标记为已完成
       if (currentStreamingMessage.value) {
@@ -1092,16 +1145,27 @@ export const useChatStore = defineStore('chat', () => {
     isConnected.value = false
     isTyping.value = false
     currentStreamingMessage.value = null
+    tokenStatsStatus.value = 'idle'
 
     // Reset token usage
     conversationTokenUsage.value = {
+      regular_input_tokens: 0,
       total_input_tokens: 0,
       total_output_tokens: 0,
       total_tokens: 0,
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 0,
       iterations: 0,
-      tool_calls_count: 0
+      tool_calls_count: 0,
+      cost_breakdown: {
+        regular_input_cost: 0,
+        cache_creation_cost: 0,
+        cache_read_cost: 0,
+        output_cost: 0
+      },
+      total_cost: 0,
+      cache_savings: 0,
+      savings_percentage: 0
     }
   }
 
@@ -1113,6 +1177,7 @@ export const useChatStore = defineStore('chat', () => {
     isTyping,
     hasMessages,
     conversationTokenUsage,
+    tokenStatsStatus,
     pendingUserInput,  // 新增：待回答的用户输入
 
     // Actions

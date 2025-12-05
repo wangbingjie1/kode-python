@@ -95,7 +95,6 @@ class AnthropicStreamingAgent:
         """
         anthropic_tools = []
         total_tools = len(self.tools)
-
         for i, tool in enumerate(self.tools):
             tool_schema = {
                 "name": tool.name,
@@ -134,6 +133,7 @@ class AnthropicStreamingAgent:
 
         # 深拷贝避免修改原始数据
         import copy
+
         messages_copy = copy.deepcopy(messages)
 
         # 找到最后一条消息
@@ -621,32 +621,49 @@ class AnthropicStreamingAgent:
                             logger.info(f"{'='*80}")
 
                             # 本次调用
+                            # 根据 Anthropic 官方文档：input_tokens 本身就是未被缓存的部分
+                            # total_input = cache_read + cache_creation + input_tokens
+                            total_input = cache_read + cache_creation + input_tokens
                             logger.info(f"\n本次 API 调用:")
-                            logger.info(f"  输入 tokens:  {input_tokens:,}")
+                            logger.info(f"  总输入 tokens: {total_input:,}")
+                            if cache_read > 0:
+                                logger.info(f"    ├─ 缓存读取: {cache_read:,} tokens (节省 90%!)")
                             if cache_creation > 0:
                                 logger.info(
                                     f"    ├─ 缓存创建: {cache_creation:,} tokens (首次，1.25× 价格)"
                                 )
-                            if cache_read > 0:
-                                logger.info(f"    ├─ 缓存读取: {cache_read:,} tokens (节省 90%!)")
-                            regular_input = input_tokens - cache_creation - cache_read
-                            if regular_input > 0:
-                                logger.info(f"    └─ 常规输入: {regular_input:,} tokens")
+                            if input_tokens > 0:
+                                logger.info(f"    └─ 常规输入: {input_tokens:,} tokens")
                             logger.info(f"  输出 tokens:  {output_tokens:,}")
-                            logger.info(f"  本次总计:     {input_tokens + output_tokens:,} tokens")
+                            logger.info(f"  本次总计:     {total_input + output_tokens:,} tokens")
 
                             # 累计统计
+                            # total_input_tokens 是常规输入累计，需要加上缓存 tokens 才是真实总输入
+                            cumulative_total_input = (
+                                total_input_tokens
+                                + total_cache_creation_tokens
+                                + total_cache_read_tokens
+                            )
                             logger.info(f"\n对话累计:")
-                            logger.info(f"  累计输入:  {total_input_tokens:,} tokens")
-                            logger.info(f"  累计输出:  {total_output_tokens:,} tokens")
+                            logger.info(f"  累计常规输入: {total_input_tokens:,} tokens")
+                            if total_cache_creation_tokens > 0:
+                                logger.info(
+                                    f"  累计缓存创建: {total_cache_creation_tokens:,} tokens"
+                                )
+                            if total_cache_read_tokens > 0:
+                                logger.info(f"  累计缓存读取: {total_cache_read_tokens:,} tokens")
+                            logger.info(f"  累计总输入:   {cumulative_total_input:,} tokens")
+                            logger.info(f"  累计输出:     {total_output_tokens:,} tokens")
                             logger.info(
-                                f"  总计:      {total_input_tokens + total_output_tokens:,} tokens"
+                                f"  总计:         {cumulative_total_input + total_output_tokens:,} tokens"
                             )
 
                             # 缓存效果
                             if cache_read > 0:
                                 # 使用 total_input_tokens 避免除零错误
-                                total_for_calc = total_input_tokens if total_input_tokens > 0 else cache_read
+                                total_for_calc = (
+                                    total_input_tokens if total_input_tokens > 0 else cache_read
+                                )
                                 savings_pct = (cache_read / total_for_calc) * 90  # 90% 节省
                                 logger.info(
                                     f"\n缓存节省: ~{savings_pct:.1f}% (读取了 {cache_read:,} tokens)"
@@ -736,13 +753,23 @@ class AnthropicStreamingAgent:
                         yield {
                             "type": "error",
                             "content": f"网络连接失败（已重试 {max_retries} 次）: {error_message}",
-                            "metadata": {"error": error_message, "retries": max_retries, "error_type": "network_error"},
+                            "metadata": {
+                                "error": error_message,
+                                "retries": max_retries,
+                                "error_type": "network_error",
+                            },
                         }
                         return
 
                 except Exception as e:
                     # 识别 Anthropic API 特定错误类型
-                    from anthropic import AuthenticationError, PermissionDeniedError, RateLimitError, BadRequestError, APIError
+                    from anthropic import (
+                        AuthenticationError,
+                        PermissionDeniedError,
+                        RateLimitError,
+                        BadRequestError,
+                        APIError,
+                    )
                     from kode.utils.logger import safe_log_exception
 
                     error_message = str(e)
