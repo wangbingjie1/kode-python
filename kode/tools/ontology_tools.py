@@ -982,9 +982,6 @@ class OntologyBuilderTool(KodeTool):
 ### 象限4：应然无 ∩ 实然无（都没有）
 **处理**: 不处理（不存在的东西不建模）
 
-但如果是**领域常见概念**，可以主动建议：
-- **示例**: 电商平台通常需要购物车，即使数据库没有 carts 表，也可以记录到 uncertainties (type: missing_in_database, severity: low)
-
 ## 第三步：冲突检测与决策
 
 ### 1. 定义冲突（Definition Conflicts）
@@ -1022,6 +1019,50 @@ class OntologyBuilderTool(KodeTool):
 - 数据库：posts.title VARCHAR(200) NULL
 - **冲突**: 业务规则要求title非空，但数据库允许NULL
 - **处理**: 记录到 uncertainties (type: definition_conflict, severity: medium)
+
+---
+
+# 格式规范 (Format Standards)
+
+本节定义本体构建过程中必须遵守的格式规范，确保输出一致性和可解析性。
+
+## Entity 定位规范 (Entity Location Rules)
+
+在本体任何位置描述实体、字段、关系时，必须使用完整定位路径，禁止使用模糊表述。
+
+**基础规则**:
+
+| 问题类型 | 正确格式 | 错误格式 |
+|---------|---------|---------|
+| 单表单字段 | `table_name.field_name` | `field_name` |
+| 单表多字段 | `table_name.(field_a, field_b)` | `table_name.field_a vs field_b` |
+| 多表同名字段 | `(table_a, table_b).field_name` | `多表.field_name` |
+| 多表多字段 | `(table_a, table_b).(field_x, field_y)` | `多表.field_x/field_y` |
+| 表关系 | `table_a ↔ table_b` | `table_a 和 table_b` |
+| 跨表字段映射 | `table_a.field_a ↔ table_b.field_b` | `table_a.field_a → table_b` |
+| 本体内路径 | `schema.classes.ClassName.attributes.field` | `ClassName.field` |
+
+**禁止使用**:
+- vs、/、和、或 等自然语言连接词
+- 裸字段名（不带表名前缀）
+- 裸表名（不带问题类型标注，当描述表级问题时）
+- 中文表名描述（如"多表"、"多个表"）
+
+**表级问题标注**:
+
+当问题针对整张表或跨表模式时，使用方括号标注问题类型：
+
+| 场景 | 格式 | 示例 |
+|-----|-----|-----|
+| 缺失的表 | `[missing] table_name` | `[missing] api_call` |
+| 表名拼写问题 | `[typo] table_name` | `[typo] platform_ai_agent_categray` |
+| 孤立表（无关联） | `[orphan] table_name` | `[orphan] backup_logs` |
+| 跨表模式问题 | `[pattern] *.field_name` | `[pattern] *.(created_by, updated_by)` |
+| 废弃表 | `[deprecated] table_name` | `[deprecated] old_user_logs` |
+
+**示例值规范**:
+
+属性的 example 字段必须使用真实示例值（如 "U_123456"、"user@example.com"），禁止使用占位符（如 "【填写ID】"、"TODO"）。
 
 ---
 
@@ -1087,7 +1128,81 @@ class OntologyBuilderTool(KodeTool):
 
 **重要**: `classes` 的第一层 key 是当前域名（`{domain_name}`），第二层 key 才是表名。
 
-### 2.2 relationships（关系定义）
+### 2.2 properties（共享属性定义）
+
+当多个类（表）共享相同的字段模式时，必须将其抽取到 `schema.properties` 中统一定义，避免重复描述。
+
+**识别条件**（满足任意2条即触发）：
+- 字段名相同或相似（如 created_by / create_by / creator_id）
+- 字段在 ≥3 个表中出现
+- 业务含义相同
+
+**处理流程**：
+```
+IF 字段在 >=3 个表中出现 AND 业务含义相同
+THEN
+  1. 在 schema.properties 中定义该属性
+  2. 记录 used_by 列表（哪些类使用）
+  3. 如有命名变体，记录 naming_variants
+  4. 各 class 引用该 property（不重复定义属性细节）
+```
+
+**schema.properties 结构**：
+
+```json
+{{{{
+  "properties": {{{{
+    "audit_fields": {{{{
+      "description": "审计字段组 - 记录数据创建和修改信息",
+      "fields": {{{{
+        "created_by": {{{{
+          "type": "string",
+          "description": "创建者ID",
+          "foreign_key": "User.id"
+        }}}},
+        "created_at": {{{{
+          "type": "datetime",
+          "description": "创建时间"
+        }}}},
+        "updated_by": {{{{
+          "type": "string",
+          "description": "最后修改者ID"
+        }}}},
+        "updated_at": {{{{
+          "type": "datetime",
+          "description": "最后修改时间"
+        }}}}
+      }}}},
+      "used_by": ["orders", "users", "products", "comments"],
+      "naming_variants": {{{{
+        "created_by": ["create_by", "creator_id"],
+        "updated_at": ["update_at", "last_modify_at", "modify_time"]
+      }}}},
+      "consistency_note": "存在命名变体，建议统一为 created_by/updated_by 格式"
+    }}}},
+    "soft_delete": {{{{
+      "description": "软删除标记",
+      "fields": {{{{
+        "deleted_at": {{{{
+          "type": "datetime",
+          "nullable": true,
+          "description": "删除时间，NULL表示未删除"
+        }}}}
+      }}}},
+      "used_by": ["orders", "users", "products"],
+      "why": "支持数据恢复和审计追溯"
+    }}}}
+  }}}}
+}}}}
+```
+
+**常见通用属性组**：
+- `audit_fields`: created_by, created_at, updated_by, updated_at
+- `soft_delete`: deleted_at, is_deleted
+- `status_enum`: status（各表具体枚举值不同，但模式相同）
+- `tenant_isolation`: tenant_id, org_id
+
+### 2.3 relationships（关系定义）
 
 多对多关系需要单独定义：
 
@@ -1193,25 +1308,46 @@ class OntologyBuilderTool(KodeTool):
 
 ## 5. uncertainties（不确定性清单）
 
-**重要**: 将所有发现的问题、缺失、冲突统一记录到此处。
+**重要**: 将所有发现的问题、缺失、冲突统一记录到此处。**禁止同一实体重复出现多次。**
+
+### 聚合规则（必须遵守）
+
+| 情况 | 处理方式 |
+|-----|---------|
+| 同一表的多个问题 | 合并为一条，用 `issues` 数组列出 |
+| 多表的同类问题 | 提取为 `[pattern]` 级问题，记录 `affected_tables` |
+| 同一字段的多角度问题 | 合并为一条，在 `issues` 中分项描述 |
+
+**禁止**: 同一 entity 在 uncertainties 中重复出现。当多个表存在同样的问题时，聚合为模式级问题。
+
+**严重性判断**:
+- `high`: 核心逻辑冲突，必须立即解决（如关系基数错误）
+- `medium`: 需要明确但可以暂时假设（如字段含义不明）
+- `low`: 轻微不一致，不影响主流程（如命名风格）
 
 ```json
 {{{{
   "uncertainties": [
     {{{{
       "id": "UC_001",
-      "type": "schema_ambiguity/missing_in_database/naming_confusion/business_logic_unclear/definition_conflict/missing_context",
+      "entity": "表名 或 [标注] 表名",
+      "type": "field_ambiguity/naming_inconsistency/table_not_found/multiple_issues/missing_in_database/definition_conflict",
       "severity": "high/medium/low",
-      "category": "数据模型/业务逻辑/命名规范/数据质量",
-      "entity": "相关的表名或类名",
-      "question": "具体的疑问描述",
-      "context": "产生疑问的上下文",
-      "impact": "对业务分析的影响",
-      "options": [
-        {{{{"option": "A", "solution": "方案描述", "pros": "优点", "cons": "缺点"}}}}
+      "data_source": "business/database/inferred",
+      "issues": [
+        {{{{
+          "type": "问题子类型（可选）",
+          "field": "相关字段（可选）",
+          "question": "具体的疑问描述",
+          "context": "产生疑问的上下文（可选）"
+        }}}}
       ],
-      "suggested_action": "建议的解决方案",
-      "data_source": "business/database/inferred"
+      "affected_tables": ["table_a", "table_b"],
+      "affected_count": 12,
+      "options": [
+        {{{{"option": "A", "solution": "方案描述"}}}}
+      ],
+      "suggested_action": "建议的解决方案"
     }}}}
   ]
 }}}}
@@ -1352,15 +1488,46 @@ class OntologyBuilderTool(KodeTool):
   "uncertainties": [
     {{{{
       "id": "UC_001",
-      "type": "business_logic_unclear",
+      "entity": "orders.(refund_amount, refund_status)",
+      "type": "missing_in_database",
       "severity": "medium",
-      "category": "业务逻辑",
+      "data_source": "inferred",
+      "issues": [
+        {{{{
+          "question": "订单取消后是否需要退款？退款流程是什么？",
+          "context": "订单有 cancelled 状态，但未发现退款相关字段"
+        }}}}
+      ],
+      "suggested_action": "确认退款流程，可能需要增加 refund_amount 字段"
+    }}}},
+    {{{{
+      "id": "UC_002",
+      "entity": "[pattern] *.(created_by, updated_by, created_at, updated_at)",
+      "type": "naming_inconsistency",
+      "severity": "low",
+      "data_source": "database",
+      "affected_tables": ["orders", "users", "products", "order_items"],
+      "affected_count": 4,
+      "issues": [
+        {{{{
+          "question": "审计字段命名不统一",
+          "context": "部分表使用 create_by，部分使用 created_by"
+        }}}}
+      ],
+      "suggested_action": "在 schema.properties.audit_fields 中定义标准命名，映射各变体"
+    }}}},
+    {{{{
+      "id": "UC_003",
       "entity": "orders",
-      "question": "订单取消后是否需要退款？退款流程是什么？",
-      "context": "订单有 cancelled 状态，但未发现退款相关字段",
-      "impact": "影响财务对账和用户退款体验",
-      "suggested_action": "确认退款流程，可能需要增加 refund_amount 字段",
-      "data_source": "inferred"
+      "type": "multiple_issues",
+      "severity": "high",
+      "data_source": "database",
+      "issues": [
+        {{{{"type": "relationship_unclear", "question": "与 payments 表的关系不明确，是1:1还是1:N？"}}}},
+        {{{{"type": "enum_undefined", "field": "status", "question": "cancelled 状态的触发条件未定义"}}}},
+        {{{{"type": "precision_unclear", "field": "total_amount", "question": "金额精度是分还是元？"}}}}
+      ],
+      "suggested_action": "核心业务表，需优先澄清以上问题"
     }}}}
   ]
 }}}}

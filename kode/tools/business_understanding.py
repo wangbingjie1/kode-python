@@ -28,21 +28,14 @@ logger = setup_logger(__name__)
 class BusinessUnderstandingInput(BaseModel):
     """业务理解工具输入参数"""
 
-    connection_name: str = Field(
-        description="数据库连接名称（用于关联业务上下文和本体）"
-    )
+    connection_name: str = Field(description="数据库连接名称（用于关联业务上下文和本体）")
     answer: Optional[str] = Field(
-        default=None,
-        description="用户对当前问题的回答（首次调用时为空，后续调用传入答案）"
+        default=None, description="用户对当前问题的回答（首次调用时为空，后续调用传入答案）"
     )
     skip_question: bool = Field(
-        default=False,
-        description="是否跳过当前问题（用户不知道答案时可跳过，但会记录）"
+        default=False, description="是否跳过当前问题（用户不知道答案时可跳过，但会记录）"
     )
-    regenerate: bool = Field(
-        default=False,
-        description="是否强制重新生成问题（忽略已有状态）"
-    )
+    regenerate: bool = Field(default=False, description="是否强制重新生成问题（忽略已有状态）")
 
 
 class BusinessUnderstandingTool(InteractiveTool):
@@ -92,6 +85,7 @@ class BusinessUnderstandingTool(InteractiveTool):
 
     class Config:
         """Pydantic config to allow arbitrary types."""
+
         arbitrary_types_allowed = True
 
     def _load_table_summary_from_cache(self, connection_name: str) -> Optional[Dict[str, Any]]:
@@ -112,7 +106,7 @@ class BusinessUnderstandingTool(InteractiveTool):
             return None
 
         try:
-            with open(schema_file, 'r', encoding='utf-8') as f:
+            with open(schema_file, "r", encoding="utf-8") as f:
                 schema_data = json.load(f)
 
             # 兼容两种格式：schema.tables 或直接 tables
@@ -184,22 +178,39 @@ class BusinessUnderstandingTool(InteractiveTool):
         prompt = f"""你是一个业务分析师，正在理解一个新的数据库系统。
 
 以下是数据库中的表结构和样例数据摘要：
-
 {tables_text}
-
-请根据这些表结构，生成 5-10 个关键业务问题，帮助我理解这个系统的业务逻辑。
-
-问题应该涵盖：
-1. 这个系统的核心业务是什么？主营什么？
-2. 商业模式是什么？（B2B/B2C/订阅/平台等）
-3. 关键业务流程是怎样的？
-4. 最关注的业务指标有哪些？
-5. 用户希望解决什么问题？
-
-要求：
-- 问题要具体，针对这个数据库的实际情况
-- 问题要有价值，能帮助理解业务本质
-- 每个问题都要有提示，帮助用户回答
+你的任务是：
+根据 Schema 自动“推测”企业业务结构与使用动机，并提出一系列封闭式、可判断或可选择的问题，让用户确认或纠正这些推测，从而消除业务层面的歧义。
+你必须遵守以下原则
+- 问题必须是业务层的，不允许涉及字段级解释。
+- 问题必须基于 Schema 的观察生成，而不是开放式提问。
+- 每个问题必须带有明确的推测，并要求用户“确认/否认/选择”。
+- 问题数量 3–5 个即可，越少越好，但必须覆盖关键业务消歧点。
+- 目标是让你 100% 理解用户的主业务模式和核心分析诉求，为构建本体提供顶层业务框架。
+你应优先提出以下三类问题（按需组合）：
+1. 业务唯一性推测（当 Schema 出现多个可能业务）
+示例逻辑（需动态生成类似问题）：
+- "数据中同时包含 {{订单}}、{{广告}}、{{订阅}} 相关结构。我推测您的核心业务可能主要是 {{订单}} 驱动，请确认是：
+ A. 订单业务为主
+ B. 广告业务为主
+ C. 订阅业务为主
+ D. 多业务并存（请指明主业务）”
+2. 核心商业模式推测
+根据 Schema 观察收入/交易/广告/订阅等线索：
+- "我在 Schema 中看到 {{交易金额}} 和 {{用户行为事件}}，推测您的商业模式更接近：
+ A. 交易型（电商/平台）
+ B. 订阅型（SaaS/会员）
+ C. 广告/流量变现
+ D. 不确定，请您指定
+ 是否正确？”
+3. 推测用户使用动机/核心需求
+根据数据中 KPI/事件/订单/用户行为等判断：
+- “根据您提供的数据，我推测您最希望通过本体解决的问题是：
+ A. 对关键指标（如收入、GMV、留存）进行监控
+ B. 做日常数据查询（like SQL→自然语言）
+ C. 获取 business insights（业务洞察）
+ D. 构建完整业务知识结构
+ 请问推测是否正确？可多选。”
 
 返回 JSON 格式（严格遵守）：
 {{
@@ -221,7 +232,7 @@ class BusinessUnderstandingTool(InteractiveTool):
             content = response.content
 
             # 提取 JSON
-            json_match = re.search(r'\{[\s\S]*\}', content)
+            json_match = re.search(r"\{[\s\S]*\}", content)
             if not json_match:
                 logger.error(f"LLM 返回格式错误: {content[:200]}")
                 return self._get_fallback_questions()
@@ -234,10 +245,7 @@ class BusinessUnderstandingTool(InteractiveTool):
                 return self._get_fallback_questions()
 
             # 转换格式
-            return [
-                (q["key"], q["question"], q.get("hint", "请详细描述"))
-                for q in questions
-            ]
+            return [(q["key"], q["question"], q.get("hint", "请详细描述")) for q in questions]
 
         except Exception as e:
             logger.error(f"生成问题失败: {e}")
@@ -260,7 +268,7 @@ class BusinessUnderstandingTool(InteractiveTool):
         answer: Optional[str] = None,
         skip_question: bool = False,
         regenerate: bool = False,
-        **kwargs
+        **kwargs,
     ) -> str:
         """
         执行业务理解交互
@@ -288,7 +296,7 @@ class BusinessUnderstandingTool(InteractiveTool):
             if table_summary is None:
                 return (
                     "❌ **未找到 Schema 缓存**\n\n"
-                    f"请先运行 `DatabaseSchemaExtractor(connection_name=\"{connection_name}\")` 提取数据库结构。"
+                    f'请先运行 `DatabaseSchemaExtractor(connection_name="{connection_name}")` 提取数据库结构。'
                 )
 
             # 生成问题
@@ -296,7 +304,7 @@ class BusinessUnderstandingTool(InteractiveTool):
             state = {
                 "questions": questions,
                 "answers": {},
-                "table_count": len(table_summary.get("tables", []))
+                "table_count": len(table_summary.get("tables", [])),
             }
             self._save_state(session_id, state)
             logger.info(f"生成了 {len(questions)} 个业务问题: {connection_name}")
@@ -335,7 +343,7 @@ class BusinessUnderstandingTool(InteractiveTool):
         question_index: int,
         questions: List[Tuple[str, str, str]],
         existing_answers: Dict[str, str],
-        connection_name: str
+        connection_name: str,
     ) -> str:
         """
         格式化问题，抛出 UserInputRequired 异常以触发前端弹窗
@@ -346,10 +354,9 @@ class BusinessUnderstandingTool(InteractiveTool):
         from kode.exceptions import UserInputRequired
 
         if question_index >= len(questions):
-            return json.dumps({
-                "status": "completed",
-                "message": "所有问题已回答完毕。"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {"status": "completed", "message": "所有问题已回答完毕。"}, ensure_ascii=False
+            )
 
         key, question_text, hint = questions[question_index]
 
@@ -361,19 +368,10 @@ class BusinessUnderstandingTool(InteractiveTool):
         self._user_response_event = asyncio.Event()
         self._user_response_data = None
 
-        # 构建已回答摘要（作为上下文）
+        # 构建简洁的上下文（不显示已回答的问题，避免冗余）
         context_parts = [f"📋 业务理解问卷 ({question_index + 1}/{len(questions)})"]
-
-        if existing_answers:
-            context_parts.append("\n已回答问题:")
-            for i, (q_key, q_text, _) in enumerate(questions[:question_index]):
-                ans = existing_answers.get(q_key, "（未回答）")
-                if len(ans) > 50:
-                    ans = ans[:50] + "..."
-                context_parts.append(f"  {i + 1}. {q_text} → {ans}")
-
-        context_parts.append(f"\n💡 提示: {hint}")
-        context_parts.append(f"\n🔗 connection_name: {connection_name}")
+        context_parts.append(f"💡 提示: {hint}")
+        context_parts.append(f"🔗 connection_name: {connection_name}")
 
         context = "\n".join(context_parts)
 
@@ -386,14 +384,11 @@ class BusinessUnderstandingTool(InteractiveTool):
             context=context,
             required=True,
             allow_defer=True,  # 允许用户跳过
-            tool_instance=self  # 传递工具实例以便接收响应
+            tool_instance=self,  # 传递工具实例以便接收响应
         )
 
     def _format_completion_message(
-        self,
-        connection_name: str,
-        questions: List[Tuple[str, str, str]],
-        answers: Dict[str, str]
+        self, connection_name: str, questions: List[Tuple[str, str, str]], answers: Dict[str, str]
     ) -> str:
         """格式化完成消息，并保存完整的问答数据"""
 
@@ -426,10 +421,7 @@ class BusinessUnderstandingTool(InteractiveTool):
         return "\n".join(message_parts)
 
     def _save_complete_business_context(
-        self,
-        connection_name: str,
-        questions: List[Tuple[str, str, str]],
-        answers: Dict[str, str]
+        self, connection_name: str, questions: List[Tuple[str, str, str]], answers: Dict[str, str]
     ) -> None:
         """
         保存完整的业务上下文
@@ -458,20 +450,17 @@ class BusinessUnderstandingTool(InteractiveTool):
             # 🔑 主要字段：纯文本问答，直接嵌入提示词
             "qa_text": qa_text,
             # 结构化数据（备用）
-            "qa_pairs": [
-                {"question": q[1], "answer": answers.get(q[0], "")}
-                for q in questions
-            ],
+            "qa_pairs": [{"question": q[1], "answer": answers.get(q[0], "")} for q in questions],
             "completed": True,
             "question_count": len(questions),
             "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now().isoformat(),
         }
 
         context_file = self.storage.base_path / connection_name / "business_context.json"
         context_file.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(context_file, 'w', encoding='utf-8') as f:
+        with open(context_file, "w", encoding="utf-8") as f:
             json.dump(context_data, f, ensure_ascii=False, indent=2)
 
         logger.info(f"[BusinessUnderstanding] 保存完整业务上下文: {context_file}")
@@ -522,8 +511,12 @@ class BusinessUnderstandingTool(InteractiveTool):
                 state["answers"][self._current_question_key] = answer
                 self._save_state(self._current_connection_name, state)
                 # 同时保存到 ontology_store
-                self.storage.update_business_context(self._current_connection_name, state["answers"])
-                logger.info(f"[BusinessUnderstanding] 保存答案: {self._current_question_key} = {answer[:50]}...")
+                self.storage.update_business_context(
+                    self._current_connection_name, state["answers"]
+                )
+                logger.info(
+                    f"[BusinessUnderstanding] 保存答案: {self._current_question_key} = {answer[:50]}..."
+                )
 
     async def _wait_for_response(self) -> str:
         """
@@ -540,24 +533,24 @@ class BusinessUnderstandingTool(InteractiveTool):
             await asyncio.wait_for(self._user_response_event.wait(), timeout=300.0)
         except asyncio.TimeoutError:
             logger.error("[BusinessUnderstanding] 用户响应超时 (5 分钟)")
-            return json.dumps({
-                "status": "timeout",
-                "message": "用户未在规定时间内回答"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {"status": "timeout", "message": "用户未在规定时间内回答"}, ensure_ascii=False
+            )
 
         # 提取答案
         if not self._user_response_data:
-            return json.dumps({
-                "status": "error",
-                "message": "无响应数据"
-            }, ensure_ascii=False)
+            return json.dumps({"status": "error", "message": "无响应数据"}, ensure_ascii=False)
 
         answer = self._user_response_data.get("answer")
         if answer is None:
             answer = ""
 
         # 检查是否还有更多问题
-        state = self._load_state(self._current_connection_name) if self._current_connection_name else None
+        state = (
+            self._load_state(self._current_connection_name)
+            if self._current_connection_name
+            else None
+        )
         questions_count = len(state.get("questions", [])) if state else 0
         answers_count = len(state.get("answers", {})) if state else 0
         has_more_questions = answers_count < questions_count
@@ -573,9 +566,13 @@ class BusinessUnderstandingTool(InteractiveTool):
         }
 
         if has_more_questions:
-            result["next_action"] = f"继续调用 BusinessUnderstanding(connection_name=\"{self._current_connection_name}\") 获取下一个问题"
+            result["next_action"] = (
+                f'继续调用 BusinessUnderstanding(connection_name="{self._current_connection_name}") 获取下一个问题'
+            )
         else:
             result["next_action"] = "所有问题已回答完毕，业务理解问卷完成"
 
-        logger.info(f"[BusinessUnderstanding] 用户回答: {answer[:50]}..., 进度: {answers_count}/{questions_count}")
+        logger.info(
+            f"[BusinessUnderstanding] 用户回答: {answer[:50]}..., 进度: {answers_count}/{questions_count}"
+        )
         return json.dumps(result, ensure_ascii=False, indent=2)
