@@ -118,42 +118,60 @@ class AnthropicStreamingAgent:
         return anthropic_tools
 
     def _add_cache_control_to_messages(self, messages: List[Dict]) -> List[Dict]:
-        """在最后一条消息的最后一个 content block 上添加 cache_control。
+        """在最后一条消息末尾注入当前时间，并添加 cache_control。
 
-        按照 Anthropic 最佳实践，在对话末尾设置缓存断点以最大化缓存命中率。
+        策略：
+        1. 把当前时间注入到最后一条消息的文本末尾（不破坏之前消息的缓存）
+        2. 在最后一个 content block 上添加 cache_control 作为缓存边界
+
+        这样既保证 AI 能感知当前时间，又不破坏 Prompt Caching。
 
         Args:
             messages: 原始消息列表
 
         Returns:
-            添加了 cache_control 的消息列表（深拷贝）
+            添加了时间信息和 cache_control 的消息列表（深拷贝）
         """
         if not messages:
             return messages
 
         # 深拷贝避免修改原始数据
         import copy
+        from kode.utils.system_info import format_system_info_dynamic
 
         messages_copy = copy.deepcopy(messages)
+
+        # 获取当前时间
+        time_info = format_system_info_dynamic()
 
         # 找到最后一条消息
         last_msg = messages_copy[-1]
         content = last_msg.get("content")
 
-        # 处理不同的 content 类型
+        # 处理不同的 content 类型，注入时间到末尾
         if isinstance(content, str):
-            # 字符串类型 → 转换为 content block 格式并添加 cache_control
+            # 字符串类型 → 追加时间，转换为 content block 格式并添加 cache_control
             last_msg["content"] = [
                 {
                     "type": "text",
-                    "text": content,
+                    "text": f"{content}\n\n<current_time>{time_info}</current_time>",
                     "cache_control": {"type": "ephemeral"},
                 }
             ]
         elif isinstance(content, list) and len(content) > 0:
-            # 列表类型 → 在最后一个 block 上添加 cache_control
+            # 列表类型 → 在最后一个 text block 追加时间，并添加 cache_control
             last_block = content[-1]
             if isinstance(last_block, dict):
+                # 如果是 text 类型，追加时间信息
+                if last_block.get("type") == "text":
+                    last_block["text"] = f"{last_block.get('text', '')}\n\n<current_time>{time_info}</current_time>"
+                else:
+                    # 不是 text 类型（如 tool_result），追加一个新的 text block
+                    content.append({
+                        "type": "text",
+                        "text": f"<current_time>{time_info}</current_time>",
+                    })
+                    last_block = content[-1]
                 last_block["cache_control"] = {"type": "ephemeral"}
 
         return messages_copy

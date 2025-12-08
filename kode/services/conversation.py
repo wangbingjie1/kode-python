@@ -137,7 +137,7 @@ class AsyncConversationService:
 
         注意：不包含系统信息和时间，这些已经分别处理：
         - 静态系统信息（OS、Python）→ system_prompt（可缓存）
-        - 动态时间信息 → 每次迭代尾部（anthropic_streaming.py）
+        - 动态时间信息 → 最后一条消息末尾（anthropic_streaming.py._add_cache_control_to_messages）
 
         这些信息会变化，不应该放在 system_prompt 中（会破坏缓存）。
         应该作为第一条 user message 注入。
@@ -166,7 +166,7 @@ class AsyncConversationService:
         注意：为了启用 Prompt Caching，system_prompt 必须保持静态。
         动态内容（缓存、数据库连接、时间）通过以下方式注入：
         - 对话头部：缓存资源、数据库连接（_get_dynamic_context）
-        - 每次迭代尾部：当前时间、token 预算（anthropic_streaming.py）
+        - 最后一条消息末尾：当前时间（anthropic_streaming.py._add_cache_control_to_messages）
         """
         from kode.utils.system_info import format_system_info_static
 

@@ -1147,12 +1147,13 @@ THEN
   4. 各 class 引用该 property（不重复定义属性细节）
 ```
 
-**schema.properties 结构**：
+**schema.properties 结构**（注意：properties 在 schema 内部，与 classes 同级）：
 
 ```json
 {{{{
-  "properties": {{{{
-    "audit_fields": {{{{
+  "schema": {{{{
+    "properties": {{{{
+      "audit_fields": {{{{
       "description": "审计字段组 - 记录数据创建和修改信息",
       "fields": {{{{
         "created_by": {{{{
@@ -1191,6 +1192,7 @@ THEN
       }}}},
       "used_by": ["orders", "users", "products"],
       "why": "支持数据恢复和审计追溯"
+    }}}}
     }}}}
   }}}}
 }}}}
@@ -1409,6 +1411,20 @@ THEN
             "belongs_to": "users",
             "has_many": ["order_items", "payments"]
           }}}}
+        }}}}
+      }}}}
+    }}}},
+
+    "properties": {{{{
+      "audit_fields": {{{{
+        "description": "审计字段组",
+        "fields": {{{{
+          "created_at": {{{{"type": "datetime", "description": "创建时间"}}}},
+          "updated_at": {{{{"type": "datetime", "description": "更新时间"}}}}
+        }}}},
+        "used_by": ["orders", "users", "products"],
+        "naming_variants": {{{{
+          "updated_at": ["update_at", "modify_time"]
         }}}}
       }}}}
     }}}},
