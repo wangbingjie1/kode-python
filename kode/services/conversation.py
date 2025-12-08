@@ -110,7 +110,7 @@ class AsyncConversationService:
                     BusinessUnderstandingTool(),  # 业务理解五问（新增）
                     DomainUncertaintyAnalyzer(),  # 并行域分析工具
                     UncertaintyQAManager(),  # 不确定性问答管理
-                    OntologyBuilderTool(),  # 本体构建器（V2格式）
+                    OntologyBuilderTool(),  # 本体构建器（V3格式）
                     OntologySearchTool(),
                     OntologyUpdateTool(),  # 本体增量更新工具（Phase 1）
                     OntologyReflectTool(),  # 本体反思工具（Phase 3）
@@ -239,20 +239,26 @@ BusinessUnderstanding(connection_name="erp_db")
 1. 检查业务理解是否完成
 2. 提取 Schema（如果没有）
 3. 智能判断构建策略（<30表直接构建，>=30表分域并行）
-4. 生成 ontology_v2.json（V2格式）
+4. 生成 ontology_v2.json（V3格式）
 
 **使用**：
 ```
 OntologyBuilder(connection_name="erp_db")
 ```
 
-**输出格式**：
-- meta: 业务元信息（五问答案）
-- domains: 业务域列表
-- classes: 业务类（含 table_mapping）
-- business_rules: 业务规则
-- metrics: 指标定义
-- data_flows: 数据流向
+**输出格式（V3）**：
+- meta: 业务元信息（域名、版本、核心目标、关键活动）
+- schema: 数据模型
+  - classes: 业务类（按域分组，含 attributes/relations/lifecycle_states）
+  - properties: 通用属性组（如 audit_fields、soft_delete）
+  - relationships: 多对多关系定义
+- business_logic: 业务逻辑
+  - rules: 业务规则（含 confidence/source）
+  - flows: 业务流程
+- mappings: 数据源映射
+  - objects: 类到表的映射
+  - metrics: 指标定义和计算公式
+- uncertainties: 不确定性清单（需用户确认的问题）
 
 ---
 
@@ -263,7 +269,7 @@ OntologyBuilder(connection_name="erp_db")
 - 理解 数据分析 业务模块：财务、供应链、生产、销售、人力资源
 
 ### 2. 业务本体构建
-- **推荐**：使用 **OntologyBuilder** 构建本体（V2格式：meta/domains/classes）
+- **推荐**：使用 **OntologyBuilder** 构建本体（V3格式：meta/schema/business_logic/mappings/uncertainties）
 - 识别隐含关系（如:订单→客户→地区）
 - 构建业务实体映射
 

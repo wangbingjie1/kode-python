@@ -201,54 +201,49 @@ class BusinessUnderstandingTool(InteractiveTool):
 
 ## 表结构和样例数据
 {tables_text}
-你的任务是：
-根据 Schema 自动“推测”企业业务结构与使用动机，并提出一系列封闭式、可判断或可选择的问题，让用户确认或纠正这些推测，从而消除业务层面的歧义。
-你必须遵守以下原则
-- 问题必须是业务层的，不允许涉及字段级解释。
-- 问题必须基于 Schema 的观察生成，而不是开放式提问。
-- 每个问题必须带有明确的推测，并要求用户“确认/否认/选择”。
-- 问题数量 3–5 个即可，越少越好，但必须覆盖关键业务消歧点。
-- 目标是让你 100% 理解用户的主业务模式和核心分析诉求，为构建本体提供顶层业务框架。
-以下是问题示例，请务必举一反三，问题包含但不限于以下示例
 
-1. 产品名称确认
-- “根据您上传的 Schema，我看到存在 {示例：clients / subscriptions / credits / feedback} 等结构，我推测贵方的业务 / 产品名称可能是以下之一：
- A. Bencat（从字段名 {bencat_user / bencat_log / bencat_order} 推测）
- B. {动态推测名称2}（根据 Schema 中另一显著命名空间推测）
- C. {动态推测名称3}（若存在多个命名空间或品牌字段）
- D. 企业本身名称为产品名称（若产品即公司）
- E. 以上都不是，我来输入正确名称
-2. 业务唯一性推测（当 Schema 出现多个可能业务）
-示例逻辑（需动态生成类似问题）：
-- "数据中同时包含 {{订单}}、{{广告}}、{{订阅}} 相关结构。我推测您的核心业务可能主要是 {{订单}} 驱动，请确认是：
- A. 订单业务为主
- B. 广告业务为主
- C. 订阅业务为主
- D. 多业务并存（请指明主业务）”
-3. 核心商业模式推测
-根据 Schema 观察收入/交易/广告/订阅等线索：
-- "我在 Schema 中看到 {{交易金额}} 和 {{用户行为事件}}，推测您的商业模式更接近：
+## 你的任务
+根据 Schema 自动"推测"企业业务结构与使用动机，并提出封闭式问题让用户确认或纠正。
+
+## 原则
+- 问题必须是业务层的，不涉及字段级解释
+- 每个问题必须带有明确的推测，要求用户"确认/否认/选择"
+- 问题数量 3-5 个，覆盖关键业务消歧点
+- **重点关注可能存在的独立子系统、已下线功能、废弃模块**（用户的回答可帮助识别无需分析的表）
+
+## 问题示例（举一反三）
+
+1. **产品/系统识别**
+"我看到表名中有 {{AO_xxx}}、{{main_xxx}}、{{legacy_xxx}} 等前缀，推测：
+ A. AO 开头是独立子系统（请说明是否在用）
+ B. legacy 开头是历史遗留（已下线？）
+ C. 都是同一系统的不同模块
+ D. 请您说明"
+
+2. **业务范围推测**
+"数据中同时包含 {{订单}}、{{广告}}、{{日志}} 相关结构。推测：
+ A. 订单是核心业务，广告/日志是辅助
+ B. 多业务并存
+ C. 部分是已下线或废弃功能（请指明）"
+
+3. **商业模式推测**
+"我看到 {{交易金额}} 和 {{用户行为}}，推测商业模式是：
  A. 交易型（电商/平台）
  B. 订阅型（SaaS/会员）
- C. 广告/流量变现
- D. 不确定，请您指定
- 是否正确？”
-4. 推测用户使用动机/核心需求
-根据数据中 KPI/事件/订单/用户行为等判断：
-- “根据您提供的数据，我推测您最希望通过本体解决的问题是：
- A. 对关键指标（如收入、GMV、留存）进行监控
- B. 做日常数据查询（like SQL→自然语言）
- C. 获取 business insights（业务洞察）
- D. 构建完整业务知识结构
- 请问推测是否正确？可多选。”
+ C. 广告变现
+ D. 其他（请说明）"
 
-返回 JSON 格式（严格遵守）：
+4. **分析需求**
+"您最希望解决的问题是：
+ A. 关键指标监控（收入、GMV、留存）
+ B. 日常数据查询
+ C. 业务洞察分析
+ D. 其他"
+
+## 返回格式（严格JSON）
 {{
     "questions": [
-        {{"key": "q1_business_type", "question": "问题内容", "hint": "回答提示"}},
-        {{"key": "q2_business_model", "question": "问题内容", "hint": "回答提示"}},
-        {{"key": "q3_user_goal", "question": "问题内容", "hint": "回答提示"}},
-        {{"key": "q_excluded_tables", "question": "关于冗余表的问题", "hint": "请列出需要排除的表名，用逗号分隔"}}
+        {{"key": "q1_xxx", "question": "问题内容", "hint": "回答提示"}}
     ]
 }}
 
@@ -425,7 +420,18 @@ class BusinessUnderstandingTool(InteractiveTool):
         """格式化完成消息，并保存完整的问答数据"""
 
         # 🔑 保存完整的问答数据（包含问题文本，供 OntologyBuilder 使用）
+        # 同时会调用 AI 分析排除表
         self._save_complete_business_context(connection_name, questions, answers)
+
+        # 读取保存的结果（包含排除表信息）
+        context_file = self.storage.base_path / connection_name / "business_context.json"
+        excluded_tables = []
+        exclusion_reasons = {}
+        if context_file.exists():
+            with open(context_file, "r", encoding="utf-8") as f:
+                context_data = json.load(f)
+                excluded_tables = context_data.get("excluded_tables", [])
+                exclusion_reasons = context_data.get("exclusion_reasons", {})
 
         message_parts = []
 
@@ -439,6 +445,24 @@ class BusinessUnderstandingTool(InteractiveTool):
             ans = answers.get(key, "（未回答）")
             message_parts.append(f"**{i + 1}. {question_text}**")
             message_parts.append(f"   {ans}")
+            message_parts.append("")
+
+        # 🔑 显示排除表信息
+        if excluded_tables:
+            message_parts.append(f"🗑️ **根据你的回答，以下 {len(excluded_tables)} 个表将被排除：**")
+            # 按原因分组显示
+            reasons_grouped: Dict[str, List[str]] = {}
+            for table in excluded_tables:
+                reason = exclusion_reasons.get(table, "业务分析不需要")
+                if reason not in reasons_grouped:
+                    reasons_grouped[reason] = []
+                reasons_grouped[reason].append(table)
+
+            for reason, tables in reasons_grouped.items():
+                if len(tables) <= 5:
+                    message_parts.append(f"   - {', '.join(tables)} ({reason})")
+                else:
+                    message_parts.append(f"   - {', '.join(tables[:5])}... 等 {len(tables)} 个表 ({reason})")
             message_parts.append("")
 
         # 保存位置
@@ -459,7 +483,7 @@ class BusinessUnderstandingTool(InteractiveTool):
         保存完整的业务上下文
 
         🔑 核心格式：qa_text（纯文本问答，直接嵌入提示词）
-        🔑 新增：解析并保存 excluded_tables 列表
+        🔑 新增：用 AI 智能分析问答内容，识别需要排除的表
 
         Args:
             connection_name: 数据库连接名
@@ -478,8 +502,8 @@ class BusinessUnderstandingTool(InteractiveTool):
 
         qa_text = "\n".join(qa_lines).strip()
 
-        # 🔑 解析排除表列表（从 q_excluded_tables 答案中提取）
-        excluded_tables = self._parse_excluded_tables(answers)
+        # 🔑 用 AI 智能分析问答，识别需要排除的表
+        excluded_tables, exclusion_reasons = self._analyze_excluded_tables(connection_name, questions, answers)
 
         # 保存到 ontology_store（统一格式）
         context_data = {
@@ -487,8 +511,9 @@ class BusinessUnderstandingTool(InteractiveTool):
             "answers": answers,
             # 结构化问答对（包含问题文本，用于构建提示词）
             "qa_pairs": [{"question": q[1], "answer": answers.get(q[0], "")} for q in questions],
-            # 🔑 新增：排除表列表（供 DatabaseSchemaClusterer 使用）
+            # 🔑 新增：排除表列表和原因（供 DatabaseSchemaClusterer 使用）
             "excluded_tables": excluded_tables,
+            "exclusion_reasons": exclusion_reasons,
             "completed": True,
             "question_count": len(questions),
             "created_at": datetime.now().isoformat(),
@@ -505,57 +530,118 @@ class BusinessUnderstandingTool(InteractiveTool):
             f"[BusinessUnderstanding] 保存完整业务上下文: {context_file}, "
             f"排除表数量: {len(excluded_tables)}"
         )
+        if exclusion_reasons:
+            logger.info(f"[BusinessUnderstanding] 排除原因: {exclusion_reasons}")
 
-    def _parse_excluded_tables(self, answers: Dict[str, str]) -> List[str]:
+    def _analyze_excluded_tables(
+        self,
+        connection_name: str,
+        questions: List[Tuple[str, str, str]],
+        answers: Dict[str, str]
+    ) -> Tuple[List[str], Dict[str, str]]:
         """
-        从用户答案中解析排除表列表
+        用 AI 智能分析问答内容，识别需要排除的表
 
-        支持多种格式：
-        - 逗号分隔: "table1, table2, table3"
-        - 换行分隔: "table1\ntable2\ntable3"
-        - 中文逗号: "table1，table2，table3"
-        - 混合格式
+        根据用户的回答（如"AO开头的表是已下线功能"），自动识别并排除相关表。
 
         Args:
-            answers: 用户答案字典
+            connection_name: 数据库连接名
+            questions: 问题列表
+            answers: 答案字典
 
         Returns:
-            排除表名列表（去重、去空）
+            (excluded_tables, exclusion_reasons)
+            - excluded_tables: 需要排除的表名列表
+            - exclusion_reasons: 排除原因字典 {"table_name": "原因"}
         """
-        # 查找排除表相关的答案
-        excluded_answer = ""
-        for key in ["q_excluded_tables", "excluded_tables", "q4_excluded_tables"]:
-            if key in answers:
-                excluded_answer = answers[key]
-                break
+        from kode.core.model_manager import ModelManager
+        from kode.utils.config import ConfigManager
 
-        if not excluded_answer or excluded_answer in ["（未回答）", "（用户跳过）", "无", "没有"]:
-            return []
+        # 加载表名列表
+        table_summary = self._load_table_summary_from_cache(connection_name)
+        if not table_summary:
+            return [], {}
 
-        # 解析表名
-        # 替换各种分隔符为统一的逗号
-        normalized = excluded_answer
-        normalized = normalized.replace("，", ",")  # 中文逗号
-        normalized = normalized.replace("\n", ",")  # 换行
-        normalized = normalized.replace(";", ",")   # 分号
-        normalized = normalized.replace("、", ",")  # 中文顿号
+        table_names = [t["name"] for t in table_summary.get("tables", [])]
 
-        # 分割并清理
-        tables = []
-        for part in normalized.split(","):
-            table_name = part.strip()
-            # 过滤掉空字符串和常见的非表名文本
-            if table_name and len(table_name) > 1:
-                # 移除可能的编号前缀（如 "1. table_name"）
-                if table_name[0].isdigit() and "." in table_name:
-                    table_name = table_name.split(".", 1)[1].strip()
-                # 移除引号
-                table_name = table_name.strip("'\"` ")
-                if table_name:
-                    tables.append(table_name)
+        # 构建问答文本
+        qa_text = "\n".join([
+            f"Q: {q[1]}\nA: {answers.get(q[0], '（未回答）')}"
+            for q in questions
+        ])
 
-        # 去重
-        return list(dict.fromkeys(tables))
+        prompt = f"""分析以下业务问答，识别需要排除的数据库表。
+
+## 数据库表名列表（共 {len(table_names)} 个）
+{', '.join(table_names)}
+
+## 业务问答
+{qa_text}
+
+## 任务
+根据用户的回答，识别哪些表应该被排除（不纳入业务分析）。
+
+排除条件：
+1. 用户明确说某些表/功能已下线、废弃、不再使用
+2. 用户说某个前缀的表是独立系统且不需要分析
+3. 用户提到某些表是测试、临时、备份用途
+4. 用户说某些模块不是核心业务
+
+## 返回格式（严格JSON）
+{{
+    "excluded_tables": ["table1", "table2"],
+    "reasons": {{
+        "table1": "用户说 AO 开头的表是已下线功能",
+        "table2": "用户说这是测试表"
+    }},
+    "patterns_excluded": ["AO_*", "test_*"]
+}}
+
+如果没有需要排除的表，返回：
+{{"excluded_tables": [], "reasons": {{}}, "patterns_excluded": []}}
+
+只返回 JSON，不要其他内容。"""
+
+        try:
+            config_manager = ConfigManager()
+            config = config_manager.get_all()
+            model_manager = ModelManager(config)
+            model = model_manager.get_model("quick")
+
+            response = model.invoke([HumanMessage(content=prompt)])
+            content = response.content
+
+            # 提取 JSON
+            json_match = re.search(r"\{[\s\S]*\}", content)
+            if not json_match:
+                logger.warning(f"[BusinessUnderstanding] AI 分析排除表失败，返回格式错误")
+                return [], {}
+
+            result = json.loads(json_match.group())
+
+            excluded_tables = result.get("excluded_tables", [])
+            reasons = result.get("reasons", {})
+            patterns = result.get("patterns_excluded", [])
+
+            # 如果有模式匹配，展开为具体表名
+            if patterns:
+                for pattern in patterns:
+                    # 简单的前缀匹配（如 "AO_*" -> 所有 AO_ 开头的表）
+                    if pattern.endswith("*"):
+                        prefix = pattern[:-1]
+                        for table in table_names:
+                            if table.startswith(prefix) and table not in excluded_tables:
+                                excluded_tables.append(table)
+                                reasons[table] = f"匹配模式 {pattern}"
+
+            logger.info(
+                f"[BusinessUnderstanding] AI 分析完成，排除 {len(excluded_tables)} 个表"
+            )
+            return excluded_tables, reasons
+
+        except Exception as e:
+            logger.error(f"[BusinessUnderstanding] AI 分析排除表失败: {e}")
+            return [], {}
 
     def get_answers(self, connection_name: str) -> Optional[Dict[str, str]]:
         """获取已保存的业务理解答案"""
