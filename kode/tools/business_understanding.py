@@ -156,67 +156,87 @@ class BusinessUnderstandingTool(InteractiveTool):
         from kode.core.model_manager import ModelManager
         from kode.utils.config import ConfigManager
 
-        # 构建表结构描述
+        # 构建表结构描述（包含实际样例数据）
         tables_desc = []
         for table in table_summary.get("tables", []):
-            desc = f"- **{table['name']}**"
+            desc = f"### {table['name']}"
             if table.get("comment"):
                 desc += f" ({table['comment']})"
+            desc += "\n"
 
-            # 添加样例数据摘要
+            # 添加样例数据（实际内容，不只是行数）
             sample_rows = table.get("sample_rows", [])
             if sample_rows:
                 # 获取字段列表
                 fields = list(sample_rows[0].keys()) if sample_rows else []
-                desc += f"\n  字段: {', '.join(fields[:10])}"  # 最多显示10个字段
-                desc += f"\n  样例数据: {len(sample_rows)} 行"
+                desc += f"字段: {', '.join(fields[:15])}\n"  # 最多显示15个字段
+
+                # 🔑 显示实际样例数据（最多3行，每行截断）
+                desc += "样例数据:\n"
+                for i, row in enumerate(sample_rows[:3]):
+                    # 格式化行数据，每个值截断到50字符
+                    row_items = []
+                    for k, v in list(row.items())[:8]:  # 最多8个字段
+                        v_str = str(v) if v is not None else "NULL"
+                        if len(v_str) > 50:
+                            v_str = v_str[:50] + "..."
+                        row_items.append(f"{k}={v_str}")
+                    desc += f"  {i+1}. {' | '.join(row_items)}\n"
+            else:
+                desc += "(无样例数据)\n"
 
             tables_desc.append(desc)
 
         tables_text = "\n".join(tables_desc)
 
+        # 生成表名列表（用于冗余表问题）
+        table_names = [t["name"] for t in table_summary.get("tables", [])]
+        table_count = len(table_names)
+
         prompt = f"""你是一个业务分析师，正在理解一个新的数据库系统。
 
-以下是数据库中的表结构和样例数据摘要：
-{tables_text}
-你的任务是：
-根据 Schema 自动“推测”企业业务结构与使用动机，并提出一系列封闭式、可判断或可选择的问题，让用户确认或纠正这些推测，从而消除业务层面的歧义。
-你必须遵守以下原则
-- 问题必须是业务层的，不允许涉及字段级解释。
-- 问题必须基于 Schema 的观察生成，而不是开放式提问。
-- 每个问题必须带有明确的推测，并要求用户“确认/否认/选择”。
-- 问题数量 3–5 个即可，越少越好，但必须覆盖关键业务消歧点。
-- 目标是让你 100% 理解用户的主业务模式和核心分析诉求，为构建本体提供顶层业务框架。
-你应优先提出以下三类问题（按需组合）：
-1. 业务唯一性推测（当 Schema 出现多个可能业务）
-示例逻辑（需动态生成类似问题）：
-- "数据中同时包含 {{订单}}、{{广告}}、{{订阅}} 相关结构。我推测您的核心业务可能主要是 {{订单}} 驱动，请确认是：
- A. 订单业务为主
- B. 广告业务为主
- C. 订阅业务为主
- D. 多业务并存（请指明主业务）”
-2. 核心商业模式推测
-根据 Schema 观察收入/交易/广告/订阅等线索：
-- "我在 Schema 中看到 {{交易金额}} 和 {{用户行为事件}}，推测您的商业模式更接近：
- A. 交易型（电商/平台）
- B. 订阅型（SaaS/会员）
- C. 广告/流量变现
- D. 不确定，请您指定
- 是否正确？”
-3. 推测用户使用动机/核心需求
-根据数据中 KPI/事件/订单/用户行为等判断：
-- “根据您提供的数据，我推测您最希望通过本体解决的问题是：
- A. 对关键指标（如收入、GMV、留存）进行监控
- B. 做日常数据查询（like SQL→自然语言）
- C. 获取 business insights（业务洞察）
- D. 构建完整业务知识结构
- 请问推测是否正确？可多选。”
+## 数据库概览
+- 表数量: {table_count}
+- 表名列表: {', '.join(table_names[:50])}{"..." if table_count > 50 else ""}
 
-返回 JSON 格式（严格遵守）：
+## 表结构和样例数据
+{tables_text}
+
+## 你的任务
+根据 Schema 和样例数据自动"推测"企业业务结构，并提出封闭式问题让用户确认或纠正。
+
+## 必须遵守的原则
+- 问题必须是业务层的，不涉及字段级解释
+- 每个问题必须带有明确的推测，要求用户"确认/否认/选择"
+- 问题数量 3-5 个，覆盖关键业务消歧点
+- **最后一个问题必须是关于冗余表的识别**
+
+## 问题类型（按顺序）
+
+### 1. 业务唯一性推测
+当 Schema 出现多个可能业务时：
+"数据中同时包含 {{订单}}、{{广告}} 相关结构。请确认核心业务是：A/B/C/D"
+
+### 2. 核心商业模式推测
+"推测您的商业模式更接近：A. 交易型 B. 订阅型 C. 广告变现 D. 其他"
+
+### 3. 用户使用动机
+"您最希望解决的问题是：A. 指标监控 B. 数据查询 C. 业务洞察 D. 其他"
+
+### 4. 🔑 冗余表识别（必须有这个问题）
+基于表名和样例数据，识别可能的冗余/无关表，让用户确认排除。
+格式要求：
+- 列出你推测的冗余表（如：日志表、临时表、备份表、测试表、废弃表）
+- 让用户确认哪些表可以排除，不需要纳入业务分析
+- 示例："我发现以下表可能是冗余/无关表：xxx_log, xxx_temp, xxx_bak, xxx_test。请确认哪些可以排除？如有其他需要排除的表也请列出。"
+
+## 返回格式（严格JSON）
 {{
     "questions": [
         {{"key": "q1_business_type", "question": "问题内容", "hint": "回答提示"}},
-        ...
+        {{"key": "q2_business_model", "question": "问题内容", "hint": "回答提示"}},
+        {{"key": "q3_user_goal", "question": "问题内容", "hint": "回答提示"}},
+        {{"key": "q_excluded_tables", "question": "关于冗余表的问题", "hint": "请列出需要排除的表名，用逗号分隔"}}
     ]
 }}
 
@@ -427,6 +447,7 @@ class BusinessUnderstandingTool(InteractiveTool):
         保存完整的业务上下文
 
         🔑 核心格式：qa_text（纯文本问答，直接嵌入提示词）
+        🔑 新增：解析并保存 excluded_tables 列表
 
         Args:
             connection_name: 数据库连接名
@@ -445,12 +466,17 @@ class BusinessUnderstandingTool(InteractiveTool):
 
         qa_text = "\n".join(qa_lines).strip()
 
+        # 🔑 解析排除表列表（从 q_excluded_tables 答案中提取）
+        excluded_tables = self._parse_excluded_tables(answers)
+
         # 保存到 ontology_store（统一格式）
         context_data = {
             # 兼容旧格式
             "answers": answers,
             # 结构化问答对（包含问题文本，用于构建提示词）
             "qa_pairs": [{"question": q[1], "answer": answers.get(q[0], "")} for q in questions],
+            # 🔑 新增：排除表列表（供 DatabaseSchemaClusterer 使用）
+            "excluded_tables": excluded_tables,
             "completed": True,
             "question_count": len(questions),
             "created_at": datetime.now().isoformat(),
@@ -463,7 +489,61 @@ class BusinessUnderstandingTool(InteractiveTool):
         with open(context_file, "w", encoding="utf-8") as f:
             json.dump(context_data, f, ensure_ascii=False, indent=2)
 
-        logger.info(f"[BusinessUnderstanding] 保存完整业务上下文: {context_file}")
+        logger.info(
+            f"[BusinessUnderstanding] 保存完整业务上下文: {context_file}, "
+            f"排除表数量: {len(excluded_tables)}"
+        )
+
+    def _parse_excluded_tables(self, answers: Dict[str, str]) -> List[str]:
+        """
+        从用户答案中解析排除表列表
+
+        支持多种格式：
+        - 逗号分隔: "table1, table2, table3"
+        - 换行分隔: "table1\ntable2\ntable3"
+        - 中文逗号: "table1，table2，table3"
+        - 混合格式
+
+        Args:
+            answers: 用户答案字典
+
+        Returns:
+            排除表名列表（去重、去空）
+        """
+        # 查找排除表相关的答案
+        excluded_answer = ""
+        for key in ["q_excluded_tables", "excluded_tables", "q4_excluded_tables"]:
+            if key in answers:
+                excluded_answer = answers[key]
+                break
+
+        if not excluded_answer or excluded_answer in ["（未回答）", "（用户跳过）", "无", "没有"]:
+            return []
+
+        # 解析表名
+        # 替换各种分隔符为统一的逗号
+        normalized = excluded_answer
+        normalized = normalized.replace("，", ",")  # 中文逗号
+        normalized = normalized.replace("\n", ",")  # 换行
+        normalized = normalized.replace(";", ",")   # 分号
+        normalized = normalized.replace("、", ",")  # 中文顿号
+
+        # 分割并清理
+        tables = []
+        for part in normalized.split(","):
+            table_name = part.strip()
+            # 过滤掉空字符串和常见的非表名文本
+            if table_name and len(table_name) > 1:
+                # 移除可能的编号前缀（如 "1. table_name"）
+                if table_name[0].isdigit() and "." in table_name:
+                    table_name = table_name.split(".", 1)[1].strip()
+                # 移除引号
+                table_name = table_name.strip("'\"` ")
+                if table_name:
+                    tables.append(table_name)
+
+        # 去重
+        return list(dict.fromkeys(tables))
 
     def get_answers(self, connection_name: str) -> Optional[Dict[str, str]]:
         """获取已保存的业务理解答案"""

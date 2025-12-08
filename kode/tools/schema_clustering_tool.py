@@ -100,10 +100,28 @@ class DatabaseSchemaClusterer(KodeTool):
         Returns:
             Clustering result as JSON
         """
+        from kode.utils.logger import setup_logger
+        logger = setup_logger(__name__)
+
         try:
             # 1. Load raw schema
             schema_data = self._load_schema(schema_file)
             tables = schema_data["schema"]["tables"]
+            original_table_count = len(tables)
+
+            # 🔑 1.5 读取 business_context.json 中的排除表列表
+            excluded_tables = self._load_excluded_tables(connection_name)
+            if excluded_tables:
+                # 过滤掉排除的表
+                tables = {k: v for k, v in tables.items() if k not in excluded_tables}
+                logger.info(
+                    f"[SchemaClusterer] 排除了 {len(excluded_tables)} 个冗余表: {excluded_tables[:10]}..."
+                    if len(excluded_tables) > 10 else
+                    f"[SchemaClusterer] 排除了 {len(excluded_tables)} 个冗余表: {excluded_tables}"
+                )
+                # 更新 schema_data 中的 tables
+                schema_data["schema"]["tables"] = tables
+
             total_tables = len(tables)
 
             # 2. Extract table features for AI analysis
@@ -139,6 +157,9 @@ class DatabaseSchemaClusterer(KodeTool):
                 "status": "success",
                 "connection_name": connection_name,
                 "clustering_summary": {
+                    "original_table_count": original_table_count,
+                    "excluded_table_count": len(excluded_tables) if excluded_tables else 0,
+                    "excluded_tables": excluded_tables[:20] if excluded_tables else [],  # 最多显示20个
                     "total_tables": total_tables,
                     "total_domains": len(domains),
                     "avg_tables_per_domain": total_tables / len(domains) if domains else 0,
@@ -152,7 +173,10 @@ class DatabaseSchemaClusterer(KodeTool):
                     ],
                 },
                 "storage": storage_result,
-                "message": f"Successfully clustered {total_tables} tables into {len(domains)} domains",
+                "message": (
+                    f"Successfully clustered {total_tables} tables into {len(domains)} domains"
+                    + (f" (excluded {len(excluded_tables)} redundant tables)" if excluded_tables else "")
+                ),
             }
 
             return json.dumps(summary, indent=2, ensure_ascii=False)
@@ -174,6 +198,31 @@ class DatabaseSchemaClusterer(KodeTool):
 
         with open(schema_path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    def _load_excluded_tables(self, connection_name: str) -> List[str]:
+        """
+        从 business_context.json 读取排除表列表。
+
+        Args:
+            connection_name: 数据库连接名
+
+        Returns:
+            排除表名列表，如果文件不存在则返回空列表
+        """
+        config = ConfigManager()
+        ontology_path = config.get("storage.ontology_path", "./ontology_store")
+        safe_conn_name = get_safe_connection_path(connection_name)
+        context_file = Path(ontology_path) / safe_conn_name / "business_context.json"
+
+        if not context_file.exists():
+            return []
+
+        try:
+            with open(context_file, "r", encoding="utf-8") as f:
+                context_data = json.load(f)
+            return context_data.get("excluded_tables", [])
+        except Exception:
+            return []
 
     def _extract_table_features(
         self, tables: Dict[str, Any], max_columns: Optional[int] = None
