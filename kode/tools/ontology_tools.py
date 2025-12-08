@@ -555,6 +555,38 @@ class OntologyBuilderTool(KodeTool):
                 "error": str(e),
             }
 
+    def _build_qa_text(self, business_context: Dict[str, Any]) -> str:
+        """从业务上下文构建问答文本
+
+        优先级：qa_pairs > answers
+        """
+        # 1. 优先使用 qa_pairs（包含完整问题文本）
+        qa_pairs = business_context.get("qa_pairs", [])
+        if qa_pairs:
+            lines = []
+            for i, pair in enumerate(qa_pairs, 1):
+                question = pair.get("question", "")
+                answer = pair.get("answer", "（未回答）")
+                if question:
+                    lines.append(f"**Q{i}: {question}**")
+                    lines.append(f"A: {answer}")
+                    lines.append("")
+            return "\n".join(lines).strip()
+
+        # 2. 回退到 answers（只有答案，问题文本丢失）
+        answers = business_context.get("answers", {})
+        if answers:
+            lines = []
+            for i, (key, answer) in enumerate(answers.items(), 1):
+                # 从 key 推断问题类型
+                label = key.replace("q", "Q").replace("_", " ").title()
+                lines.append(f"**{label}**")
+                lines.append(f"A: {answer}")
+                lines.append("")
+            return "\n".join(lines).strip()
+
+        return ""
+
     def _prepare_domain_schema(self, domain_schema: Dict[str, Any]) -> str:
         """为域准备详细schema文本（含样例数据智能摘要）。"""
         lines = []
@@ -591,11 +623,7 @@ class OntologyBuilderTool(KodeTool):
             lines.append("")
         return "\n".join(lines)
 
-    def _load_business_questions(
-        self,
-        connection_name: str,
-        business_tool
-    ) -> Dict[str, str]:
+    def _load_business_questions(self, connection_name: str, business_tool) -> Dict[str, str]:
         """
         加载业务问题列表（key -> 问题文本）
 
@@ -871,14 +899,14 @@ class OntologyBuilderTool(KodeTool):
         # 准备领域 schema 文本
         domain_schema_text = self._prepare_domain_schema(domain_schema)
 
-        # 🔥 加载业务理解问答（直接嵌入提示词）
+        # 🔥 加载业务理解问答
         from kode.tools.business_understanding import BusinessUnderstandingTool
 
         business_tool = BusinessUnderstandingTool()
         business_context = business_tool.storage.load_business_context(connection_name) or {}
 
-        # 🔑 直接使用 qa_text（纯文本问答，无需解析）
-        qa_text = business_context.get("qa_text", "")
+        # 🔑 从 qa_pairs（优先）或 answers（回退）构建问答文本
+        qa_text = self._build_qa_text(business_context)
 
         # 构建业务描述（Input 1: 应然层）
         business_context_section = ""
@@ -904,9 +932,9 @@ class OntologyBuilderTool(KodeTool):
             uncertainty_section += "\n**重要**: 构建本体时必须严格遵循上述规则！\n"
 
         # 🔥 完全使用产品经理的提示词（V3 格式）
-        prompt = f"""你是一名专业的语义层数据建模师（Semantic-Layer Modeling Agent）。
+        prompt = f"""模拟一名专业的语义层数据建模师（Semantic-Layer Modeling Agent）。
 
-你的任务是：根据用户回答的业务问题 + 用户的数据库的 schema，构建一个语义清晰、可审计、可映射的数据本体（Ontology），并基于用户需求引导本体执行各种分析类需求，交付结果。
+任务是：根据用户回答的业务问题 + 用户的数据库的 schema，构建一个语义清晰、可审计、可映射的数据本体（Ontology），并基于用户需求引导本体执行各种分析类需求，交付结果。
 
 ---
 
@@ -1357,7 +1385,7 @@ THEN
 
 ---
 
-# 完整输出示例
+# ***本体完整最终输出示例***
 
 ```json
 {{{{
@@ -1414,7 +1442,6 @@ THEN
         }}}}
       }}}}
     }}}},
-
     "properties": {{{{
       "audit_fields": {{{{
         "description": "审计字段组",
@@ -1564,7 +1591,8 @@ THEN
    - high: 有明确的数据库约束支撑
    - medium: 从命名模式或字段注释推断
    - low: 仅基于业务常识猜测
-9. **只返回 JSON，不要任何解释文字**
+9. **不要遗忘输出properties**
+10. **只返回 JSON，不要任何解释文字**
 """
 
         # 异步调用 AI
@@ -1967,7 +1995,7 @@ THEN
             [f"- {m.get('name', '')}: {m.get('formula', '')}" for m in derived_metrics[:30]]
         )
 
-        prompt = f"""你是 SaaS/ERP 业务分析专家。请根据用户的业务上下文，生成核心业务指标（KPIs）。
+        prompt = f"""模拟 SaaS/ERP 业务分析专家。请根据用户的业务上下文，生成核心业务指标（KPIs）。
 
 # 用户业务上下文
 
@@ -2246,16 +2274,18 @@ class OntologySearchTool(KodeTool):
 
                 if is_related:
                     # 返回精简版不确定性（去掉冗余字段）
-                    entity_related_uncertainties.append({
-                        "id": uncertainty.get("id", ""),
-                        "type": uncertainty.get("type", ""),
-                        "category": uncertainty.get("category", ""),
-                        "priority": uncertainty.get("priority", ""),
-                        "entity": entity,
-                        "question": uncertainty.get("question", ""),
-                        "impact": uncertainty.get("impact", ""),
-                        "suggestions": uncertainty.get("suggestions", []),
-                    })
+                    entity_related_uncertainties.append(
+                        {
+                            "id": uncertainty.get("id", ""),
+                            "type": uncertainty.get("type", ""),
+                            "category": uncertainty.get("category", ""),
+                            "priority": uncertainty.get("priority", ""),
+                            "entity": entity,
+                            "question": uncertainty.get("question", ""),
+                            "impact": uncertainty.get("impact", ""),
+                            "suggestions": uncertainty.get("suggestions", []),
+                        }
+                    )
 
             # Return with related uncertainties content
             ontology_version = ontology.get("version", "2.0")
@@ -2413,14 +2443,14 @@ class OntologySearchTool(KodeTool):
         """
         # 业务同义词映射
         synonyms = {
-            'GMV': '交易金额 成交额 订单金额 payment_price revenue',
-            '订单': 'order 交易 购买',
-            '支付': 'payment pay 付款 paid',
-            '用户': 'user 会员 customer',
-            '充值': 'recharge top_up 续费',
-            '收入': 'revenue income MRR ARR',
-            '金额': 'amount price money',
-            '交易': 'transaction trade order',
+            "GMV": "交易金额 成交额 订单金额 payment_price revenue",
+            "订单": "order 交易 购买",
+            "支付": "payment pay 付款 paid",
+            "用户": "user 会员 customer",
+            "充值": "recharge top_up 续费",
+            "收入": "revenue income MRR ARR",
+            "金额": "amount price money",
+            "交易": "transaction trade order",
         }
 
         expanded = query
@@ -2436,7 +2466,7 @@ class OntologySearchTool(KodeTool):
         result_ids: List[str],
         result_distances: List[float],
         query: str,
-        class_by_key: Dict[str, Any]
+        class_by_key: Dict[str, Any],
     ) -> List[str]:
         """
         使用关键词匹配对语义搜索结果重排序。
@@ -2468,8 +2498,8 @@ class OntologySearchTool(KodeTool):
 
             # 检查 description 是否包含查询词
             if class_id in class_by_key:
-                desc = class_by_key[class_id].get('description', '').lower()
-                why = class_by_key[class_id].get('why', '').lower()
+                desc = class_by_key[class_id].get("description", "").lower()
+                why = class_by_key[class_id].get("why", "").lower()
                 for term in query_terms:
                     if term in desc:
                         keyword_score += 0.2
@@ -2574,7 +2604,7 @@ class OntologySearchTool(KodeTool):
                 concept_results = concepts_collection.query(
                     query_texts=[expanded_query],
                     n_results=min(search_k, concept_count),
-                    include=["distances"]  # 需要距离用于重排
+                    include=["distances"],  # 需要距离用于重排
                 )
 
             # Search properties
@@ -2584,7 +2614,7 @@ class OntologySearchTool(KodeTool):
                 property_results = properties_collection.query(
                     query_texts=[expanded_query],
                     n_results=min(search_k, property_count),
-                    include=["distances"]
+                    include=["distances"],
                 )
 
             # Parse results and retrieve full ontology data
@@ -2659,10 +2689,7 @@ class OntologySearchTool(KodeTool):
                     distances = concept_results.get("distances", [[]])[0]
                     if distances:
                         reranked_concept_ids = self._rerank_by_keywords(
-                            concept_results["ids"][0],
-                            distances,
-                            query,
-                            class_by_key
+                            concept_results["ids"][0], distances, query, class_by_key
                         )
                     else:
                         reranked_concept_ids = concept_results["ids"][0]
@@ -2715,7 +2742,7 @@ class OntologySearchTool(KodeTool):
 
                     class_data = class_by_key[class_id]
                     class_text = class_id.lower()
-                    desc = class_data.get('description', '').lower()
+                    desc = class_data.get("description", "").lower()
 
                     # 检查 class_id 或 description 是否包含查询关键词
                     matched = False
@@ -2847,8 +2874,11 @@ class OntologySearchTool(KodeTool):
         return slim
 
     def _index_ontology_to_chroma(
-        self, ontology: Dict[str, Any], concepts_collection, properties_collection,
-        index_version: str = "v1"
+        self,
+        ontology: Dict[str, Any],
+        concepts_collection,
+        properties_collection,
+        index_version: str = "v1",
     ):
         """
         Index ontology data into ChromaDB collections.
@@ -2935,10 +2965,21 @@ class OntologySearchTool(KodeTool):
                     )
                     # 🔥 提取关键业务字段的 why（用于提高语义搜索召回率）
                     key_attr_whys = []
-                    importance_keywords = ['核心', '关键', '重要', '收入', '订单', 'GMV', 'MRR', '金额', '支付', '交易']
+                    importance_keywords = [
+                        "核心",
+                        "关键",
+                        "重要",
+                        "收入",
+                        "订单",
+                        "GMV",
+                        "MRR",
+                        "金额",
+                        "支付",
+                        "交易",
+                    ]
                     for attr_name, attr_data in attributes.items():
                         if isinstance(attr_data, dict):
-                            why = attr_data.get('why', '')
+                            why = attr_data.get("why", "")
                             if why and any(kw in why for kw in importance_keywords):
                                 key_attr_whys.append(f"{attr_name}:{why[:50]}")
                     key_whys_text = " ".join(key_attr_whys[:5])  # 限制最多 5 个关键字段
@@ -2974,7 +3015,7 @@ class OntologySearchTool(KodeTool):
 
                         attr_info = attr_data if isinstance(attr_data, dict) else {}
                         # 🔥 加入 why 字段，提高业务语义召回率
-                        attr_why = attr_info.get('why', '')[:60] if attr_info.get('why') else ''
+                        attr_why = attr_info.get("why", "")[:60] if attr_info.get("why") else ""
                         doc_text = f"{attr_name} {attr_info.get('type', '')} {attr_info.get('constraint', '')} {attr_why} {class_key}"
                         property_docs.append(doc_text)
 

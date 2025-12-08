@@ -174,7 +174,7 @@ class AsyncConversationService:
         static_system_info = format_system_info_static()
 
         # 构建 system_prompt（使用字符串格式化避免 f-string 嵌套过深）
-        system_prompt = """你是一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
+        system_prompt = """模拟一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
 
 {static_system_info}""".format(
             static_system_info=static_system_info

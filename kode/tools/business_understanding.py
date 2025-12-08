@@ -445,11 +445,11 @@ class BusinessUnderstandingTool(InteractiveTool):
 
         qa_text = "\n".join(qa_lines).strip()
 
-        # 保存到 ontology_store
+        # 保存到 ontology_store（统一格式）
         context_data = {
-            # 🔑 主要字段：纯文本问答，直接嵌入提示词
-            "qa_text": qa_text,
-            # 结构化数据（备用）
+            # 兼容旧格式
+            "answers": answers,
+            # 结构化问答对（包含问题文本，用于构建提示词）
             "qa_pairs": [{"question": q[1], "answer": answers.get(q[0], "")} for q in questions],
             "completed": True,
             "question_count": len(questions),

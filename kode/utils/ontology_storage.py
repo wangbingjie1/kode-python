@@ -111,7 +111,7 @@ class OntologyStorageV2:
         connection_name: str,
         new_answers: Dict[str, str]
     ) -> Path:
-        """更新业务理解答案（增量更新）
+        """更新业务理解答案（增量更新，保留其他字段）
 
         Args:
             connection_name: 数据库连接名
@@ -123,7 +123,9 @@ class OntologyStorageV2:
         existing = self.load_business_context(connection_name)
 
         if existing:
-            # 合并答案
+            # 合并答案，保留其他字段（如 qa_text, qa_pairs）
+            if "answers" not in existing:
+                existing["answers"] = {}
             existing["answers"].update(new_answers)
             existing["completed"] = len(existing["answers"]) >= 5
             existing["updated_at"] = datetime.now().isoformat()
