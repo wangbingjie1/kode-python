@@ -182,83 +182,64 @@ class AsyncConversationService:
 
         system_prompt += """
 
-## 本体构建流程（2步）⭐ 核心工作流
+## 本体构建流程（3步）⭐ 核心工作流
 
-### 步骤1：业务理解（必需）
+**🔑 关键：必须按顺序执行，不能跳步！**
+
+### 步骤1：提取表结构
+
+**工具**：`DatabaseSchemaExtractor`
+
+首次连接数据库时，调用此工具提取 Schema。
+- 仅提取表结构，**不做聚类**
+- 返回结果包含 `next_step` 提示
+
+```
+DatabaseSchemaExtractor(connection_name="erp_db")
+```
+
+### 步骤2：业务理解（必需）
 
 **工具**：`BusinessUnderstanding`
 
-首次连接数据库时，调用此工具。工具会根据数据库表结构自动生成 5-10 个针对性问题。
+根据表结构生成问题，用户回答后自动识别需要排除的表/前缀。
 
 **🔑 工作机制**：
-- 工具会自动触发前端弹窗，向用户提问（不需要手动调用 AskUser）
-- 用户回答后，你会收到包含答案和下一步指令的 JSON
-- 根据 `has_more_questions` 字段决定是否继续
+- 工具自动触发前端弹窗向用户提问
+- 用户回答后生成 `excluded_tables`（排除的表列表）和 `excluded_prefixes`（排除的前缀）
+- 这些配置会在后续聚类时使用
 
 **使用流程**：
 1. 调用 `BusinessUnderstanding(connection_name="xxx")` 启动问卷
-2. 前端自动弹窗向用户提问（你不需要做任何事）
-3. 用户回答后，你收到 JSON 响应，如：
-   ```json
-   {
-     "status": "answer_received",
-     "answer": "用户的回答",
-     "progress": "1/10",
-     "has_more_questions": true,
-     "next_action": "继续调用 BusinessUnderstanding..."
-   }
-   ```
-4. 如果 `has_more_questions=true`，继续调用 `BusinessUnderstanding(connection_name="xxx")`
-5. 重复直到 `has_more_questions=false` 或收到完成消息
-
-**示例**：
-```
-# 第1步：启动问卷
-BusinessUnderstanding(connection_name="erp_db")
-# → 前端弹窗，用户回答后返回 JSON
-
-# 第2步：收到用户回答
-# {"status": "answer_received", "has_more_questions": true, ...}
-# → 继续调用
-
-# 第3步：继续问卷
-BusinessUnderstanding(connection_name="erp_db")
-# → 重复直到完成
-```
+2. 根据 `has_more_questions` 字段决定是否继续
+3. 完成后自动保存到 `ontology_store/{connection_name}/business_context.json`
 
 **规则**：
-- ✅ `has_more_questions=true` 时必须继续调用 BusinessUnderstanding
-- ✅ 答案自动保存到 `ontology_store/{connection_name}/business_context.json`
+- ✅ `has_more_questions=true` 时必须继续调用
+- ✅ 完成后会自动分析并生成排除配置
 - ❌ 禁止跳过直接构建本体
 
-### 步骤2：一键构建本体
+### 步骤3：一键构建本体
 
 **工具**：`OntologyBuilder`
 
 调用后会自动：
 1. 检查业务理解是否完成
-2. 提取 Schema（如果没有）
-3. 智能判断构建策略（<30表直接构建，>=30表分域并行）
-4. 生成 ontology_v2.json（V3格式）
+2. 读取排除配置（excluded_tables/excluded_prefixes）
+3. 聚类分域（剔除冗余表）
+4. 分析不确定性
+5. 生成 ontology_v2.json（V3格式）
 
-**使用**：
 ```
 OntologyBuilder(connection_name="erp_db")
 ```
 
 **输出格式（V3）**：
-- meta: 业务元信息（域名、版本、核心目标、关键活动）
-- schema: 数据模型
-  - classes: 业务类（按域分组，含 attributes/relations/lifecycle_states）
-  - properties: 通用属性组（如 audit_fields、soft_delete）
-  - relationships: 多对多关系定义
-- business_logic: 业务逻辑
-  - rules: 业务规则（含 confidence/source）
-  - flows: 业务流程
-- mappings: 数据源映射
-  - objects: 类到表的映射
-  - metrics: 指标定义和计算公式
-- uncertainties: 不确定性清单（需用户确认的问题）
+- meta: 业务元信息
+- schema: 数据模型（classes, properties, relationships）
+- business_logic: 业务逻辑（rules, flows）
+- mappings: 数据源映射（objects, metrics）
+- uncertainties: 不确定性清单
 
 ---
 

@@ -1,9 +1,9 @@
 {
   "domain_name": "user_management",
-  "display_name": "User Management",
-  "description": "Core user account management including registration, authentication, profiles, devices, and blacklist control.",
-  "table_count": 10,
-  "created_at": "2025-12-05T10:41:05.797639",
+  "display_name": "用户管理",
+  "description": "管理用户账号、认证、个人信息、设备信息、黑名单和钱包等核心用户数据",
+  "table_count": 12,
+  "created_at": "2025-12-08T22:37:16.466232",
   "connection": {
     "name": "yanfa",
     "db_type": "mysql",
@@ -1212,6 +1212,364 @@
         "json_path": "schema.tables.platform_user_wallet"
       }
     },
+    "platform_user_sign_detail": {
+      "name": "platform_user_sign_detail",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": "0",
+          "comment": "id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": "0",
+          "comment": "用户id"
+        },
+        {
+          "name": "sign_date",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "签到时间"
+        },
+        {
+          "name": "credit_reward",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "奖励"
+        },
+        {
+          "name": "continue_sign_times",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "当前签到连续次数"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人Id"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除：0否，1是"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 400365503308108800,
+            "user_id": 399455891209851904,
+            "sign_date": 1743655643598,
+            "credit_reward": 3,
+            "continue_sign_times": 1,
+            "create_at": 1743655643605,
+            "create_name": "399455891209851904",
+            "create_by": "399455891209851904",
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 401768043350332416,
+            "user_id": 399345871478592512,
+            "sign_date": 1743739241500,
+            "credit_reward": 3,
+            "continue_sign_times": 1,
+            "create_at": 1743739241506,
+            "create_name": "399345871478592512",
+            "create_by": "399345871478592512",
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 402166555749651456,
+            "user_id": 399455891209851904,
+            "sign_date": 1743762994686,
+            "credit_reward": 3,
+            "continue_sign_times": 2,
+            "create_at": 1743762994696,
+            "create_name": "399455891209851904",
+            "create_by": "399455891209851904",
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 406142472054379520,
+            "user_id": 399348546588906496,
+            "sign_date": 1743999977770,
+            "credit_reward": 3,
+            "continue_sign_times": 1,
+            "create_at": 1743999977775,
+            "create_name": "399348546588906496",
+            "create_by": "399348546588906496",
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 406303855383417856,
+            "user_id": 399345257348600832,
+            "sign_date": 1744009596965,
+            "credit_reward": 3,
+            "continue_sign_times": 1,
+            "create_at": 1744009596971,
+            "create_name": "399345257348600832",
+            "create_by": "399345257348600832",
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      },
+      "schema_ref": {
+        "connection": "yanfa",
+        "table": "platform_user_sign_detail",
+        "schema_file": "schema_store\\yanfa\\schema_raw.json",
+        "json_path": "schema.tables.platform_user_sign_detail"
+      }
+    },
+    "platform_user_sign_status": {
+      "name": "platform_user_sign_status",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": "0",
+          "comment": "id"
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false,
+          "default": "0",
+          "comment": "用户id"
+        },
+        {
+          "name": "last_sign_day",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "最后一次签到时间"
+        },
+        {
+          "name": "continue_sign_times",
+          "type": "int",
+          "nullable": true,
+          "default": null,
+          "comment": "7天周期内连续签到天数"
+        },
+        {
+          "name": "history_continue_sign_times",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "历史累积连续签到天数， 新增字段默认值为0"
+        },
+        {
+          "name": "create_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "创建时间"
+        },
+        {
+          "name": "create_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人"
+        },
+        {
+          "name": "create_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "创建人id"
+        },
+        {
+          "name": "update_at",
+          "type": "bigint",
+          "nullable": true,
+          "default": null,
+          "comment": "更新时间"
+        },
+        {
+          "name": "update_name",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "更新人id"
+        },
+        {
+          "name": "is_del",
+          "type": "int",
+          "nullable": true,
+          "default": "0",
+          "comment": "是否删除：0否，1是"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 12,
+      "sample_data": {
+        "row_count": 5,
+        "rows": [
+          {
+            "id": 400365503190668288,
+            "user_id": 399455891209851904,
+            "last_sign_day": 1744021046073,
+            "continue_sign_times": 1,
+            "history_continue_sign_times": 1,
+            "create_at": 1743655643598,
+            "create_name": "399455891209851904",
+            "create_by": "399455891209851904",
+            "update_at": 1744021046073,
+            "update_name": "399455891209851904",
+            "update_by": "399455891209851904",
+            "is_del": 0
+          },
+          {
+            "id": 401768043249669120,
+            "user_id": 399345871478592512,
+            "last_sign_day": 1743739241500,
+            "continue_sign_times": 1,
+            "history_continue_sign_times": 1,
+            "create_at": 1743739241500,
+            "create_name": "399345871478592512",
+            "create_by": "399345871478592512",
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          },
+          {
+            "id": 406142471970493440,
+            "user_id": 399348546588906496,
+            "last_sign_day": 1754278343137,
+            "continue_sign_times": 1,
+            "history_continue_sign_times": 1,
+            "create_at": 1743999977770,
+            "create_name": "399348546588906496",
+            "create_by": "399348546588906496",
+            "update_at": 1754278343137,
+            "update_name": "399348546588906496",
+            "update_by": "399348546588906496",
+            "is_del": 0
+          },
+          {
+            "id": 406303855282754560,
+            "user_id": 399345257348600832,
+            "last_sign_day": 1744110007943,
+            "continue_sign_times": 2,
+            "history_continue_sign_times": 2,
+            "create_at": 1744009596965,
+            "create_name": "399345257348600832",
+            "create_by": "399345257348600832",
+            "update_at": 1744110007943,
+            "update_name": "399345257348600832",
+            "update_by": "399345257348600832",
+            "is_del": 0
+          },
+          {
+            "id": 406410481553642496,
+            "user_id": 406294525724595200,
+            "last_sign_day": 1744015952386,
+            "continue_sign_times": 1,
+            "history_continue_sign_times": 1,
+            "create_at": 1744015952386,
+            "create_name": "406294525724595200",
+            "create_by": "406294525724595200",
+            "update_at": null,
+            "update_name": null,
+            "update_by": null,
+            "is_del": 0
+          }
+        ],
+        "note": "前 5 行样例数据（快速采样，无排序）"
+      },
+      "schema_ref": {
+        "connection": "yanfa",
+        "table": "platform_user_sign_status",
+        "schema_file": "schema_store\\yanfa\\schema_raw.json",
+        "json_path": "schema.tables.platform_user_sign_status"
+      }
+    },
     "user": {
       "name": "user",
       "columns": [
@@ -1598,369 +1956,193 @@
         "json_path": "schema.tables.user_option"
       }
     },
-    "backup_disabled_blacklist_accounts": {
-      "name": "backup_disabled_blacklist_accounts",
+    "personal_access_tokens": {
+      "name": "personal_access_tokens",
       "columns": [
         {
           "name": "id",
           "type": "bigint",
           "nullable": false,
           "default": null,
-          "comment": "账号ID"
+          "comment": ""
         },
         {
-          "name": "mobile",
+          "name": "tokenable_type",
           "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "电话号"
-        },
-        {
-          "name": "dial_code",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "区号"
-        },
-        {
-          "name": "login_name",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "登录名称"
-        },
-        {
-          "name": "pwd",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "密码"
-        },
-        {
-          "name": "type",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "账号类型 appleid、googleid"
-        },
-        {
-          "name": "main_partner_id",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "第三方账号id 主"
-        },
-        {
-          "name": "second_partner_id",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "第三方账号id 次"
-        },
-        {
-          "name": "partner_nick_name",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "第三方账号 用户昵称"
-        },
-        {
-          "name": "partner_head_img_url",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "第三方账号 用户头像"
-        },
-        {
-          "name": "partner_sex",
-          "type": "int",
-          "nullable": true,
-          "default": "1",
-          "comment": "第三方账号性别 1 男 2 女 0 未知"
-        },
-        {
-          "name": "register_ip",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "注册IP"
-        },
-        {
-          "name": "status",
-          "type": "int",
-          "nullable": true,
-          "default": "1",
-          "comment": "禁用状态：0 不可用 1 可用"
-        },
-        {
-          "name": "user_id",
-          "type": "bigint",
-          "nullable": true,
+          "nullable": false,
           "default": null,
           "comment": ""
         },
         {
-          "name": "channel",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "渠道"
-        },
-        {
-          "name": "last_device_no",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "最后一次登录设备"
-        },
-        {
-          "name": "create_at",
+          "name": "tokenable_id",
           "type": "bigint",
-          "nullable": true,
+          "nullable": false,
           "default": null,
-          "comment": "创建时间"
+          "comment": ""
         },
         {
-          "name": "create_name",
+          "name": "name",
           "type": "varchar",
-          "nullable": true,
+          "nullable": false,
           "default": null,
-          "comment": "创建人"
+          "comment": ""
         },
         {
-          "name": "create_by",
+          "name": "token",
           "type": "varchar",
-          "nullable": true,
+          "nullable": false,
           "default": null,
-          "comment": "创建人ID"
+          "comment": ""
         },
         {
-          "name": "update_at",
-          "type": "bigint",
-          "nullable": true,
-          "default": null,
-          "comment": "更新时间"
-        },
-        {
-          "name": "update_name",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "更新人"
-        },
-        {
-          "name": "update_by",
-          "type": "varchar",
-          "nullable": true,
-          "default": null,
-          "comment": "更新ID"
-        },
-        {
-          "name": "is_del",
-          "type": "int",
-          "nullable": true,
-          "default": "0",
-          "comment": "是否删除 0否 1是"
-        },
-        {
-          "name": "partner_attachment",
+          "name": "abilities",
           "type": "text",
           "nullable": true,
           "default": null,
-          "comment": "三方账号附加信息"
+          "comment": ""
         },
         {
-          "name": "sub_channel",
-          "type": "varchar",
+          "name": "last_used_at",
+          "type": "timestamp",
           "nullable": true,
           "default": null,
           "comment": ""
         },
         {
-          "name": "email_used",
-          "type": "varchar",
+          "name": "expires_at",
+          "type": "timestamp",
           "nullable": true,
           "default": null,
           "comment": ""
         },
         {
-          "name": "domain_used",
-          "type": "varchar",
+          "name": "created_at",
+          "type": "timestamp",
           "nullable": true,
           "default": null,
           "comment": ""
         },
         {
-          "name": "backup_time",
-          "type": "bigint",
-          "nullable": false,
-          "default": "0",
+          "name": "updated_at",
+          "type": "timestamp",
+          "nullable": true,
+          "default": null,
           "comment": ""
         }
       ],
       "foreign_keys": [],
-      "column_count": 28,
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 10,
+      "sample_data": {
+        "row_count": 0,
+        "rows": [],
+        "note": "前 0 行样例数据（快速采样，无排序）"
+      },
+      "schema_ref": {
+        "connection": "yanfa",
+        "table": "personal_access_tokens",
+        "schema_file": "schema_store\\yanfa\\schema_raw.json",
+        "json_path": "schema.tables.personal_access_tokens"
+      }
+    },
+    "pre_signup": {
+      "name": "pre_signup",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": null,
+          "comment": ""
+        },
+        {
+          "name": "email",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "用户email"
+        },
+        {
+          "name": "source",
+          "type": "varchar",
+          "nullable": true,
+          "default": null,
+          "comment": "用户来源"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "创建时间"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "更新时间"
+        }
+      ],
+      "foreign_keys": [],
+      "primary_key": {
+        "name": "PRIMARY",
+        "columns": [
+          "id"
+        ]
+      },
+      "column_count": 5,
       "sample_data": {
         "row_count": 5,
         "rows": [
           {
-            "id": 494990495995401217,
-            "mobile": null,
-            "dial_code": null,
-            "login_name": "jlisdpp7gqh@disbox.net",
-            "pwd": null,
-            "type": "glbgpt",
-            "main_partner_id": "456013",
-            "second_partner_id": null,
-            "partner_nick_name": null,
-            "partner_head_img_url": null,
-            "partner_sex": 1,
-            "register_ip": null,
-            "status": 1,
-            "user_id": 494990495995401216,
-            "channel": "glbgpt",
-            "last_device_no": null,
-            "create_at": 1749295732681,
-            "create_name": null,
-            "create_by": null,
-            "update_at": null,
-            "update_name": null,
-            "update_by": null,
-            "is_del": 0,
-            "partner_attachment": null,
-            "sub_channel": null,
-            "email_used": "jlisdpp7gqh@disbox.net",
-            "domain_used": "disbox.net",
-            "backup_time": 1749878177000
+            "id": 11,
+            "email": "1178377059@qq.com",
+            "source": null,
+            "created_at": "2025-10-21T12:14:32",
+            "updated_at": "2025-10-21T12:14:32"
           },
           {
-            "id": 495006553452057601,
-            "mobile": null,
-            "dial_code": null,
-            "login_name": "jhwunirqyyf@tmpeml.com",
-            "pwd": null,
-            "type": "glbgpt",
-            "main_partner_id": "456031",
-            "second_partner_id": null,
-            "partner_nick_name": null,
-            "partner_head_img_url": null,
-            "partner_sex": 1,
-            "register_ip": null,
-            "status": 1,
-            "user_id": 495006553452057600,
-            "channel": "glbgpt",
-            "last_device_no": null,
-            "create_at": 1749296689780,
-            "create_name": null,
-            "create_by": null,
-            "update_at": null,
-            "update_name": null,
-            "update_by": null,
-            "is_del": 0,
-            "partner_attachment": null,
-            "sub_channel": null,
-            "email_used": "jhwunirqyyf@tmpeml.com",
-            "domain_used": "tmpeml.com",
-            "backup_time": 1749878177000
+            "id": 12,
+            "email": "rRooBet9001@protonmail.com",
+            "source": null,
+            "created_at": "2025-10-21T12:15:12",
+            "updated_at": "2025-10-21T12:15:12"
           },
           {
-            "id": 495024374345110529,
-            "mobile": null,
-            "dial_code": null,
-            "login_name": "bnjvb65w@moakt.ws",
-            "pwd": null,
-            "type": "glbgpt",
-            "main_partner_id": "456052",
-            "second_partner_id": null,
-            "partner_nick_name": null,
-            "partner_head_img_url": null,
-            "partner_sex": 1,
-            "register_ip": null,
-            "status": 1,
-            "user_id": 495024374345110528,
-            "channel": "glbgpt",
-            "last_device_no": null,
-            "create_at": 1749297751988,
-            "create_name": null,
-            "create_by": null,
-            "update_at": null,
-            "update_name": null,
-            "update_by": null,
-            "is_del": 0,
-            "partner_attachment": null,
-            "sub_channel": null,
-            "email_used": "bnjvb65w@moakt.ws",
-            "domain_used": "moakt.ws",
-            "backup_time": 1749878177000
+            "id": 19,
+            "email": "antoine.becotte2@qolab.ca",
+            "source": null,
+            "created_at": "2025-10-21T12:18:51",
+            "updated_at": "2025-10-21T12:18:51"
           },
           {
-            "id": 495058305761154049,
-            "mobile": null,
-            "dial_code": null,
-            "login_name": "k6ja88fjq@tmpmail.net",
-            "pwd": null,
-            "type": "glbgpt",
-            "main_partner_id": "456097",
-            "second_partner_id": null,
-            "partner_nick_name": null,
-            "partner_head_img_url": null,
-            "partner_sex": 1,
-            "register_ip": null,
-            "status": 1,
-            "user_id": 495058305761154048,
-            "channel": "glbgpt",
-            "last_device_no": null,
-            "create_at": 1749299774458,
-            "create_name": null,
-            "create_by": null,
-            "update_at": null,
-            "update_name": null,
-            "update_by": null,
-            "is_del": 0,
-            "partner_attachment": null,
-            "sub_channel": null,
-            "email_used": "k6ja88fjq@tmpmail.net",
-            "domain_used": "tmpmail.net",
-            "backup_time": 1749878177000
+            "id": 27,
+            "email": "v9bg4@8mtz.com",
+            "source": null,
+            "created_at": "2025-10-21T12:32:49",
+            "updated_at": "2025-10-21T12:32:49"
           },
           {
-            "id": 495060657138308097,
-            "mobile": null,
-            "dial_code": null,
-            "login_name": "bmhu1vq@tmail.ws",
-            "pwd": null,
-            "type": "glbgpt",
-            "main_partner_id": "456099",
-            "second_partner_id": null,
-            "partner_nick_name": null,
-            "partner_head_img_url": null,
-            "partner_sex": 1,
-            "register_ip": null,
-            "status": 1,
-            "user_id": 495060657138308096,
-            "channel": "glbgpt",
-            "last_device_no": null,
-            "create_at": 1749299914611,
-            "create_name": null,
-            "create_by": null,
-            "update_at": null,
-            "update_name": null,
-            "update_by": null,
-            "is_del": 0,
-            "partner_attachment": null,
-            "sub_channel": null,
-            "email_used": "bmhu1vq@tmail.ws",
-            "domain_used": "tmail.ws",
-            "backup_time": 1749878177000
+            "id": 28,
+            "email": "eugenianguyen1914@tubermail.com",
+            "source": null,
+            "created_at": "2025-10-21T12:34:09",
+            "updated_at": "2025-10-21T12:34:09"
           }
         ],
         "note": "前 5 行样例数据（快速采样，无排序）"
       },
       "schema_ref": {
         "connection": "yanfa",
-        "table": "backup_disabled_blacklist_accounts",
+        "table": "pre_signup",
         "schema_file": "schema_store\\yanfa\\schema_raw.json",
-        "json_path": "schema.tables.backup_disabled_blacklist_accounts"
+        "json_path": "schema.tables.pre_signup"
       }
     },
     "platform_email_domain_blacklist": {
@@ -2057,261 +2239,169 @@
         "schema_file": "schema_store\\yanfa\\schema_raw.json",
         "json_path": "schema.tables.platform_email_domain_blacklist"
       }
-    },
-    "personal_access_tokens": {
-      "name": "personal_access_tokens",
-      "columns": [
-        {
-          "name": "id",
-          "type": "bigint",
-          "nullable": false,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "tokenable_type",
-          "type": "varchar",
-          "nullable": false,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "tokenable_id",
-          "type": "bigint",
-          "nullable": false,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "name",
-          "type": "varchar",
-          "nullable": false,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "token",
-          "type": "varchar",
-          "nullable": false,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "abilities",
-          "type": "text",
-          "nullable": true,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "last_used_at",
-          "type": "timestamp",
-          "nullable": true,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "expires_at",
-          "type": "timestamp",
-          "nullable": true,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "created_at",
-          "type": "timestamp",
-          "nullable": true,
-          "default": null,
-          "comment": ""
-        },
-        {
-          "name": "updated_at",
-          "type": "timestamp",
-          "nullable": true,
-          "default": null,
-          "comment": ""
-        }
-      ],
-      "foreign_keys": [],
-      "primary_key": {
-        "name": "PRIMARY",
-        "columns": [
-          "id"
-        ]
-      },
-      "column_count": 10,
-      "sample_data": {
-        "row_count": 0,
-        "rows": [],
-        "note": "前 0 行样例数据（快速采样，无排序）"
-      },
-      "schema_ref": {
-        "connection": "yanfa",
-        "table": "personal_access_tokens",
-        "schema_file": "schema_store\\yanfa\\schema_raw.json",
-        "json_path": "schema.tables.personal_access_tokens"
-      }
     }
   },
   "relationships": [],
   "uncertainties": [
     {
       "type": "schema_ambiguity",
-      "category": "表关系",
+      "category": "数据一致性",
       "priority": "high",
-      "entity": "user vs platform_user",
-      "question": "存在两个用户主表（user 和 platform_user），它们之间的关系和使用场景不明确",
-      "context": "user 表包含 balance、chain_account 等区块链相关字段；platform_user 表包含 sex、birthday 等个人信息字段。两者都有 id 作为 user_id",
-      "impact": "无法确定用户数据的主表，影响用户查询、关联分析和数据一致性保障",
+      "entity": "platform_user vs user",
+      "question": "存在两个用户主表（platform_user 和 user），它们之间的关系和使用场景不明确",
+      "context": "platform_user 使用 id 作为 user_id，user 表也有独立的 id。platform_user_account 通过 user_id 关联 platform_user，但 user 表似乎是独立的用户体系",
+      "impact": "无法确定用户数据的主数据源，影响用户关系分析、数据统计和跨表关联",
       "suggestions": [
-        "明确两表的业务边界：是否一个用于平台用户，一个用于区块链用户",
-        "建立明确的外键关系或文档说明两表的关联方式",
-        "考虑是否应该合并或建立清晰的主从关系"
+        "明确两个表的使用场景：是否为不同产品线/业务系统",
+        "说明是否存在数据迁移或系统整合的历史原因",
+        "建立明确的表间关联关系或使用边界"
       ],
       "domain": "user_management",
-      "id": "user_management_user vs platform_user_29"
+      "id": "user_management_platform_user vs user_27"
     },
     {
       "type": "naming_confusion",
       "category": "字段命名",
       "priority": "high",
-      "entity": "platform_user_account.id vs account_id",
-      "question": "账号ID的命名不一致，platform_user_account.id 注释为'账号ID'，但在 platform_user_device 中使用 account_id 引用",
-      "context": "platform_user_account 表的主键 id 注释为'账号ID'，platform_user_device 表中有 account_id 字段注释为'账号ID'，不确定是否指向同一实体",
-      "impact": "影响表关联查询的准确性，可能导致错误的 JOIN 操作",
+      "entity": "时间字段",
+      "question": "时间字段命名不一致：create_at (bigint) vs created_at (timestamp)",
+      "context": "platform_* 表使用 create_at (bigint，疑似时间戳)，user/pre_signup 等表使用 created_at (timestamp)。同时存在 blacklist_at, sign_date, last_sign_day 等多种时间命名方式",
+      "impact": "影响时间数据的解析、转换和统一处理，增加数据分析复杂度",
       "suggestions": [
-        "统一使用 account_id 作为账号标识的字段名",
-        "明确 platform_user_device.account_id 是否外键关联到 platform_user_account.id"
+        "统一时间字段命名规范（如 created_at）",
+        "统一时间数据类型（timestamp 或 bigint）",
+        "明确 bigint 类型时间字段的单位（秒/毫秒）"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_account.id vs account_id_30"
-    },
-    {
-      "type": "schema_ambiguity",
-      "category": "业务逻辑",
-      "priority": "high",
-      "entity": "backup_disabled_blacklist_accounts",
-      "question": "表名暗示这是黑名单账号的备份表，但与 platform_user_blacklist 的关系不明确",
-      "context": "存在 platform_user_blacklist（用户黑名单）和 backup_disabled_blacklist_accounts（备份禁用黑名单账号）两个黑名单相关表，结构完全不同",
-      "impact": "无法确定黑名单管理的完整流程，可能导致黑名单查询遗漏或重复",
-      "suggestions": [
-        "明确 backup_disabled_blacklist_accounts 是历史备份还是另一种黑名单类型",
-        "说明两个黑名单表的使用场景和数据流转关系",
-        "考虑是否应该统一黑名单管理机制"
-      ],
-      "domain": "user_management",
-      "id": "user_management_backup_disabled_blacklist_accounts_31"
+      "id": "user_management_时间字段_28"
     },
     {
       "type": "business_logic_unclear",
-      "category": "业务流程",
+      "category": "账号体系",
       "priority": "high",
-      "entity": "platform_user_account.type",
-      "question": "账号类型字段注释仅列举'appleid、googleid'，但不清楚是否支持普通账号（手机号/邮箱注册）",
-      "context": "platform_user_account 有 mobile、login_name、pwd 字段，暗示支持普通账号，但 type 字段注释只提到第三方登录类型",
-      "impact": "无法准确统计各类型账号分布，可能导致账号类型判断逻辑错误",
+      "entity": "platform_user_account",
+      "question": "账号与用户的关系不明确：一个用户可以有多个账号吗？账号类型（type）的完整枚举值是什么？",
+      "context": "platform_user_account 有 user_id 关联到 platform_user，但同时支持 mobile、login_name、第三方账号（appleid、googleid）等多种登录方式。main_partner_id 和 second_partner_id 的区分逻辑不清晰",
+      "impact": "无法准确分析用户登录行为、账号合并策略、第三方账号绑定逻辑",
       "suggestions": [
-        "完善 type 字段的所有可能值及其含义（如：mobile、email、appleid、googleid）",
-        "明确普通账号和第三方账号的字段使用规则"
+        "明确用户与账号的关系（1:1 或 1:N）",
+        "提供完整的账号类型枚举值和说明",
+        "说明 main_partner_id 和 second_partner_id 的业务含义"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_account.type_32"
-    },
-    {
-      "type": "naming_confusion",
-      "category": "字段命名",
-      "priority": "medium",
-      "entity": "时间字段命名不一致",
-      "question": "时间字段存在多种命名方式：create_at、created_at、blacklist_at、update_at、updated_at",
-      "context": "platform_user 使用 create_at (bigint)，user 使用 created_at (timestamp)，缺乏统一的命名和数据类型规范",
-      "impact": "增加开发和查询的复杂度，容易出现字段名错误",
-      "suggestions": [
-        "统一时间字段命名规范（建议使用 created_at/updated_at）",
-        "统一时间字段数据类型（timestamp 或 bigint）",
-        "为历史表建立迁移计划"
-      ],
-      "domain": "user_management",
-      "id": "user_management_时间字段命名不一致_33"
+      "id": "user_management_platform_user_account_29"
     },
     {
       "type": "schema_ambiguity",
       "category": "数据安全",
       "priority": "high",
       "entity": "platform_user_wallet.private_key & user.private_key",
-      "question": "私钥以明文形式存储在数据库中，存在严重安全隐患",
-      "context": "platform_user_wallet 和 user 表都存储了 private_key 字段（text/varchar 类型），未见加密说明",
-      "impact": "私钥泄露将导致用户资产损失，存在重大安全风险",
+      "question": "私钥以明文形式存储在数据库中，是否符合安全规范？",
+      "context": "platform_user_wallet 和 user 表都存储了 private_key 字段（text/varchar 类型），疑似区块链钱包私钥",
+      "impact": "涉及资产安全的关键数据，存储方式可能存在重大安全风险",
       "suggestions": [
-        "确认私钥是否已加密存储，如未加密需立即整改",
-        "考虑使用密钥管理服务（KMS）而非数据库存储私钥",
-        "添加字段注释说明加密方式"
+        "确认私钥是否已加密存储",
+        "如未加密，建议使用加密存储或密钥管理服务",
+        "评估是否需要存储私钥或使用其他方案（如助记词、密钥分片）"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_wallet.private_key & user.private_key_34"
+      "id": "user_management_platform_user_wallet.private_key & user.private_key_30"
     },
     {
       "type": "business_logic_unclear",
-      "category": "业务逻辑",
+      "category": "钱包体系",
       "priority": "medium",
-      "entity": "platform_user_account 多账号关联",
-      "question": "main_partner_id 和 second_partner_id 的业务含义不明确",
-      "context": "存在主、次两个第三方账号ID字段，但不清楚为何需要两个，以及它们的使用场景",
-      "impact": "无法理解账号绑定的完整逻辑，可能影响第三方登录功能分析",
+      "entity": "user 表钱包字段",
+      "question": "user 表中存在多个钱包地址字段（chain_account, assign_chain_account, nal_protocol_wallet_address），它们的区别和使用场景不明确",
+      "context": "chain_account（用户链上地址）、assign_chain_account（分配给用户的地址）、nal_protocol_wallet_address 三个字段共存，且 platform_user_wallet 也有 wallet_address",
+      "impact": "无法确定钱包地址的主数据源，影响资产追踪和钱包关联分析",
       "suggestions": [
-        "说明为何需要主次两个第三方账号ID",
-        "明确在什么场景下会使用 second_partner_id",
-        "考虑是否应该用独立的账号绑定关系表来管理多账号绑定"
+        "说明各钱包地址字段的业务含义和使用场景",
+        "明确是否支持多链或多钱包",
+        "统一钱包数据管理策略"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_account 多账号关联_35"
+      "id": "user_management_user 表钱包字段_31"
+    },
+    {
+      "type": "naming_confusion",
+      "category": "字段命名",
+      "priority": "medium",
+      "entity": "personal_access_tokens.tokenable_type/tokenable_id",
+      "question": "tokenable_type 和 tokenable_id 的多态关联目标不明确",
+      "context": "使用了 Laravel 风格的多态关联，但未说明可能关联的实体类型（如 User, PlatformUser 等）",
+      "impact": "无法准确分析 token 的归属和使用范围",
+      "suggestions": [
+        "列出 tokenable_type 的所有可能值",
+        "说明不同类型 token 的使用场景"
+      ],
+      "domain": "user_management",
+      "id": "user_management_personal_access_tokens.tokenable_type/tokenable_id_32"
+    },
+    {
+      "type": "business_logic_unclear",
+      "category": "签到逻辑",
+      "priority": "medium",
+      "entity": "platform_user_sign_status",
+      "question": "continue_sign_times 和 history_continue_sign_times 的计算逻辑不清晰",
+      "context": "continue_sign_times 描述为'7天周期内连续签到天数'，history_continue_sign_times 为'历史累积连续签到天数'，两者关系和重置规则不明确",
+      "impact": "无法准确分析用户签到行为和奖励发放逻辑",
+      "suggestions": [
+        "明确连续签到的中断和重置规则",
+        "说明7天周期的具体含义（自然周/滚动周期）",
+        "解释历史累积的计算方式"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user_sign_status_33"
     },
     {
       "type": "schema_ambiguity",
-      "category": "数据完整性",
+      "category": "状态管理",
       "priority": "medium",
-      "entity": "platform_user_device.id",
-      "question": "设备表的主键 id 注释为'账号ID'，但应该是设备ID",
-      "context": "platform_user_device 表的主键 id 注释错误，且表中已有 account_id 字段",
-      "impact": "注释错误可能导致开发人员误解表结构",
+      "entity": "status 字段",
+      "question": "多个表的 status 字段含义不一致",
+      "context": "platform_email_domain_blacklist.status (1=启用，0=禁用)、platform_user_account.status (0=不可用，1=可用)、platform_user_blacklist.status (1=已拉黑，0=已解除)，含义相反或不同",
+      "impact": "容易造成状态判断错误，影响业务逻辑准确性",
       "suggestions": [
-        "修正 id 字段注释为'设备ID'或'记录ID'",
-        "确认是否需要添加唯一性约束（如：user_id + android_id 组合唯一）"
+        "统一状态字段的命名和取值规范",
+        "使用更明确的字段名（如 is_enabled, is_blacklisted）",
+        "建立统一的状态枚举标准"
       ],
       "domain": "user_management",
-      "id": "user_management_platform_user_device.id_36"
+      "id": "user_management_status 字段_34"
+    },
+    {
+      "type": "business_logic_unclear",
+      "category": "设备管理",
+      "priority": "low",
+      "entity": "platform_user_device",
+      "question": "设备与用户/账号的关系不明确：一个用户可以有多个设备吗？设备更换如何处理？",
+      "context": "platform_user_device 同时关联 user_id 和 account_id，且包含多种设备标识符（android_id, idfv, imei, idfa 等）",
+      "impact": "影响设备指纹分析、多设备登录检测、风控策略",
+      "suggestions": [
+        "明确设备与用户的关系（1:N）",
+        "说明设备记录的更新策略（覆盖/新增）",
+        "解释 product_no（业务线）字段的作用"
+      ],
+      "domain": "user_management",
+      "id": "user_management_platform_user_device_35"
     },
     {
       "type": "naming_confusion",
       "category": "字段命名",
       "priority": "low",
-      "entity": "sex vs partner_sex",
-      "question": "性别字段编码不一致：platform_user.sex 和 platform_user_account.partner_sex 都使用 1/2/0，但含义可能不同",
-      "context": "两个表都有性别字段，编码相同（1男2女0未知），但一个是用户性别，一个是第三方账号性别",
-      "impact": "较小，但可能在数据同步时产生混淆",
+      "entity": "软删除标识",
+      "question": "is_del 字段命名不规范且不一致",
+      "context": "部分表使用 is_del (int) 表示软删除，但 personal_access_tokens 等表未使用此机制",
+      "impact": "数据查询时可能遗漏软删除过滤条件",
       "suggestions": [
-        "在注释中明确说明性别编码标准",
-        "考虑使用枚举类型或统一的性别码表"
+        "统一使用 deleted_at (timestamp) 或 is_deleted (tinyint)",
+        "在所有需要软删除的表中保持一致"
       ],
       "domain": "user_management",
-      "id": "user_management_sex vs partner_sex_37"
-    },
-    {
-      "type": "business_logic_unclear",
-      "category": "业务逻辑",
-      "priority": "medium",
-      "entity": "user.source & user.inviter_account",
-      "question": "用户来源（source）和邀请人（inviter_account）的关系不明确",
-      "context": "user 表有 source（用户来源）和 inviter_account（邀请人地址）字段，不清楚它们如何配合使用",
-      "impact": "影响用户增长分析和邀请关系追踪",
-      "suggestions": [
-        "明确 source 字段的可能值（如：organic、referral、ads等）",
-        "说明当 source 为邀请时，inviter_account 的填充规则",
-        "考虑建立独立的邀请关系表以支持复杂的邀请链分析"
-      ],
-      "domain": "user_management",
-      "id": "user_management_user.source & user.inviter_account_38"
+      "id": "user_management_软删除标识_36"
     }
   ],
   "uncertainty_count": 10,
-  "uncertainty_analyzed_at": "2025-12-05T10:43:06.460385"
+  "uncertainty_analyzed_at": "2025-12-08T22:38:34.473931"
 }

@@ -349,22 +349,9 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 save_result = self._save_schema(schema_data, connection_name, version)
                 schema_data["storage"] = save_result
 
-            # Auto-cluster schema into domains (if enabled in config)
-            clustering_result = None
-            uncertainty_result = None
-            if auto_save and save_result and save_result.get("saved"):
-                clustering_result = self._auto_cluster_schema(
-                    connection_name=connection_name,
-                    schema_file=save_result.get("latest_file"),
-                    enable_progress=enable_progress
-                )
-                
-                # 🔥 新增: 自动分析不确定性（仅在聚类成功后）
-                if clustering_result and clustering_result.get("status") == "success":
-                    uncertainty_result = self._auto_analyze_uncertainties(
-                        connection_name=connection_name,
-                        enable_progress=enable_progress
-                    )
+            # 🔑 不再自动聚类！聚类必须在 BusinessUnderstanding 之后进行
+            # 用户的业务问答会生成 excluded_tables，聚类时需要读取这些配置
+            # 正确流程：Schema提取 → BusinessUnderstanding → 聚类 → 不确定性分析 → 本体构建
 
             # 构建概要信息(不返回完整数据,避免上下文爆炸)
             # 注意: schema_data["tables"] 是字典 {table_name: table_data}, 不是列表
@@ -408,13 +395,8 @@ class DatabaseSchemaExtractorTool(KodeTool):
             else:
                 summary["warning"] = "Schema 未保存到文件 (auto_save=False),完整数据未持久化"
 
-            # 如果执行了聚类,添加聚类结果
-            if clustering_result:
-                summary["clustering"] = clustering_result
-            
-            # 如果执行了不确定性分析,添加分析结果
-            if uncertainty_result:
-                summary["uncertainty"] = uncertainty_result
+            # 🔑 提示下一步：运行 BusinessUnderstanding
+            summary["next_step"] = f"请运行 BusinessUnderstanding(connection_name='{connection_name}') 完成业务问答，然后再构建本体"
 
             return json.dumps(summary, indent=2, ensure_ascii=False)
 

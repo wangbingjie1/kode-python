@@ -1,0 +1,37 @@
+{
+  "questions": [
+    [
+      "q1_system_scope",
+      "我注意到数据库中存在多个明显的前缀模式（ao_*、platform_*、note_*、candy_chat_*、crush_chat_*等），推测这些可能代表不同的产品或子系统。请确认：\nA. 这些都是同一个产品的不同功能模块\nB. 这是多个独立产品/子系统（请列出哪些是核心在用的，哪些已下线或废弃）\nC. ao_* 是主系统，其他是实验性或临时项目",
+      "这将帮助我识别哪些表需要重点分析，哪些可以忽略"
+    ],
+    [
+      "q2_legacy_systems",
+      "我发现了一些疑似历史遗留或已下线的模块迹象（如：backup_disabled_blacklist_accounts、eventbak、draw_10.15-11.15_bill、带日期后缀的表如*_2024_11_28等）。请确认：\nA. 这些都是历史数据备份，业务已迁移到新表\nB. 部分仍在使用中（请说明哪些）\nC. 全部已废弃，可忽略\nD. 其他情况（请说明）",
+      "明确废弃模块可以让我聚焦在活跃业务上"
+    ],
+    [
+      "q3_business_model",
+      "根据表结构，我推测您的核心商业模式包含以下特征，请确认主要的收入来源：\nA. AI服务订阅（platform_trade_subscription、subscription相关表）\nB. 游戏/社交互动（ao_permble_*、ao_fission_*系列）\nC. 区块链/加密货币相关（ao_bencat_*、wallet相关）\nD. 多业务并存（请说明主次关系）",
+      "这将帮助我理解业务优先级和分析重点"
+    ],
+    [
+      "q4_product_focus",
+      "从产品形态来看，我观察到可能存在多个产品线（如：ChatPal、GlbGPT、DivinoAI、Note相关、Telegram Bot等）。请确认：\nA. 这些是同一品牌下的不同产品（请列出核心产品）\nB. 这是产品演进过程中的不同版本（旧版已停用？）\nC. 多个独立品牌并行运营\nD. 部分是测试项目或已下线功能",
+      "明确产品边界有助于精准的业务分析"
+    ],
+    [
+      "q5_analysis_priority",
+      "关于数据分析的优先级，您最关注的业务问题是：\nA. 订阅收入分析（续费率、流失原因、ARPU）\nB. 用户增长与留存（DAU/MAU、留存曲线、渠道效果）\nC. AI功能使用分析（模型调用、成本优化、用户偏好）\nD. 游戏/社交互动数据（参与度、活跃度）\nE. 综合运营看板（请说明核心指标）",
+      "这将决定我后续分析的方向和深度"
+    ]
+  ],
+  "answers": {
+    "q1_system_scope": "B. 这是多个独立产品，ao_*、note_*、candy_chat_*、crush_chat_* 这几个下线了，platform_*是glbgpt",
+    "q2_legacy_systems": "B.eventbak 埋点日志仍在使用中",
+    "q3_business_model": "A. AI服务订阅）",
+    "q4_product_focus": " A. 这些是同一品牌下的不同产品GlbGPT是和弦产品，DivinoAI是手机端，其他都下线了",
+    "q5_analysis_priority": " A. 订阅收入分析（续费率、流失原因、ARPU） B. 用户增长与留存（DAU/MAU、留存曲线、渠道效果） C. AI功能使用分析（模型调用、成本优化、用户偏好） D. 游戏/社交互动数据（参与度、活跃度）"
+  },
+  "table_count": 106
+}

@@ -227,21 +227,59 @@ class OntologyBuilderTool(KodeTool):
             # 【智能门禁检查】检查不确定性分析状态（从各领域文件中读取）
             # ✨ 新架构：不确定性数据已分散存储在各 domain JSON 文件中
             domains_dir = Path(schema_path) / get_safe_connection_path(connection_name) / "domains"
+            domain_index_file = Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
 
+            # 🔑 如果没有 domains 目录，自动运行聚类和不确定性分析
             if not domains_dir.exists() or not list(domains_dir.glob("*.json")):
-                # 🔍 情况1: 没有领域文件 → Schema 未提取
-                logger.warning(f"⚠️ 未找到 domains 目录或领域文件")
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "gate_check_failed": True,
-                        "reason": "missing_schema_extraction",
-                        "message": "未找到领域schema文件。",
-                        "suggestion": "请先运行 DatabaseSchemaExtractor 提取数据库schema。",
-                    },
-                    indent=2,
-                    ensure_ascii=False,
+                logger.info(f"📂 未找到 domains 目录，自动运行聚类流程...")
+
+                # 🔄 步骤1：自动运行聚类
+                from kode.tools.schema_clustering_tool import DatabaseSchemaClusterer
+                clusterer = DatabaseSchemaClusterer()
+                clustering_result_str = clusterer._run(
+                    connection_name=connection_name,
+                    schema_file=str(schema_file),
+                    target_tables_per_domain=10,
+                    max_columns_for_analysis=20,
+                    llm_model="main",
+                    output_language="zh",
                 )
+                clustering_result = json.loads(clustering_result_str)
+
+                if clustering_result.get("status") != "success":
+                    return json.dumps(
+                        {
+                            "status": "error",
+                            "gate_check_failed": True,
+                            "reason": "clustering_failed",
+                            "message": f"聚类失败: {clustering_result.get('message', '未知错误')}",
+                            "suggestion": "请检查 schema 文件是否正确提取。",
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+
+                logger.info(f"✅ 聚类完成: {clustering_result.get('clustering_summary', {}).get('total_domains', 0)} 个域")
+
+                # 🔄 步骤2：自动运行不确定性分析
+                from kode.tools.domain_uncertainty_analyzer import DomainUncertaintyAnalyzer
+                analyzer = DomainUncertaintyAnalyzer()
+                uncertainty_result_str = analyzer._run(
+                    connection_name=connection_name,
+                    llm_model="main",
+                    max_concurrent_domains=5,
+                )
+                uncertainty_result = json.loads(uncertainty_result_str)
+
+                if uncertainty_result.get("status") != "success":
+                    logger.warning(f"⚠️ 不确定性分析失败: {uncertainty_result.get('message', '未知错误')}")
+                    # 不确定性分析失败不阻塞，继续构建
+                else:
+                    stats = uncertainty_result.get("statistics", {})
+                    logger.info(
+                        f"✅ 不确定性分析完成: {stats.get('total_uncertainties', 0)} 个问题 "
+                        f"(高: {stats.get('high_priority', 0)}, 中: {stats.get('medium_priority', 0)}, 低: {stats.get('low_priority', 0)})"
+                    )
 
             # 🔍 情况2: 读取所有领域文件，检查 high 优先级不确定性
             high_uncertainties = []

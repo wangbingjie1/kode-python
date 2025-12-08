@@ -502,8 +502,10 @@ class BusinessUnderstandingTool(InteractiveTool):
 
         qa_text = "\n".join(qa_lines).strip()
 
-        # 🔑 用 AI 智能分析问答，识别需要排除的表
-        excluded_tables, exclusion_reasons = self._analyze_excluded_tables(connection_name, questions, answers)
+        # 🔑 用 AI 智能分析问答，识别需要排除的表和前缀
+        excluded_tables, exclusion_reasons, excluded_prefixes = self._analyze_excluded_tables(
+            connection_name, questions, answers
+        )
 
         # 保存到 ontology_store（统一格式）
         context_data = {
@@ -511,9 +513,11 @@ class BusinessUnderstandingTool(InteractiveTool):
             "answers": answers,
             # 结构化问答对（包含问题文本，用于构建提示词）
             "qa_pairs": [{"question": q[1], "answer": answers.get(q[0], "")} for q in questions],
-            # 🔑 新增：排除表列表和原因（供 DatabaseSchemaClusterer 使用）
+            # 🔑 排除表列表和原因（供 DatabaseSchemaClusterer 使用）
             "excluded_tables": excluded_tables,
             "exclusion_reasons": exclusion_reasons,
+            # 🔑 新增：排除前缀列表（供 DatabaseSchemaClusterer 和 DomainUncertaintyAnalyzer 使用）
+            "excluded_prefixes": excluded_prefixes,
             "completed": True,
             "question_count": len(questions),
             "created_at": datetime.now().isoformat(),
@@ -528,19 +532,21 @@ class BusinessUnderstandingTool(InteractiveTool):
 
         logger.info(
             f"[BusinessUnderstanding] 保存完整业务上下文: {context_file}, "
-            f"排除表数量: {len(excluded_tables)}"
+            f"排除表数量: {len(excluded_tables)}, 排除前缀: {excluded_prefixes}"
         )
         if exclusion_reasons:
-            logger.info(f"[BusinessUnderstanding] 排除原因: {exclusion_reasons}")
+            # 只显示前5个原因，避免日志过长
+            reasons_preview = dict(list(exclusion_reasons.items())[:5])
+            logger.info(f"[BusinessUnderstanding] 排除原因（前5个）: {reasons_preview}")
 
     def _analyze_excluded_tables(
         self,
         connection_name: str,
         questions: List[Tuple[str, str, str]],
         answers: Dict[str, str]
-    ) -> Tuple[List[str], Dict[str, str]]:
+    ) -> Tuple[List[str], Dict[str, str], List[str]]:
         """
-        用 AI 智能分析问答内容，识别需要排除的表
+        用 AI 智能分析问答内容，识别需要排除的表和前缀
 
         根据用户的回答（如"AO开头的表是已下线功能"），自动识别并排除相关表。
 
@@ -550,9 +556,10 @@ class BusinessUnderstandingTool(InteractiveTool):
             answers: 答案字典
 
         Returns:
-            (excluded_tables, exclusion_reasons)
+            (excluded_tables, exclusion_reasons, excluded_prefixes)
             - excluded_tables: 需要排除的表名列表
             - exclusion_reasons: 排除原因字典 {"table_name": "原因"}
+            - excluded_prefixes: 需要排除的表前缀列表（如 ["ao_", "candy_chat_"]）
         """
         from kode.core.model_manager import ModelManager
         from kode.utils.config import ConfigManager
@@ -560,7 +567,7 @@ class BusinessUnderstandingTool(InteractiveTool):
         # 加载表名列表
         table_summary = self._load_table_summary_from_cache(connection_name)
         if not table_summary:
-            return [], {}
+            return [], {}, []
 
         table_names = [t["name"] for t in table_summary.get("tables", [])]
 
@@ -570,7 +577,7 @@ class BusinessUnderstandingTool(InteractiveTool):
             for q in questions
         ])
 
-        prompt = f"""分析以下业务问答，识别需要排除的数据库表。
+        prompt = f"""分析以下业务问答，识别需要排除的数据库表和表前缀。
 
 ## 数据库表名列表（共 {len(table_names)} 个）
 {', '.join(table_names)}
@@ -579,7 +586,9 @@ class BusinessUnderstandingTool(InteractiveTool):
 {qa_text}
 
 ## 任务
-根据用户的回答，识别哪些表应该被排除（不纳入业务分析）。
+根据用户的回答，识别：
+1. 哪些表应该被排除（不纳入业务分析）
+2. 哪些表前缀代表已下线/废弃的模块（这些前缀的表将被排除，后续不会为这些前缀创建独立的业务域）
 
 排除条件：
 1. 用户明确说某些表/功能已下线、废弃、不再使用
@@ -590,15 +599,20 @@ class BusinessUnderstandingTool(InteractiveTool):
 ## 返回格式（严格JSON）
 {{
     "excluded_tables": ["table1", "table2"],
+    "excluded_prefixes": ["ao_", "candy_chat_", "crush_chat_"],
     "reasons": {{
-        "table1": "用户说 AO 开头的表是已下线功能",
-        "table2": "用户说这是测试表"
-    }},
-    "patterns_excluded": ["AO_*", "test_*"]
+        "ao_*": "用户说 AO 开头是已下线游戏功能",
+        "candy_chat_*": "用户说聊天功能已下线"
+    }}
 }}
 
+重要说明：
+- excluded_prefixes 应该是小写的表前缀（如 "ao_" 而非 "AO_*"）
+- 用户提到的前缀都应该记录到 excluded_prefixes
+- reasons 的 key 使用 "前缀_*" 格式（如 "ao_*"）
+
 如果没有需要排除的表，返回：
-{{"excluded_tables": [], "reasons": {{}}, "patterns_excluded": []}}
+{{"excluded_tables": [], "excluded_prefixes": [], "reasons": {{}}}}
 
 只返回 JSON，不要其他内容。"""
 
@@ -615,33 +629,37 @@ class BusinessUnderstandingTool(InteractiveTool):
             json_match = re.search(r"\{[\s\S]*\}", content)
             if not json_match:
                 logger.warning(f"[BusinessUnderstanding] AI 分析排除表失败，返回格式错误")
-                return [], {}
+                return [], {}, []
 
             result = json.loads(json_match.group())
 
             excluded_tables = result.get("excluded_tables", [])
             reasons = result.get("reasons", {})
-            patterns = result.get("patterns_excluded", [])
+            excluded_prefixes = result.get("excluded_prefixes", [])
 
-            # 如果有模式匹配，展开为具体表名
-            if patterns:
-                for pattern in patterns:
-                    # 简单的前缀匹配（如 "AO_*" -> 所有 AO_ 开头的表）
-                    if pattern.endswith("*"):
-                        prefix = pattern[:-1]
-                        for table in table_names:
-                            if table.startswith(prefix) and table not in excluded_tables:
-                                excluded_tables.append(table)
-                                reasons[table] = f"匹配模式 {pattern}"
+            # 确保前缀是小写的
+            excluded_prefixes = [p.lower() for p in excluded_prefixes]
+
+            # 根据前缀展开为具体表名
+            if excluded_prefixes:
+                for prefix in excluded_prefixes:
+                    pattern_key = f"{prefix}*"
+                    for table in table_names:
+                        if table.lower().startswith(prefix) and table not in excluded_tables:
+                            excluded_tables.append(table)
+                            # 使用原因，如果没有则生成默认原因
+                            if table not in reasons:
+                                reasons[table] = reasons.get(pattern_key, f"匹配前缀 {prefix}")
 
             logger.info(
-                f"[BusinessUnderstanding] AI 分析完成，排除 {len(excluded_tables)} 个表"
+                f"[BusinessUnderstanding] AI 分析完成，排除 {len(excluded_tables)} 个表，"
+                f"排除前缀: {excluded_prefixes}"
             )
-            return excluded_tables, reasons
+            return excluded_tables, reasons, excluded_prefixes
 
         except Exception as e:
             logger.error(f"[BusinessUnderstanding] AI 分析排除表失败: {e}")
-            return [], {}
+            return [], {}, []
 
     def get_answers(self, connection_name: str) -> Optional[Dict[str, str]]:
         """获取已保存的业务理解答案"""
@@ -695,6 +713,21 @@ class BusinessUnderstandingTool(InteractiveTool):
                 logger.info(
                     f"[BusinessUnderstanding] 保存答案: {self._current_question_key} = {answer[:50]}..."
                 )
+
+                # 🔑 检查是否所有问题都已回答完毕，如果是则自动触发完成逻辑
+                questions = state.get("questions", [])
+                answers = state.get("answers", {})
+                if len(answers) >= len(questions) and len(questions) > 0:
+                    logger.info(
+                        f"[BusinessUnderstanding] 所有问题已回答完毕 ({len(answers)}/{len(questions)})，触发排除表分析..."
+                    )
+                    # 调用完成逻辑，生成 excluded_tables
+                    self._save_complete_business_context(
+                        self._current_connection_name, questions, answers
+                    )
+                    logger.info(
+                        f"[BusinessUnderstanding] 排除表分析完成，business_context.json 已更新"
+                    )
 
     async def _wait_for_response(self) -> str:
         """

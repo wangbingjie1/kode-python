@@ -84,6 +84,22 @@ class DomainUncertaintyAnalyzer(KodeTool):
             if not domains:
                 raise ValueError("No domains found")
 
+            # 🔑 加载排除配置
+            exclusion_config = self._load_exclusion_config(connection_name)
+            excluded_tables = set(exclusion_config.get("tables", []))
+            excluded_prefixes = exclusion_config.get("prefixes", [])
+
+            # 🔑 过滤掉已排除前缀对应的域
+            original_domain_count = len(domains)
+            if excluded_prefixes:
+                domains = [
+                    d for d in domains
+                    if not any(d["name"].startswith(prefix.rstrip("_")) for prefix in excluded_prefixes)
+                ]
+                skipped_count = original_domain_count - len(domains)
+                if skipped_count > 0:
+                    logger.info(f"[UncertaintyAnalyzer] 跳过 {skipped_count} 个已排除前缀的域")
+
             # 初始化模型
             model_manager = ModelManager(config.get_all())
             model = model_manager.get_model(llm_model)
@@ -101,6 +117,17 @@ class DomainUncertaintyAnalyzer(KodeTool):
                     domain_schema = json.load(f)
 
                 uncertainties = self._analyze_domain(domain_name, domain_schema, model)
+
+                # 🔑 过滤掉已排除表相关的 uncertainties
+                if excluded_tables:
+                    original_count = len(uncertainties)
+                    uncertainties = [
+                        u for u in uncertainties
+                        if u.get("entity") not in excluded_tables
+                    ]
+                    filtered_count = original_count - len(uncertainties)
+                    if filtered_count > 0:
+                        logger.info(f"域 {domain_name}: 过滤了 {filtered_count} 个已排除表相关的不确定性")
 
                 logger.info(f"域 {domain_name}: 识别到 {len(uncertainties)} 个不确定性")
 
@@ -136,6 +163,9 @@ class DomainUncertaintyAnalyzer(KodeTool):
                 schema_path
             )
 
+            # 🔑 计算跳过的域数量
+            skipped_domains = original_domain_count - len(domains)
+
             # Return lightweight summary (save tokens)
             summary = {
                 "status": "success",
@@ -143,7 +173,10 @@ class DomainUncertaintyAnalyzer(KodeTool):
                 "storage_strategy": save_result.get("storage_strategy"),
                 "updated_domains": save_result.get("updated_domains"),
                 "statistics": {
-                    "total_domains": len(domains),
+                    "original_domains": original_domain_count,
+                    "skipped_domains": skipped_domains,
+                    "analyzed_domains": len(domains),
+                    "excluded_prefixes": excluded_prefixes,
                     "total_uncertainties": len(all_uncertainties),
                     "high_priority": len(grouped['high']),
                     "medium_priority": len(grouped['medium']),
@@ -371,3 +404,37 @@ priority: high/medium/low
                 "saved": False,
                 "error": str(e)
             }
+
+    def _load_exclusion_config(self, connection_name: str) -> Dict[str, Any]:
+        """
+        从 business_context.json 读取排除配置。
+
+        Args:
+            connection_name: 数据库连接名
+
+        Returns:
+            排除配置字典：
+            {
+                "tables": ["table1", "table2", ...],
+                "prefixes": ["ao_", "candy_chat_", ...],
+                "reasons": {"ao_*": "用户说 AO 开头是已下线功能", ...}
+            }
+        """
+        config = ConfigManager()
+        ontology_path = config.get("storage.ontology_path", "./ontology_store")
+        safe_conn_name = get_safe_connection_path(connection_name)
+        context_file = Path(ontology_path) / safe_conn_name / "business_context.json"
+
+        if not context_file.exists():
+            return {"tables": [], "prefixes": [], "reasons": {}}
+
+        try:
+            with open(context_file, "r", encoding="utf-8") as f:
+                context_data = json.load(f)
+            return {
+                "tables": context_data.get("excluded_tables", []),
+                "prefixes": context_data.get("excluded_prefixes", []),
+                "reasons": context_data.get("exclusion_reasons", {}),
+            }
+        except Exception:
+            return {"tables": [], "prefixes": [], "reasons": {}}

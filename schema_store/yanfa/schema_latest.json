@@ -1,6 +1,6 @@
 {
-  "version": "v20251205_104029",
-  "created_at": "2025-12-05T10:40:29.429332",
+  "version": "v20251208_223247",
+  "created_at": "2025-12-08T22:32:47.102525",
   "connection_name": "yanfa",
   "schema": {
     "status": "success",
@@ -6197,58 +6197,58 @@
           "row_count": 5,
           "rows": [
             {
-              "id": 4704505,
-              "uuid": "6ae79b0e-12da-4eca-8060-c4d512fc7a9a",
-              "user_id": 1098138,
-              "page_name": "mobile_subscribe_4009",
+              "id": 4738902,
+              "uuid": "d84af2db-6ea4-4ba8-8efe-c760ef60f0dd",
+              "user_id": 0,
+              "page_name": "mobile_visit_subscription",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-11-04T11:15:59",
-              "updated_at": "2025-11-04T11:15:59",
+              "created_at": "2025-11-08T11:15:28",
+              "updated_at": "2025-11-08T11:15:28",
               "channel": "glbgpt"
             },
             {
-              "id": 4704506,
-              "uuid": "d759466f-2633-4449-ae5a-2421ee55aeb1",
-              "user_id": 1098130,
-              "page_name": "mobile_subscribe_4002",
-              "event_name": "pageview",
-              "dom_name": "",
-              "created_at": "2025-11-04T11:16:03",
-              "updated_at": "2025-11-04T11:16:03",
-              "channel": "glbgpt"
-            },
-            {
-              "id": 4704507,
-              "uuid": "d759466f-2633-4449-ae5a-2421ee55aeb1",
-              "user_id": 1098130,
-              "page_name": "mobile_subscribe_4002",
-              "event_name": "pageview",
-              "dom_name": "",
-              "created_at": "2025-11-04T11:16:05",
-              "updated_at": "2025-11-04T11:16:05",
-              "channel": "glbgpt"
-            },
-            {
-              "id": 4704508,
-              "uuid": "49650a6d-4e52-469d-8fc3-6cbae37432ce",
-              "user_id": 365022,
+              "id": 4738903,
+              "uuid": "155d52cf-840c-4017-9467-3f4e31f8a15e",
+              "user_id": 1107147,
               "page_name": "pc_subscribe_4009",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-11-04T11:16:06",
-              "updated_at": "2025-11-04T11:16:06",
+              "created_at": "2025-11-08T11:15:34",
+              "updated_at": "2025-11-08T11:15:34",
               "channel": "glbgpt"
             },
             {
-              "id": 4704509,
-              "uuid": "d759466f-2633-4449-ae5a-2421ee55aeb1",
-              "user_id": 1098130,
-              "page_name": "mobile_subscribe_4002",
+              "id": 4738904,
+              "uuid": "465248a8-0430-4f28-b551-768136ef5d32",
+              "user_id": 153647,
+              "page_name": "pc_subscribe_4008",
               "event_name": "pageview",
               "dom_name": "",
-              "created_at": "2025-11-04T11:16:17",
-              "updated_at": "2025-11-04T11:16:17",
+              "created_at": "2025-11-08T11:15:35",
+              "updated_at": "2025-11-08T11:15:35",
+              "channel": "glbgpt"
+            },
+            {
+              "id": 4738905,
+              "uuid": "848026e0-bf87-4a78-a98e-90200d0fb023",
+              "user_id": 1104673,
+              "page_name": "pc_subscribe_4009",
+              "event_name": "pageview",
+              "dom_name": "",
+              "created_at": "2025-11-08T11:15:46",
+              "updated_at": "2025-11-08T11:15:46",
+              "channel": "glbgpt"
+            },
+            {
+              "id": 4738906,
+              "uuid": "155d52cf-840c-4017-9467-3f4e31f8a15e",
+              "user_id": 1107147,
+              "page_name": "pc_subscribe_4009",
+              "event_name": "pageview",
+              "dom_name": "",
+              "created_at": "2025-11-08T11:15:48",
+              "updated_at": "2025-11-08T11:15:48",
               "channel": "glbgpt"
             }
           ],
@@ -19997,6 +19997,6 @@
       }
     },
     "relationships": [],
-    "extraction_time": "2025-12-05T10:40:29.420265"
+    "extraction_time": "2025-12-08T22:32:47.101311"
   }
 }

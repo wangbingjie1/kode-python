@@ -1,33 +1,70 @@
 {
   "connection_name": "yanfa",
-  "total_tables": 106,
-  "total_domains": 14,
-  "created_at": "2025-12-05T10:41:05.852928",
+  "total_tables": 74,
+  "total_domains": 7,
+  "created_at": "2025-12-08T22:37:16.508443",
   "domains": [
     {
       "name": "user_management",
-      "display_name": "User Management",
-      "description": "Core user account management including registration, authentication, profiles, devices, and blacklist control.",
-      "table_count": 10,
+      "display_name": "用户管理",
+      "description": "管理用户账号、认证、个人信息、设备信息、黑名单和钱包等核心用户数据",
+      "table_count": 12,
       "tables": [
         "platform_user",
         "platform_user_account",
         "platform_user_device",
         "platform_user_blacklist",
         "platform_user_wallet",
+        "platform_user_sign_detail",
+        "platform_user_sign_status",
         "user",
         "user_option",
-        "backup_disabled_blacklist_accounts",
-        "platform_email_domain_blacklist",
-        "personal_access_tokens"
+        "personal_access_tokens",
+        "pre_signup",
+        "platform_email_domain_blacklist"
       ],
       "file_path": "domains/user_management.json"
     },
     {
+      "name": "order_payment",
+      "display_name": "订单支付",
+      "description": "处理订单交易、支付流程、订阅管理、充值记录和佣金分成等交易相关业务",
+      "table_count": 15,
+      "tables": [
+        "order",
+        "platform_trade_order",
+        "platform_trade_order_sub",
+        "platform_trade_subscription",
+        "platform_trade_subscription_log",
+        "platform_trade_subscription_plan",
+        "subscription",
+        "subscription_log",
+        "subscription_plan",
+        "top_up_record",
+        "commission",
+        "license_coupon",
+        "invoices",
+        "stripesubscriptions",
+        "retention_free_credit_offers"
+      ],
+      "file_path": "domains/order_payment.json"
+    },
+    {
+      "name": "product_catalog",
+      "display_name": "商品管理",
+      "description": "管理平台商品、SKU规格、定价策略和库存信息",
+      "table_count": 2,
+      "tables": [
+        "platform_trade_product",
+        "platform_trade_product_sku"
+      ],
+      "file_path": "domains/product_catalog.json"
+    },
+    {
       "name": "ai_agent_system",
-      "display_name": "AI Agent System",
-      "description": "AI agent configuration, categorization, templates, and role management for various AI-powered features.",
-      "table_count": 12,
+      "display_name": "AI智能体系统",
+      "description": "管理AI智能体、分类、标签、角色、模板和用户自定义配置等AI核心功能",
+      "table_count": 16,
       "tables": [
         "platform_ai_agent",
         "platform_ai_agent_categray",
@@ -39,202 +76,70 @@
         "platform_ai_role_user_agent_mapping",
         "platform_ai_role_user_default_agent",
         "platform_ai_role_guide",
+        "platform_ai_animation_template",
+        "platform_ai_voice_template",
+        "platform_ai_template_effect",
+        "platform_ai_model",
         "robot",
         "chatpal_agent_ad"
       ],
       "file_path": "domains/ai_agent_system.json"
     },
     {
-      "name": "conversation_system",
-      "display_name": "Conversation System",
-      "description": "AI conversation management including chat sessions, messages, and related metadata for different AI models.",
-      "table_count": 9,
+      "name": "conversation_task",
+      "display_name": "对话任务",
+      "description": "管理用户与AI的对话会话、消息记录、任务执行和相关元数据",
+      "table_count": 13,
       "tables": [
         "platform_ai_conversation",
         "platform_ai_conversation_msg",
         "platform_ai_conversation_msg_perplexity_meta",
-        "task",
-        "message",
-        "note_chat_conversation",
-        "candy_chat_girl_friend",
-        "crush_chat_boy_friend",
-        "fantasy_image_session"
-      ],
-      "file_path": "domains/conversation_system.json"
-    },
-    {
-      "name": "billing_system",
-      "display_name": "Billing & Usage Tracking",
-      "description": "Token usage tracking, billing records, and cost management for AI model consumption across different account types.",
-      "table_count": 6,
-      "tables": [
-        "bill",
-        "platform_ai_bill",
-        "platform_ai_model",
-        "commission",
-        "top_up_record",
-        "features_token_usage"
-      ],
-      "file_path": "domains/billing_system.json"
-    },
-    {
-      "name": "order_system",
-      "display_name": "Order & Transaction System",
-      "description": "Order processing, payment management, and transaction records for both one-time purchases and subscriptions.",
-      "table_count": 6,
-      "tables": [
-        "order",
-        "platform_trade_order",
-        "platform_trade_order_sub",
-        "license_coupon",
-        "invoices",
-        "stripesubscriptions"
-      ],
-      "file_path": "domains/order_system.json"
-    },
-    {
-      "name": "subscription_management",
-      "display_name": "Subscription Management",
-      "description": "Subscription lifecycle management including plans, renewals, cancellations, and retention offers.",
-      "table_count": 7,
-      "tables": [
-        "subscription",
-        "subscription_log",
-        "subscription_plan",
-        "platform_trade_subscription",
-        "platform_trade_subscription_log",
-        "platform_trade_subscription_plan",
-        "retention_free_credit_offers"
-      ],
-      "file_path": "domains/subscription_management.json"
-    },
-    {
-      "name": "product_catalog",
-      "display_name": "Product Catalog",
-      "description": "Product and SKU management for various offerings including subscription plans and one-time purchases.",
-      "table_count": 2,
-      "tables": [
-        "platform_trade_product",
-        "platform_trade_product_sku"
-      ],
-      "file_path": "domains/product_catalog.json"
-    },
-    {
-      "name": "task_management",
-      "display_name": "Task & Content Generation",
-      "description": "AI task execution, content generation, and media processing including animations, voices, and document tasks.",
-      "table_count": 10,
-      "tables": [
         "platform_ai_task",
         "platform_ai_task_batch",
         "platform_ai_task_ext",
         "platform_ai_tasktags",
         "platform_ai_tag",
-        "platform_ai_animation_template",
-        "platform_ai_voice_template",
-        "platform_ai_template_effect",
+        "platform_ai_prompt",
+        "task",
+        "message",
         "seo_task",
-        "platform_ai_prompt"
+        "fantasy_image_session"
       ],
-      "file_path": "domains/task_management.json"
+      "file_path": "domains/conversation_task.json"
     },
     {
-      "name": "ao_game_system",
-      "display_name": "AO Game System",
-      "description": "Game mechanics including battles, rounds, rewards, bencat token management, and social features like PK and friends.",
-      "table_count": 21,
+      "name": "billing_analytics",
+      "display_name": "计费分析",
+      "description": "记录AI使用的费用账单、Token消耗、模型调用和成本统计",
+      "table_count": 5,
       "tables": [
-        "ao_permble_game",
-        "ao_permble_round",
-        "ao_permble_round_fight",
-        "ao_permble_round_fight_2024_11_28",
-        "ao_permble_round_fight_2024_12_13",
-        "ao_permble_round_rwd",
-        "ao_permble_round_rwd_2024_12_13",
-        "ao_permble_game_user_feeds",
-        "ao_permble_game_user_feeds_2024_11_28",
-        "ao_permble_game_user_feeds_2024_12_13",
-        "ao_permble_user",
-        "ao_bencat_user",
-        "ao_bencat_send",
-        "ao_bencat_acquired",
-        "ao_fission_pk",
-        "ao_fission_pk_friends",
-        "ao_fission_role_evaluation",
-        "ao_awareness",
-        "ao_npc",
-        "ao_friends",
-        "ao_permble_clean_old_records_log"
+        "bill",
+        "platform_ai_bill",
+        "chat",
+        "video_all",
+        "features_token_usage"
       ],
-      "file_path": "domains/ao_game_system.json"
+      "file_path": "domains/billing_analytics.json"
     },
     {
-      "name": "note_system",
-      "display_name": "Note Management System",
-      "description": "Personal note and record management with categorization, calendar integration, and feedback collection.",
-      "table_count": 4,
-      "tables": [
-        "note_categroy",
-        "note_categroy_records",
-        "note_feedback",
-        "note_free_trial_whitelist"
-      ],
-      "file_path": "domains/note_system.json"
-    },
-    {
-      "name": "gamification_engagement",
-      "display_name": "Gamification & Engagement",
-      "description": "User engagement features including daily sign-ins, rewards, Halloween events, and other promotional activities.",
-      "table_count": 3,
-      "tables": [
-        "platform_user_sign_detail",
-        "platform_user_sign_status",
-        "halloween_pumpkin_rewards"
-      ],
-      "file_path": "domains/gamification_engagement.json"
-    },
-    {
-      "name": "analytics_tracking",
-      "display_name": "Analytics & Tracking",
-      "description": "User behavior tracking, event logging, A/B testing experiments, and analytics for business intelligence.",
-      "table_count": 7,
+      "name": "operation_analytics",
+      "display_name": "运营分析",
+      "description": "追踪用户行为事件、日活数据、A/B测试、营销活动和内容管理等运营数据",
+      "table_count": 11,
       "tables": [
         "event",
         "eventbak",
-        "experiment",
         "daily_new_users",
         "daily_new_uuid",
         "daily_uuid",
-        "features_manage"
-      ],
-      "file_path": "domains/analytics_tracking.json"
-    },
-    {
-      "name": "content_marketing",
-      "display_name": "Content & Marketing",
-      "description": "Marketing content, articles, enterprise inquiries, pre-signup campaigns, and version management.",
-      "table_count": 4,
-      "tables": [
+        "experiment",
+        "halloween_pumpkin_rewards",
         "platform_article",
         "platform_enterprise_inquiry",
-        "pre_signup",
+        "features_manage",
         "chatpal_app_version"
       ],
-      "file_path": "domains/content_marketing.json"
-    },
-    {
-      "name": "system_utilities",
-      "display_name": "System Utilities",
-      "description": "System-level utilities including migrations and temporary data tables for various operations.",
-      "table_count": 5,
-      "tables": [
-        "migrations",
-        "chat",
-        "gpt-5-chat",
-        "video_all",
-        "draw_10.15-11.15_bill"
-      ],
-      "file_path": "domains/system_utilities.json"
+      "file_path": "domains/operation_analytics.json"
     }
   ]
 }
