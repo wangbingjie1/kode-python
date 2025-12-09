@@ -175,19 +175,45 @@ class OntologyUpdateManager:
                     "error": str(e),
                 }
 
-    def _get_class_by_name(self, class_name: str) -> Optional[Dict[str, Any]]:
+    def _get_class_by_name(self, class_name: str, domain: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        根据类名获取类定义（兼容 V1 和 V2 格式）
+        根据类名获取类定义（兼容 V1、V2 和 V3 格式）
 
         V1 格式: {"classes": {"User": {...}}}  # 字典
         V2 格式: {"classes": [{"name": "用户", "technical_name": "users", ...}]}  # 数组
+        V3 格式: {"schema": {"classes": {"domain": {"table_name": {...}}}}}  # 嵌套字典
 
         Args:
             class_name: 类名（可能是中文名或技术名）
+            domain: 域名（V3格式需要）
 
         Returns:
             类定义字典，如果不存在返回 None
         """
+        version = self.ontology.get("version", "1.0")
+
+        # V3 格式：嵌套在 schema.classes 下
+        if version.startswith("3"):
+            schema = self.ontology.get("schema", {})
+            classes = schema.get("classes", {})
+
+            if not isinstance(classes, dict):
+                return None
+
+            # 如果提供了域名，直接查找
+            if domain and domain in classes:
+                domain_tables = classes[domain]
+                if isinstance(domain_tables, dict) and class_name in domain_tables:
+                    return domain_tables[class_name]
+
+            # 否则遍历所有域
+            for domain_name, domain_tables in classes.items():
+                if isinstance(domain_tables, dict) and class_name in domain_tables:
+                    return domain_tables[class_name]
+
+            return None
+
+        # V1/V2 格式
         classes = self.ontology.get("classes", {})
 
         # V1 格式：classes 是字典
@@ -206,10 +232,11 @@ class OntologyUpdateManager:
 
     def _get_property_by_name(self, class_def: Dict[str, Any], prop_name: str) -> Optional[Dict[str, Any]]:
         """
-        根据属性名获取属性定义（兼容 V1 和 V2 格式）
+        根据属性名获取属性定义（兼容 V1、V2 和 V3 格式）
 
         V1 格式: {"properties": {"age": {...}}}  # 字典
         V2 格式: {"properties": [{"name": "年龄", "technical_name": "age", ...}]}  # 数组
+        V3 格式: {"attributes": {"field_name": {...}}}  # 字典
 
         Args:
             class_def: 类定义
@@ -221,6 +248,12 @@ class OntologyUpdateManager:
         if not class_def:
             return None
 
+        # V3 格式：使用 attributes 字段
+        attributes = class_def.get("attributes", {})
+        if isinstance(attributes, dict) and prop_name in attributes:
+            return attributes[prop_name]
+
+        # V1/V2 格式：使用 properties 字段
         properties = class_def.get("properties", {})
 
         # V1 格式：properties 是字典
@@ -247,37 +280,79 @@ class OntologyUpdateManager:
         - update_class_desc: 更新类描述
         - update_class_mapping: 更新类的表映射
         - update_column_mapping: 更新属性的字段映射
+
+        路径格式：
+        - V1/V2: classes.{class_name}.description
+        - V3: schema.classes.{domain}.{table}.description
         """
         parts = change.target_path.split(".")
+        version = self.ontology.get("version", "1.0")
+        is_v3 = version.startswith("3")
 
         if change.change_type == "add_enum_value":
-            # 路径示例: classes.User.properties.status.enum_values
-            if len(parts) >= 5 and parts[0] == "classes" and parts[2] == "properties":
+            # V3 路径: schema.classes.{domain}.{table}.attributes.{field}.enum_values
+            # V1/V2 路径: classes.{class}.properties.{field}.enum_values
+            if is_v3 and parts[0] == "schema" and parts[1] == "classes":
+                # V3 格式
+                domain = parts[2]
+                table_name = parts[3]
+                field_name = parts[5]
+
+                prop_def = (
+                    self.ontology.get("schema", {})
+                    .get("classes", {})
+                    .get(domain, {})
+                    .get(table_name, {})
+                    .get("attributes", {})
+                    .get(field_name, {})
+                )
+            elif len(parts) >= 5 and parts[0] == "classes" and parts[2] == "properties":
                 class_name = parts[1]
                 prop_name = parts[3]
-
-                # 获取属性定义
                 prop_def = (
                     self.ontology.get("classes", {})
                     .get(class_name, {})
                     .get("properties", {})
                     .get(prop_name, {})
                 )
+            else:
+                prop_def = {}
 
+            if prop_def:
                 if "enum_values" not in prop_def:
                     prop_def["enum_values"] = []
 
-                # 检查是否已存在
                 existing_values = [ev.get("value") for ev in prop_def["enum_values"]]
                 new_val = change.new_value if isinstance(change.new_value, dict) else {"value": change.new_value}
 
                 if new_val.get("value") not in existing_values:
                     prop_def["enum_values"].append(new_val)
-                    logger.info(f"✅ 已添加枚举值: {class_name}.{prop_name} += {new_val}")
+                    logger.info(f"✅ 已添加枚举值: {change.target_path} += {new_val}")
 
         elif change.change_type == "update_property_desc":
-            # 路径示例: classes.User.properties.age.business_description
-            if len(parts) >= 5 and parts[0] == "classes" and parts[2] == "properties":
+            # V3 路径: schema.classes.{domain}.{table}.attributes.{field}.constraint
+            # V1/V2 路径: classes.{class}.properties.{field}.description
+            if is_v3 and parts[0] == "schema" and parts[1] == "classes":
+                # V3 格式: schema.classes.domain.table.attributes.field.constraint
+                domain = parts[2]
+                table_name = parts[3]
+                field_name = parts[5]
+                target_field = parts[6] if len(parts) > 6 else "constraint"
+
+                prop_def = (
+                    self.ontology.get("schema", {})
+                    .get("classes", {})
+                    .get(domain, {})
+                    .get(table_name, {})
+                    .get("attributes", {})
+                    .get(field_name, {})
+                )
+
+                if prop_def:
+                    change.old_value = prop_def.get(target_field)
+                    prop_def[target_field] = change.new_value
+                    logger.info(f"✅ 已更新属性描述 (V3): {domain}.{table_name}.{field_name}.{target_field}")
+            elif len(parts) >= 5 and parts[0] == "classes" and parts[2] == "properties":
                 class_name = parts[1]
                 prop_name = parts[3]
                 field_name = parts[4] if len(parts) > 4 else "business_description"
@@ -295,18 +370,46 @@ class OntologyUpdateManager:
                     logger.info(f"✅ 已更新属性描述: {class_name}.{prop_name}.{field_name}")
 
         elif change.change_type == "update_class_desc":
-            # 路径示例: classes.User.description (V1) 或 classes.订单.description (V2)
-            if len(parts) >= 3 and parts[0] == "classes":
-                class_name = parts[1]
-                field_name = parts[2] if len(parts) > 2 else "description"
+            # V3 路径: schema.classes.{domain}.{table}.description
+            # V1/V2 路径: classes.{class}.description 或 classes.{class}.business_description
+            if is_v3 and parts[0] == "schema" and parts[1] == "classes":
+                # V3 格式路径
+                domain = parts[2]
+                table_name = parts[3]
+                field_name = parts[4] if len(parts) > 4 else "description"
 
-                # 使用兼容 V1/V2 的方法
-                class_def = self._get_class_by_name(class_name)
+                class_def = (
+                    self.ontology.get("schema", {})
+                    .get("classes", {})
+                    .get(domain, {})
+                    .get(table_name, {})
+                )
 
                 if class_def:
                     change.old_value = class_def.get(field_name)
                     class_def[field_name] = change.new_value
-                    logger.info(f"✅ 已更新类描述: {class_name}.{field_name}")
+                    logger.info(f"✅ 已更新类描述 (V3): {domain}.{table_name}.{field_name}")
+                else:
+                    logger.warning(f"⚠️ V3 类 {domain}.{table_name} 不存在，无法更新描述")
+            elif len(parts) >= 3 and parts[0] == "classes":
+                # V1/V2 格式路径，但本体可能是 V3
+                class_name = parts[1]
+                # 从路径提取的字段名（可能是 description 或 business_description）
+                path_field_name = parts[2] if len(parts) > 2 else "description"
+
+                class_def = self._get_class_by_name(class_name)
+
+                if class_def:
+                    # V3 本体统一使用 "description" 字段，忽略路径中的 business_description
+                    # V1/V2 本体则使用路径中指定的字段名
+                    if is_v3:
+                        field_name = "description"
+                    else:
+                        field_name = path_field_name
+
+                    change.old_value = class_def.get(field_name)
+                    class_def[field_name] = change.new_value
+                    logger.info(f"✅ 已更新类描述: {class_name}.{field_name} (路径字段: {path_field_name})")
                 else:
                     logger.warning(f"⚠️ 类 {class_name} 不存在，无法更新描述")
 

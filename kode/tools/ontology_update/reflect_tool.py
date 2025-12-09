@@ -8,9 +8,13 @@ from typing import Dict, Any, Optional, Type, List
 from pydantic import BaseModel, Field
 import json
 
+from langchain_core.messages import HumanMessage
+
 from kode.tools.base import KodeTool
 from kode.tools.ontology_update.update_tool import OntologyUpdateTool
 from kode.tools.ontology_update import update_tool as ontology_update_module
+from kode.core.model_manager import ModelManager
+from kode.utils.config import ConfigManager
 from kode.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -204,10 +208,7 @@ class OntologyReflectTool(KodeTool):
         ontology: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """
-        使用启发式规则分析冲突
-
-        这个方法使用简单的规则匹配。
-        在实际应用中，可以调用 AI 模型进行更智能的分析。
+        使用 AI 分析用户回答与本体的冲突
 
         Args:
             question: 问题
@@ -218,91 +219,171 @@ class OntologyReflectTool(KodeTool):
         Returns:
             冲突列表，每个冲突包含 change_type, target_path, new_value 等
         """
-        conflicts = []
+        # 1. 获取模型
+        config_manager = ConfigManager()
+        model_manager = ModelManager(config_manager.get_all())
+        model = model_manager.get_model("quick")
+        model.temperature = 0.0  # 确定性输出
 
-        # 规则1：检测枚举值缺失
-        # 问题模式："XX有哪些？"、"XX的值是什么？"
-        if any(keyword in question for keyword in ["有哪些", "枚举值", "选项", "状态"]):
-            conflicts.extend(
-                self._detect_missing_enum_values(answer, current_state, ontology)
-            )
+        # 2. 构造 prompt
+        prompt = self._build_conflict_analysis_prompt(
+            question, answer, current_state, ontology
+        )
 
-        # 规则2：检测描述不一致
-        # 问题模式："XX是什么意思？"、"XX的含义？"
-        if any(keyword in question for keyword in ["是什么", "含义", "意思", "解释"]):
-            conflicts.extend(
-                self._detect_description_mismatch(answer, current_state, question)
-            )
+        # 3. 调用 AI
+        logger.info("🤖 调用 AI 分析冲突...")
+        response = model.invoke([HumanMessage(content=prompt)])
+        logger.info(f"AI 响应: {response.content[:500]}")
 
-        return conflicts
+        # 4. 提取 JSON
+        conflicts = self._extract_json_from_text(response.content)
 
-    def _detect_missing_enum_values(
-        self, answer: str, current_state: Dict[str, Any], ontology: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """检测缺失的枚举值"""
-        conflicts = []
+        if conflicts is None:
+            raise ValueError(f"AI 返回无效 JSON: {response.content[:200]}")
 
-        # 简单实现：从回答中提取可能的枚举值（用顿号、逗号分隔）
-        import re
+        # 5. 验证和标准化
+        return self._validate_conflicts(conflicts)
 
-        # 提取枚举值（支持中文顿号、逗号、分号）
-        enum_candidates = re.split(r"[、，,;；]", answer.strip())
-        enum_candidates = [e.strip() for e in enum_candidates if e.strip()]
+    def _build_conflict_analysis_prompt(
+        self,
+        question: str,
+        answer: str,
+        current_state: Dict[str, Any],
+        ontology: Dict[str, Any],
+    ) -> str:
+        """构造冲突分析 prompt"""
 
-        # 检查每个候选值是否在本体中
-        for entity_path, entity_def in current_state.items():
-            if "enum_values" in entity_def:
-                existing_values = [ev.get("label", ev.get("value", "")) for ev in entity_def["enum_values"]]
+        # 提取本体中所有类的简要信息（用于上下文）
+        classes_summary = []
+        for class_name, class_def in ontology.get("classes", {}).items():
+            props = list(class_def.get("properties", {}).keys())[:5]
+            classes_summary.append(f"- {class_name}: {', '.join(props)}")
 
-                # 检测缺失
-                for candidate in enum_candidates:
-                    if candidate not in existing_values and len(candidate) < 10:  # 忽略过长的文本
-                        # 构建正确的 target_path（需要包含 classes. 前缀）
-                        parts = entity_path.split(".")
-                        if len(parts) == 2:
-                            # Order.status -> classes.Order.properties.status.enum_values
-                            target_path = f"classes.{parts[0]}.properties.{parts[1]}.enum_values"
-                        else:
-                            target_path = f"{entity_path}.enum_values"
+        ontology_overview = "\n".join(classes_summary[:20])  # 最多20个类
 
-                        # 推测这是缺失的枚举值
-                        conflicts.append(
-                            {
-                                "change_type": "add_enum_value",
-                                "target_path": target_path,
-                                "new_value": {"value": candidate, "label": candidate},
-                                "old_value": None,
-                                "description": f"添加枚举值 '{candidate}' 到 {entity_path}",
-                            }
-                        )
+        return f"""你是本体专家，分析用户回答与现有本体定义之间的冲突。
 
-        return conflicts
+## 问题
+{question}
 
-    def _detect_description_mismatch(
-        self, answer: str, current_state: Dict[str, Any], question: str
-    ) -> List[Dict[str, Any]]:
-        """检测描述不一致"""
-        conflicts = []
+## 用户回答
+{answer}
 
-        # 简单实现：如果用户回答与当前描述差异很大，建议更新
-        for entity_path, entity_def in current_state.items():
-            current_desc = entity_def.get("business_description", "")
+## 当前本体中相关实体定义
+```json
+{json.dumps(current_state, ensure_ascii=False, indent=2)}
+```
 
-            # 如果当前描述为空，或与用户回答差异很大
-            if not current_desc or (current_desc not in answer and answer not in current_desc):
-                # 提取问题中的字段名
-                parts = entity_path.split(".")
-                if len(parts) == 2:
-                    # 属性级别: User.level -> classes.User.properties.level.business_description
-                    target_path = f"classes.{parts[0]}.properties.{parts[1]}.business_description"
-                    conflicts.append(
-                        {
-                            "change_type": "update_property_desc",
-                            "target_path": target_path,
-                            "new_value": answer.strip(),
-                            "old_value": current_desc,
-                            "description": f"更新 {entity_path} 的业务描述",
-                        }
-                    )
+## 本体概览（部分类和属性）
+{ontology_overview}
 
-        return conflicts
+## 任务
+对比用户回答与本体定义，识别以下类型的冲突：
+
+1. **枚举值缺失** (add_enum_value) - 用户提到的枚举值在本体中不存在
+2. **枚举值错误** (update_enum_value) - 本体中的枚举值与用户描述不符
+3. **描述不一致** (update_property_desc) - 业务描述需要根据用户回答更新
+4. **新增属性** (add_property) - 用户提到了本体中没有的属性
+
+## 输出格式
+只返回 JSON 数组，不要其他内容。每个冲突包含：
+- change_type: "add_enum_value" | "update_enum_value" | "update_property_desc" | "add_property"
+- target_path: 本体路径，格式如 "classes.Order.properties.status.enum_values"
+- new_value: 新值（枚举值用 {{"value": "xxx", "label": "xxx"}} 格式）
+- old_value: 旧值（可选，用于 update 类型）
+- description: 冲突描述（中文）
+
+如果没有冲突，返回空数组 []
+
+示例输出：
+```json
+[
+  {{
+    "change_type": "add_enum_value",
+    "target_path": "classes.Order.properties.status.enum_values",
+    "new_value": {{"value": "cancelled", "label": "已取消"}},
+    "old_value": null,
+    "description": "添加枚举值 '已取消' 到 Order.status"
+  }}
+]
+```
+"""
+
+    def _extract_json_from_text(self, text: str) -> Optional[List[Dict[str, Any]]]:
+        """从 AI 输出提取 JSON（三层策略）"""
+
+        # 策略1：直接解析
+        try:
+            result = json.loads(text)
+            if isinstance(result, list):
+                return result
+        except json.JSONDecodeError:
+            pass
+
+        # 策略2：查找 [ ] 边界
+        start_idx = text.find("[")
+        end_idx = text.rfind("]")
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            try:
+                potential_json = text[start_idx : end_idx + 1]
+                result = json.loads(potential_json)
+                if isinstance(result, list):
+                    return result
+            except json.JSONDecodeError:
+                pass
+
+        # 策略3：markdown 代码块
+        if "```" in text:
+            try:
+                # 找 ```json 或 ```
+                if "```json" in text:
+                    code_start = text.find("```json") + 7
+                else:
+                    code_start = text.find("```") + 3
+
+                json_start = text.find("\n", code_start) + 1
+                code_end = text.find("```", json_start)
+                if code_end != -1:
+                    json_text = text[json_start:code_end].strip()
+                    result = json.loads(json_text)
+                    if isinstance(result, list):
+                        return result
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        logger.warning(f"无法提取 JSON: {text[:200]}")
+        return None
+
+    def _validate_conflicts(self, conflicts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """验证冲突格式，过滤无效项"""
+        valid_change_types = {
+            "add_enum_value",
+            "update_enum_value",
+            "update_property_desc",
+            "add_property",
+        }
+
+        validated = []
+        for conflict in conflicts:
+            # 必须有 change_type
+            if conflict.get("change_type") not in valid_change_types:
+                logger.warning(f"跳过无效 change_type: {conflict}")
+                continue
+
+            # 必须有 target_path
+            if not conflict.get("target_path"):
+                logger.warning(f"跳过缺少 target_path: {conflict}")
+                continue
+
+            # 必须有 new_value
+            if "new_value" not in conflict:
+                logger.warning(f"跳过缺少 new_value: {conflict}")
+                continue
+
+            # 必须有 description
+            if not conflict.get("description"):
+                conflict["description"] = f"{conflict['change_type']} at {conflict['target_path']}"
+
+            validated.append(conflict)
+
+        return validated

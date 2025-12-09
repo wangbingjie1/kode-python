@@ -42,10 +42,12 @@ class OntologyUpdateToolInput(BaseModel):
     )
     target_path: str = Field(
         description=(
-            "目标路径（JSON path格式）。示例：\n"
-            "- 'classes.User.properties.age' (属性级别)\n"
-            "- 'classes.Order.business_description' (类描述)\n"
-            "- 'classes.Product.properties.status.enum_values' (枚举值)"
+            "目标路径（JSON path格式）。\n"
+            "V1/V2 格式示例：\n"
+            "- 'classes.User.properties.age.description' (属性描述)\n"
+            "- 'classes.Order.description' (类描述，注意使用 description 而非 business_description)\n"
+            "- 'classes.Product.properties.status.enum_values' (枚举值)\n"
+            "注意：更新类描述时请使用 'classes.表名.description' 格式"
         )
     )
     new_value: Any = Field(description="新值（JSON格式）。可以是字符串、字典或列表")

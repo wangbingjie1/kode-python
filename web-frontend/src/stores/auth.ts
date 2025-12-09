@@ -5,6 +5,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '@/config/constants'
+import { heartbeatService } from '@/services/sse'
 
 interface User {
   id: string
@@ -56,6 +57,10 @@ export const useAuthStore = defineStore('auth', () => {
 
       // 获取用户信息
       await fetchUserProfile()
+
+      // 启动心跳连接
+      heartbeatService.connect()
+      console.log('[Auth] Heartbeat started after login')
 
       return true
     } catch (err: any) {
@@ -141,6 +146,10 @@ export const useAuthStore = defineStore('auth', () => {
       // 获取用户信息
       await fetchUserProfile()
 
+      // 启动心跳连接
+      heartbeatService.connect()
+      console.log('[Auth] Heartbeat started after Google login')
+
       return true
     } catch (err: any) {
       error.value = err.response?.data?.detail || '谷歌登录失败'
@@ -161,6 +170,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
+    // 停止心跳连接
+    heartbeatService.disconnect()
+    console.log('[Auth] Heartbeat stopped on logout')
+
     user.value = null
     accessToken.value = null
     refreshToken.value = null
@@ -168,9 +181,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('refresh_token')
   }
 
-  // 初始化时尝试获取用户信息
+  // 初始化时尝试获取用户信息并启动心跳
   if (accessToken.value) {
     fetchUserProfile()
+    // 页面刷新后重新启动心跳
+    heartbeatService.connect()
+    console.log('[Auth] Heartbeat started on page load (token exists)')
   }
 
   return {

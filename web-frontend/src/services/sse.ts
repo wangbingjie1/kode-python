@@ -2,11 +2,11 @@
  * SSE (Server-Sent Events) Service
  *
  * Manages SSE connections for real-time chat communication.
- * Replaces WebSocket implementation with simpler SSE approach.
+ * Includes heartbeat connection for maintaining connection status.
  */
 
 export interface StreamingChunk {
-  type: 'thinking' | 'tool_call' | 'tool_result' | 'chunk' | 'complete' | 'error' | 'done'
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'chunk' | 'complete' | 'error' | 'done' | 'heartbeat' | 'connected' | 'disconnected'
   content: string
   metadata: Record<string, any>
 }
@@ -14,7 +14,184 @@ export interface StreamingChunk {
 type MessageCallback = (chunk: StreamingChunk) => void
 type ErrorCallback = (error: Error) => void
 type CloseCallback = () => void
+type ConnectionCallback = (connected: boolean) => void
 
+/**
+ * SSE Heartbeat Service
+ *
+ * 维护一个长连接用于：
+ * 1. 检测真实的网络连接状态
+ * 2. 每 30 秒接收心跳保持连接
+ * 3. 自动重连
+ */
+export class SSEHeartbeatService {
+  private eventSource: EventSource | null = null
+  private connectionCallbacks: ConnectionCallback[] = []
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private lastHeartbeat: number = 0
+  private _isConnected: boolean = false
+  private reconnectAttempts: number = 0
+  private maxReconnectAttempts: number = 10
+  private baseReconnectDelay: number = 1000 // 1 秒
+
+  constructor() {}
+
+  /**
+   * 启动心跳连接
+   */
+  connect(): void {
+    // 如果已连接，先断开
+    if (this.eventSource) {
+      this.disconnect()
+    }
+
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      console.warn('[Heartbeat] No access token, skipping heartbeat connection')
+      return
+    }
+
+    const sseUrl = `/api/sse/heartbeat?token=${encodeURIComponent(token)}`
+
+    try {
+      this.eventSource = new EventSource(sseUrl)
+
+      this.eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+
+          if (data.type === 'connected') {
+            console.log('[Heartbeat] Connected')
+            this._isConnected = true
+            this.reconnectAttempts = 0 // 重置重连计数
+            this.notifyConnectionChange(true)
+          } else if (data.type === 'heartbeat') {
+            this.lastHeartbeat = data.metadata?.timestamp || Date.now() / 1000
+            // console.log('[Heartbeat] Received at', new Date(this.lastHeartbeat * 1000).toLocaleTimeString())
+          } else if (data.type === 'disconnected') {
+            console.log('[Heartbeat] Server disconnected')
+            this._isConnected = false
+            this.notifyConnectionChange(false)
+          }
+        } catch (error) {
+          console.error('[Heartbeat] Error parsing message:', error)
+        }
+      }
+
+      this.eventSource.onerror = (error) => {
+        console.error('[Heartbeat] Connection error:', error)
+        this._isConnected = false
+        this.notifyConnectionChange(false)
+        this.eventSource?.close()
+        this.eventSource = null
+
+        // 尝试重连
+        this.scheduleReconnect()
+      }
+
+      this.eventSource.onopen = () => {
+        console.log('[Heartbeat] Connection opened')
+      }
+
+    } catch (error) {
+      console.error('[Heartbeat] Failed to create EventSource:', error)
+      this._isConnected = false
+      this.notifyConnectionChange(false)
+    }
+  }
+
+  /**
+   * 计划重连
+   */
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+    }
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('[Heartbeat] Max reconnect attempts reached')
+      return
+    }
+
+    // 指数退避：1s, 2s, 4s, 8s, 16s, 30s (max)
+    const delay = Math.min(
+      this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
+      30000
+    )
+
+    console.log(`[Heartbeat] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1})`)
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectAttempts++
+      this.connect()
+    }, delay)
+  }
+
+  /**
+   * 断开心跳连接
+   */
+  disconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
+    if (this.eventSource) {
+      this.eventSource.close()
+      this.eventSource = null
+    }
+
+    this._isConnected = false
+    this.notifyConnectionChange(false)
+  }
+
+  /**
+   * 注册连接状态变化回调
+   */
+  onConnectionChange(callback: ConnectionCallback): void {
+    this.connectionCallbacks.push(callback)
+    // 立即通知当前状态
+    callback(this._isConnected)
+  }
+
+  /**
+   * 清除回调
+   */
+  clearCallbacks(): void {
+    this.connectionCallbacks = []
+  }
+
+  /**
+   * 通知连接状态变化
+   */
+  private notifyConnectionChange(connected: boolean): void {
+    this.connectionCallbacks.forEach(callback => callback(connected))
+  }
+
+  /**
+   * 获取连接状态
+   */
+  get isConnected(): boolean {
+    return this._isConnected
+  }
+
+  /**
+   * 获取最后心跳时间
+   */
+  get lastHeartbeatTime(): number {
+    return this.lastHeartbeat
+  }
+}
+
+// 心跳服务单例
+export const heartbeatService = new SSEHeartbeatService()
+
+
+/**
+ * SSE Chat Service
+ *
+ * 用于发送消息和接收流式响应
+ */
 export class SSEService {
   private eventSource: EventSource | null = null
   private conversationId: string | null = null

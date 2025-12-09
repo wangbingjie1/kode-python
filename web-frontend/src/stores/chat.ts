@@ -5,9 +5,9 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import type { Conversation, Message } from '@/services/api'
-import { sseService } from '@/services/sse'
+import { sseService, heartbeatService } from '@/services/sse'
 import * as api from '@/services/api'
 import { notification } from '@/composables/useNotification'
 
@@ -118,6 +118,35 @@ export const useChatStore = defineStore('chat', () => {
 
   // Computed
   const hasMessages = computed(() => messages.value.length > 0)
+
+  // ============================================================
+  // 心跳连接管理
+  // ============================================================
+
+  /**
+   * 启动心跳连接（登录后调用）
+   */
+  function startHeartbeat() {
+    // 注册连接状态变化回调
+    heartbeatService.onConnectionChange((connected) => {
+      isConnected.value = connected
+      console.log('[ChatStore] Heartbeat connection status:', connected)
+    })
+
+    // 启动心跳
+    heartbeatService.connect()
+    console.log('[ChatStore] Heartbeat started')
+  }
+
+  /**
+   * 停止心跳连接（登出时调用）
+   */
+  function stopHeartbeat() {
+    heartbeatService.disconnect()
+    heartbeatService.clearCallbacks()
+    isConnected.value = false
+    console.log('[ChatStore] Heartbeat stopped')
+  }
 
   // Actions
 
@@ -457,10 +486,10 @@ export const useChatStore = defineStore('chat', () => {
       sseService.clearCallbacks()
       console.log('[ChatStore] Cleared old SSE callbacks')
 
-      // Connect SSE
+      // Connect SSE (设置 conversation ID，不再设置假的 isConnected)
       sseService.connect(conversationId)
-      isConnected.value = true
-      console.log('[ChatStore] SSE connected. isConnected:', isConnected.value)
+      // 注意: isConnected 现在由 heartbeatService 管理，不在这里设置
+      console.log('[ChatStore] SSE ready for conversation. isConnected (from heartbeat):', isConnected.value)
 
       // Setup message handler
       sseService.onMessage((chunk) => {
@@ -470,14 +499,13 @@ export const useChatStore = defineStore('chat', () => {
 
       sseService.onClose(() => {
         console.log('[ChatStore] SSE stream closed (message complete)')
-        // Don't set isConnected to false - we're still connected to the conversation
-        // SSE closes after each message completion, but we remain ready to send new messages
+        // isConnected 由 heartbeat 管理，这里不需要修改
       })
 
       sseService.onError((error) => {
         console.error('[ChatStore] SSE error:', error)
         notification.error('连接错误', 'SSE 连接失败: ' + error.message)
-        isConnected.value = false // Only disconnect on error
+        // isConnected 由 heartbeat 管理，这里不需要修改
       })
 
       console.log('[ChatStore] Connection setup complete')
@@ -491,8 +519,15 @@ export const useChatStore = defineStore('chat', () => {
    * Send message
   */
   async function sendMessage(content: string, databaseName?: string) {
+    // 检查心跳连接状态
     if (!isConnected.value) {
-      throw new Error('Not connected to conversation')
+      notification.error('连接断开', '与服务器的连接已断开，请刷新页面重试')
+      throw new Error('Not connected to server (heartbeat disconnected)')
+    }
+
+    // 检查是否有活跃的对话
+    if (!sseService.isConnected()) {
+      throw new Error('No active conversation')
     }
 
     // 标记 Token 统计生成中，避免 UI 闪跳
@@ -1133,16 +1168,17 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /**
-   * Clear current conversation
+   * Clear current conversation (不影响心跳连接)
    */
   function clearConversation() {
-    if (isConnected.value) {
-      sseService.disconnect()
-    }
+    // 断开 SSE 聊天连接（不是心跳连接）
+    sseService.disconnect()
     sseService.clearCallbacks()
+    sseService.reset()
+
     currentConversation.value = null
     messages.value = []
-    isConnected.value = false
+    // 注意: isConnected 由 heartbeat 管理，不在这里设置
     isTyping.value = false
     currentStreamingMessage.value = null
     tokenStatsStatus.value = 'idle'
@@ -1178,14 +1214,18 @@ export const useChatStore = defineStore('chat', () => {
     hasMessages,
     conversationTokenUsage,
     tokenStatsStatus,
-    pendingUserInput,  // 新增：待回答的用户输入
+    pendingUserInput,  // 待回答的用户输入
 
     // Actions
     connectToConversation,
     sendMessage,
     createNewConversation,
     clearConversation,
-    submitUserResponse,  // 新增：提交用户响应
-    cancelStreaming  // 新增：终止 streaming
+    submitUserResponse,  // 提交用户响应
+    cancelStreaming,  // 终止 streaming
+
+    // 心跳连接管理
+    startHeartbeat,  // 启动心跳（登录后调用）
+    stopHeartbeat    // 停止心跳（登出时调用）
   }
 })

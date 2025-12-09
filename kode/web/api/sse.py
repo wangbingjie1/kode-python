@@ -1328,3 +1328,142 @@ async def append_message_to_stream(
         "message": "消息已追加到streaming会话",
         "conversation_id": conversation_id,
     }
+
+
+# ============================================================
+# SSE Heartbeat Endpoint (保持连接状态)
+# ============================================================
+
+# 全局心跳会话管理
+class HeartbeatSessionManager:
+    """
+    管理 SSE 心跳连接。
+
+    每个用户维持一个心跳连接，用于：
+    1. 验证连接是否存活
+    2. 防止代理/负载均衡器断开空闲连接
+    3. 前端据此显示"已连接"状态
+    """
+
+    def __init__(self):
+        self._sessions: Dict[str, asyncio.Event] = {}  # user_id -> cancel_event
+
+    def register(self, user_id: str) -> asyncio.Event:
+        """注册心跳会话，返回取消事件"""
+        # 如果已有会话，先取消旧的
+        if user_id in self._sessions:
+            self._sessions[user_id].set()
+
+        cancel_event = asyncio.Event()
+        self._sessions[user_id] = cancel_event
+        logger.info(f"[Heartbeat] Registered session for user {user_id}")
+        return cancel_event
+
+    def cancel(self, user_id: str):
+        """取消用户的心跳会话"""
+        if user_id in self._sessions:
+            self._sessions[user_id].set()
+            del self._sessions[user_id]
+            logger.info(f"[Heartbeat] Cancelled session for user {user_id}")
+
+    def is_connected(self, user_id: str) -> bool:
+        """检查用户是否有活跃的心跳连接"""
+        return user_id in self._sessions and not self._sessions[user_id].is_set()
+
+
+heartbeat_session_manager = HeartbeatSessionManager()
+
+
+async def heartbeat_generator(
+    user_id: str,
+    cancel_event: asyncio.Event,
+    interval: int = 30,
+) -> AsyncGenerator[str, None]:
+    """
+    生成心跳事件流。
+
+    每 interval 秒发送一次心跳，保持连接存活。
+    """
+    import time
+
+    try:
+        # 发送初始连接成功事件
+        connect_data = json.dumps({
+            "type": "connected",
+            "content": "",
+            "metadata": {"user_id": user_id, "timestamp": time.time()}
+        }, ensure_ascii=False)
+        yield f"data: {connect_data}\n\n"
+        logger.info(f"[Heartbeat] Started for user {user_id}")
+
+        while not cancel_event.is_set():
+            # 等待 interval 秒或被取消
+            try:
+                await asyncio.wait_for(cancel_event.wait(), timeout=interval)
+                # 如果 wait 返回（被取消），退出循环
+                break
+            except asyncio.TimeoutError:
+                # 超时说明没被取消，发送心跳
+                heartbeat_data = json.dumps({
+                    "type": "heartbeat",
+                    "content": "",
+                    "metadata": {"timestamp": time.time()}
+                }, ensure_ascii=False)
+                yield f"data: {heartbeat_data}\n\n"
+
+    except asyncio.CancelledError:
+        logger.info(f"[Heartbeat] Cancelled for user {user_id}")
+    except Exception as e:
+        logger.error(f"[Heartbeat] Error for user {user_id}: {e}")
+    finally:
+        heartbeat_session_manager.cancel(user_id)
+        # 发送断开事件
+        disconnect_data = json.dumps({
+            "type": "disconnected",
+            "content": "",
+            "metadata": {"user_id": user_id}
+        }, ensure_ascii=False)
+        yield f"data: {disconnect_data}\n\n"
+        logger.info(f"[Heartbeat] Ended for user {user_id}")
+
+
+@router.get("/heartbeat")
+async def sse_heartbeat(
+    current_user: User = Depends(get_user_from_token_or_header),
+):
+    """
+    SSE 心跳端点 - 维持长连接状态。
+
+    前端应在登录后立即建立此连接，用于：
+    1. 显示"已连接"状态
+    2. 每 30 秒接收心跳，保持连接存活
+    3. 检测网络断开
+
+    **Usage:**
+    ```javascript
+    const eventSource = new EventSource('/api/sse/heartbeat?token=xxx')
+    eventSource.onmessage = (e) => {
+      const data = JSON.parse(e.data)
+      if (data.type === 'heartbeat') {
+        // 更新最后心跳时间
+      }
+    }
+    ```
+
+    **Events:**
+    - `connected`: 连接建立成功
+    - `heartbeat`: 每 30 秒一次
+    - `disconnected`: 连接断开
+    """
+    # 注册心跳会话
+    cancel_event = heartbeat_session_manager.register(current_user.id)
+
+    return StreamingResponse(
+        heartbeat_generator(current_user.id, cancel_event),
+        media_type="text/event-stream; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
