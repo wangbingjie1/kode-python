@@ -89,3 +89,4 @@ test_*.py
 # Node modules (should be in frontend .gitignore but added here for safety)
 node_modules/
 web-frontend/node_modules/
+interaction_state
