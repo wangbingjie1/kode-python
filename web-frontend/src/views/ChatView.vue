@@ -544,6 +544,9 @@ function setupViewportWatcher() {
 }
 
 onMounted(async () => {
+  // 启动心跳连接
+  chatStore.startHeartbeat()
+
   setupViewportWatcher()
   await ensureProjectId()
   await loadConversations()
@@ -553,6 +556,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // 停止心跳连接
+  chatStore.stopHeartbeat()
+
   chatStore.clearConversation()
   if (mediaQueryCleanup) {
     mediaQueryCleanup()

@@ -1815,6 +1815,7 @@ THEN
         # 合并各域的数据
         merged_classes = {}
         merged_relationships = {}
+        merged_properties = {}  # 🔧 新增：共享属性合并
         merged_rules = {}
         merged_flows = {}
         merged_objects = {}
@@ -1827,6 +1828,7 @@ THEN
             schema = ont.get("schema", {})
             classes = schema.get("classes", {})
             relationships = schema.get("relationships", {})
+            properties = schema.get("properties", {})  # 🔧 新增：提取共享属性
 
             # 🔥 嵌套格式合并：classes 应该是 {domain_name: {table_name: {...}}}
             if isinstance(classes, dict):
@@ -1850,6 +1852,29 @@ THEN
             # 合并 relationships
             if isinstance(relationships, dict):
                 merged_relationships.update(relationships)
+
+            # 🔧 新增：智能合并 properties（需要合并 used_by 列表）
+            if isinstance(properties, dict):
+                for prop_name, prop_data in properties.items():
+                    if prop_name in merged_properties:
+                        # 属性已存在，合并 used_by 列表
+                        existing_used_by = merged_properties[prop_name].get("used_by", [])
+                        new_used_by = prop_data.get("used_by", [])
+                        merged_properties[prop_name]["used_by"] = list(set(existing_used_by + new_used_by))
+
+                        # 合并 naming_variants（如果存在）
+                        if "naming_variants" in prop_data:
+                            existing_variants = merged_properties[prop_name].get("naming_variants", {})
+                            new_variants = prop_data.get("naming_variants", {})
+                            for field, variants in new_variants.items():
+                                if field in existing_variants:
+                                    existing_variants[field] = list(set(existing_variants[field] + variants))
+                                else:
+                                    existing_variants[field] = variants
+                            merged_properties[prop_name]["naming_variants"] = existing_variants
+                    else:
+                        # 新属性，直接添加
+                        merged_properties[prop_name] = prop_data
 
             # 提取 business_logic
             business_logic = ont.get("business_logic", {})
@@ -1953,6 +1978,7 @@ THEN
             "schema": {
                 "classes": merged_classes,
                 "relationships": merged_relationships,
+                "properties": merged_properties,  # 🔧 新增：输出共享属性
             },
             "business_logic": {
                 "rules": merged_rules,

@@ -48,6 +48,8 @@ export class SSEHeartbeatService {
     const token = localStorage.getItem('access_token')
     if (!token) {
       console.warn('[Heartbeat] No access token, skipping heartbeat connection')
+      this._isConnected = false
+      this.notifyConnectionChange(false)
       return
     }
 
@@ -80,12 +82,26 @@ export class SSEHeartbeatService {
 
       this.eventSource.onerror = (error) => {
         console.error('[Heartbeat] Connection error:', error)
+
+        // 检查是否是认证错误（EventSource 会立即关闭）
+        // readyState: 2 = CLOSED
+        const isClosed = this.eventSource?.readyState === EventSource.CLOSED
+
         this._isConnected = false
         this.notifyConnectionChange(false)
         this.eventSource?.close()
         this.eventSource = null
 
-        // 尝试重连
+        // 如果是认证错误（连接立即关闭），清除 token 并停止重连
+        if (isClosed && this.reconnectAttempts === 0) {
+          console.error('[Heartbeat] Authentication failed, token may be invalid or expired')
+          console.warn('[Heartbeat] Stopping reconnection attempts due to auth failure')
+          localStorage.removeItem('access_token')
+          this.reconnectAttempts = this.maxReconnectAttempts // 阻止重连
+          return
+        }
+
+        // 其他错误：尝试重连
         this.scheduleReconnect()
       }
 

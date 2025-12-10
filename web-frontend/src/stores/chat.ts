@@ -127,13 +127,16 @@ export const useChatStore = defineStore('chat', () => {
    * 启动心跳连接（登录后调用）
    */
   function startHeartbeat() {
+    // 先清除旧的回调,避免重复注册
+    heartbeatService.clearCallbacks()
+
     // 注册连接状态变化回调
     heartbeatService.onConnectionChange((connected) => {
       isConnected.value = connected
       console.log('[ChatStore] Heartbeat connection status:', connected)
     })
 
-    // 启动心跳
+    // 启动心跳（会触发 connected 事件并调用回调）
     heartbeatService.connect()
     console.log('[ChatStore] Heartbeat started')
   }
