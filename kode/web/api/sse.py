@@ -909,15 +909,22 @@ async def stream_chat(
     # 检查用户配额
     await check_user_quota(current_user.id, db)
 
-    # Verify conversation exists
+    # Verify conversation exists (如果不存在，自动创建)
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalar_one_or_none()
 
     if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found",
+        # 🛡️ 容错：自动创建会话（避免前端缓存导致的外键错误）
+        logger.warning(f"Conversation {conversation_id} not found, creating new one")
+        conversation = Conversation(
+            id=conversation_id,
+            title="New chat",
+            user_id=current_user.id,  # 关联当前用户
         )
+        db.add(conversation)
+        await db.commit()
+        await db.refresh(conversation)
+        logger.info(f"Auto-created conversation {conversation_id} for user {current_user.id}")
 
     if not task:
         raise HTTPException(
@@ -1106,15 +1113,22 @@ async def send_message_sse(
 
     Returns SSE stream same as GET endpoint.
     """
-    # Verify conversation exists
+    # Verify conversation exists (如果不存在，自动创建)
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalar_one_or_none()
 
     if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found",
+        # 🛡️ 容错：自动创建会话（避免前端缓存导致的外键错误）
+        logger.warning(f"Conversation {conversation_id} not found, creating new one (POST)")
+        conversation = Conversation(
+            id=conversation_id,
+            title="New chat",
+            user_id=current_user.id,  # 关联当前用户
         )
+        db.add(conversation)
+        await db.commit()
+        await db.refresh(conversation)
+        logger.info(f"Auto-created conversation {conversation_id} for user {current_user.id} (POST)")
 
     if not task:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task is required")
