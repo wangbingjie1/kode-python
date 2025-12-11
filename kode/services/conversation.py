@@ -214,6 +214,14 @@ DatabaseSchemaExtractor(connection_name="erp_db")
 2. 根据 `has_more_questions` 字段决定是否继续
 3. 完成后自动保存到 `ontology_store/{connection_name}/business_context.json`
 
+**⚠️ 处理工具返回结果**：
+
+| 返回字段 | 你的动作 |
+|----------|----------|
+| `has_more_questions: true` | **必须**立即再次调用工具继续提问，不要输出无关内容 |
+| `has_more_questions: false` + `status: completed` | 业务理解完成，告知用户并进入步骤3 |
+| `status: error` | 向用户说明错误并建议解决方案 |
+
 **规则**：
 - ✅ `has_more_questions=true` 时必须继续调用
 - ✅ 完成后会自动分析并生成排除配置
@@ -232,6 +240,22 @@ DatabaseSchemaExtractor(connection_name="erp_db")
 
 ```
 OntologyBuilder(connection_name="erp_db")
+```
+
+**⚠️ 处理工具返回结果（重要）**：
+
+工具返回 JSON 格式，你**必须**根据 `status` 字段采取相应动作：
+
+| status | 含义 | 你的动作 |
+|--------|------|----------|
+| `success` | 构建完成 | 向用户总结结果（statistics、domains、file_path） |
+| `warning` + `gate_check_failed: false` | 有未解决问题但可跳过 | 告知用户有未解决问题，询问是否跳过；若用户同意跳过，再次调用并加 `skip_uncertainty_check=true` |
+| `warning` + `already_exists: true` | 本体已存在 | 告知用户并询问是否重建，若同意则加 `force_rebuild=true` |
+| `error` | 失败 | 向用户说明错误原因和建议 |
+
+**示例：用户说"跳过问卷"时的正确处理**：
+```
+OntologyBuilder(connection_name="erp_db", skip_uncertainty_check=true)
 ```
 
 **输出格式（V3）**：

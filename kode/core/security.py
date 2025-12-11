@@ -18,7 +18,8 @@ from cryptography.hazmat.backends import default_backend
 # JWT配置
 SECRET_KEY = os.getenv("SECRET_KEY", "kode-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+# 延长 access token 有效期，避免频繁过期（尤其是心跳连接）
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))  # 默认 8 小时
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # 数据库密码加密配置

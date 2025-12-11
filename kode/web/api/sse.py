@@ -1399,6 +1399,8 @@ async def heartbeat_generator(
     每 interval 秒发送一次心跳，保持连接存活。
     """
     import time
+    from kode.core.security import create_access_token
+    from datetime import timedelta
 
     try:
         # 发送初始连接成功事件
@@ -1417,11 +1419,20 @@ async def heartbeat_generator(
                 # 如果 wait 返回（被取消），退出循环
                 break
             except asyncio.TimeoutError:
-                # 超时说明没被取消，发送心跳
+                # 超时说明没被取消，发送心跳（带新 token）
+                # 生成新的 access token（延长有效期）
+                new_token = create_access_token(
+                    data={"sub": user_id},
+                    expires_delta=timedelta(hours=2)  # 心跳期间延长到 2 小时
+                )
+
                 heartbeat_data = json.dumps({
                     "type": "heartbeat",
                     "content": "",
-                    "metadata": {"timestamp": time.time()}
+                    "metadata": {
+                        "timestamp": time.time(),
+                        "new_token": new_token  # 前端应更新 token
+                    }
                 }, ensure_ascii=False)
                 yield f"data: {heartbeat_data}\n\n"
 

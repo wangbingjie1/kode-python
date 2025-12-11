@@ -509,6 +509,9 @@ class BusinessUnderstandingTool(InteractiveTool):
             connection_name, questions, answers
         )
 
+        # 🔥 新增：提取 5 个核心业务字段（用于本体 meta 信息）
+        business_fields = self._extract_business_fields(questions, answers)
+
         # 保存到 ontology_store（统一格式）
         context_data = {
             # 兼容旧格式
@@ -520,6 +523,12 @@ class BusinessUnderstandingTool(InteractiveTool):
             "exclusion_reasons": exclusion_reasons,
             # 🔑 新增：排除前缀列表（供 DatabaseSchemaClusterer 和 DomainUncertaintyAnalyzer 使用）
             "excluded_prefixes": excluded_prefixes,
+            # 🔥 新增：提取的核心业务字段（供 OntologyBuilder 使用）
+            "product_name": business_fields.get("product_name", ""),
+            "business_model": business_fields.get("business_model", ""),
+            "revenue_formula": business_fields.get("revenue_formula", ""),
+            "conversion_path": business_fields.get("conversion_path", ""),
+            "key_metrics": business_fields.get("key_metrics", ""),
             "completed": True,
             "question_count": len(questions),
             "created_at": datetime.now().isoformat(),
@@ -663,11 +672,165 @@ class BusinessUnderstandingTool(InteractiveTool):
             logger.error(f"[BusinessUnderstanding] AI 分析排除表失败: {e}")
             return [], {}, []
 
+    def _extract_business_fields(
+        self,
+        questions: List[Tuple[str, str, str]],
+        answers: Dict[str, str]
+    ) -> Dict[str, str]:
+        """
+        从业务问答中提取 5 个核心业务字段（用于本体 meta 信息）
+
+        提取字段：
+        1. product_name: 产品名称（如"AI对话平台"）
+        2. business_model: 商业模式（如"订阅制+按量付费"）
+        3. revenue_formula: 收入公式（如"MRR = 订阅收入 + 按量消费"）
+        4. conversion_path: 转化路径（如"注册 -> 免费试用 -> 订阅付费"）
+        5. key_metrics: 核心指标（如"MRR, DAU, 留存率"）
+
+        Args:
+            questions: 问题列表
+            answers: 答案字典
+
+        Returns:
+            包含 5 个字段的字典
+        """
+        from kode.core.model_manager import ModelManager
+        from kode.utils.config import ConfigManager
+        from langchain_core.messages import HumanMessage
+
+        # 构建问答文本
+        qa_text = "\n".join([
+            f"**Q{i+1}: {q[1]}**\nA: {answers.get(q[0], '（未回答）')}\n"
+            for i, q in enumerate(questions)
+        ])
+
+        prompt = f"""你是业务分析专家。请从以下业务问答中提取 5 个核心业务字段。
+
+## 业务问答
+{qa_text}
+
+## 任务
+从上述问答中提取以下 5 个字段（如果问答中没有明确信息，请根据上下文推断或留空）：
+
+1. **product_name**（产品名称）
+   - 用户的核心产品/服务名称
+   - 如果有多个产品线，用斜杠分隔（如"AI对话/AI创作"）
+   - 示例："AI对话平台"、"SaaS ERP系统"
+
+2. **business_model**（商业模式）
+   - 用户的盈利模式
+   - 示例："订阅制（月费/年费）"、"按量付费（按token）"、"订阅+增值服务"
+
+3. **revenue_formula**（收入公式）
+   - 用户的收入计算公式
+   - 示例："MRR = 订阅用户数 × 月费单价"、"收入 = 订阅费 + Token消费"
+   - 如果问答中没有明确信息，基于 business_model 推断
+
+4. **conversion_path**（转化路径）
+   - 用户从获客到付费的转化漏斗
+   - 示例："注册 -> 免费试用 -> 订阅付费"、"访问 -> 注册 -> 首次充值 -> 续费"
+
+5. **key_metrics**（核心指标）
+   - 用户最关注的业务指标（3-5个）
+   - 示例："MRR, Churn Rate, ARPU"、"DAU, 留存率, 新增用户"
+
+## 返回格式（严格JSON）
+{{
+    "product_name": "...",
+    "business_model": "...",
+    "revenue_formula": "...",
+    "conversion_path": "...",
+    "key_metrics": "..."
+}}
+
+**重要规则**：
+- 每个字段必须是单行文本（不要换行）
+- 如果问答中没有明确信息，**推断或留空**（不要返回"未知"）
+- key_metrics 使用逗号分隔（如"MRR, DAU, Churn Rate"）
+- 只返回 JSON，不要其他内容"""
+
+        try:
+            config_manager = ConfigManager()
+            config = config_manager.get_all()
+            model_manager = ModelManager(config)
+            model = model_manager.get_model("quick")
+
+            response = model.invoke([HumanMessage(content=prompt)])
+            content = response.content
+
+            # 提取 JSON
+            json_match = re.search(r"\{[\s\S]*\}", content)
+            if not json_match:
+                logger.warning(f"[BusinessUnderstanding] AI 提取业务字段失败，返回格式错误")
+                return {
+                    "product_name": "",
+                    "business_model": "",
+                    "revenue_formula": "",
+                    "conversion_path": "",
+                    "key_metrics": "",
+                }
+
+            result = json.loads(json_match.group())
+
+            # 确保所有字段都存在
+            business_fields = {
+                "product_name": result.get("product_name", ""),
+                "business_model": result.get("business_model", ""),
+                "revenue_formula": result.get("revenue_formula", ""),
+                "conversion_path": result.get("conversion_path", ""),
+                "key_metrics": result.get("key_metrics", ""),
+            }
+
+            logger.info(
+                f"[BusinessUnderstanding] 提取业务字段成功:\n"
+                f"  - product_name: {business_fields['product_name']}\n"
+                f"  - business_model: {business_fields['business_model']}\n"
+                f"  - revenue_formula: {business_fields['revenue_formula']}\n"
+                f"  - conversion_path: {business_fields['conversion_path']}\n"
+                f"  - key_metrics: {business_fields['key_metrics']}"
+            )
+            return business_fields
+
+        except Exception as e:
+            logger.error(f"[BusinessUnderstanding] AI 提取业务字段失败: {e}")
+            return {
+                "product_name": "",
+                "business_model": "",
+                "revenue_formula": "",
+                "conversion_path": "",
+                "key_metrics": "",
+            }
+
     def get_answers(self, connection_name: str) -> Optional[Dict[str, str]]:
-        """获取已保存的业务理解答案"""
+        """
+        获取已保存的业务理解答案
+
+        返回包含核心业务字段的字典：
+        - product_name: 产品名称
+        - business_model: 商业模式
+        - revenue_formula: 收入公式
+        - conversion_path: 转化路径
+        - key_metrics: 核心指标
+
+        注意：这些字段是从原始问答中提取的结构化信息
+        """
         context = self.storage.load_business_context(connection_name)
         if context:
-            return context.get("answers")
+            # 🔥 优先返回提取的核心字段（如果存在）
+            business_fields = {
+                "product_name": context.get("product_name", ""),
+                "business_model": context.get("business_model", ""),
+                "revenue_formula": context.get("revenue_formula", ""),
+                "conversion_path": context.get("conversion_path", ""),
+                "key_metrics": context.get("key_metrics", ""),
+            }
+
+            # 如果核心字段都为空，说明是旧版数据（还没有提取字段）
+            # 此时返回原始 answers（兼容旧代码）
+            if all(v == "" for v in business_fields.values()):
+                return context.get("answers")
+
+            return business_fields
         return None
 
     def is_completed(self, connection_name: str) -> bool:

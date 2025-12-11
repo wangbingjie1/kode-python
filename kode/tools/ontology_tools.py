@@ -95,7 +95,15 @@ class OntologyBuilderTool(KodeTool):
     6. Optionally enriches with LLM-generated business semantics
     7. Saves ontology to ontology_store/{connection_name}/
 
-    Input: connection_name (string), NOT the full schema JSON."""
+    Input: connection_name (string), NOT the full schema JSON.
+
+    ⚠️ IMPORTANT - Handle return status:
+    - status="success": Done! Summarize statistics to user.
+    - status="warning" + gate_check_failed=false: Has unresolved uncertainties.
+      → Ask user if they want to skip. If yes, call again with skip_uncertainty_check=true
+    - status="warning" + already_exists=true: Ontology exists.
+      → Ask user if they want to rebuild. If yes, call again with force_rebuild=true
+    - status="error": Failed. Show error message and suggestion to user."""
 
     args_schema: Type[BaseModel] = OntologyBuilderInput
     requires_permission: bool = False
@@ -211,9 +219,17 @@ class OntologyBuilderTool(KodeTool):
                                         ),
                                     },
                                 },
-                                "question": "是否要重新构建本体？这将覆盖现有的本体文件。",
-                                "suggestion": "如果要重新构建，请明确告诉我'重新构建本体'或'覆盖现有本体'。如果不需要重新构建，可以直接使用 OntologySearch 工具搜索现有本体。",
-                                "note": "重新构建会保留历史版本，但本体文件会被更新。",
+                                "user_message": "是否要重新构建本体？这将覆盖现有的本体文件。如果不需要重新构建，可以直接使用 OntologySearch 工具搜索现有本体。",
+                                # ⚠️ Agent 必须读取此字段！
+                                "next_action": {
+                                    "trigger": "用户说重建/覆盖/重新构建",
+                                    "tool": "OntologyBuilder",
+                                    "params": {
+                                        "connection_name": connection_name,
+                                        "force_rebuild": True,
+                                    },
+                                    "example_call": f"OntologyBuilder(connection_name='{connection_name}', force_rebuild=True)",
+                                },
                             },
                             indent=2,
                             ensure_ascii=False,
@@ -227,7 +243,9 @@ class OntologyBuilderTool(KodeTool):
             # 【智能门禁检查】检查不确定性分析状态（从各领域文件中读取）
             # ✨ 新架构：不确定性数据已分散存储在各 domain JSON 文件中
             domains_dir = Path(schema_path) / get_safe_connection_path(connection_name) / "domains"
-            domain_index_file = Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
+            domain_index_file = (
+                Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
+            )
 
             # 🔑 如果没有 domains 目录，自动运行聚类和不确定性分析
             if not domains_dir.exists() or not list(domains_dir.glob("*.json")):
@@ -235,6 +253,7 @@ class OntologyBuilderTool(KodeTool):
 
                 # 🔄 步骤1：自动运行聚类
                 from kode.tools.schema_clustering_tool import DatabaseSchemaClusterer
+
                 clusterer = DatabaseSchemaClusterer()
                 clustering_result_str = clusterer._run(
                     connection_name=connection_name,
@@ -259,10 +278,13 @@ class OntologyBuilderTool(KodeTool):
                         ensure_ascii=False,
                     )
 
-                logger.info(f"✅ 聚类完成: {clustering_result.get('clustering_summary', {}).get('total_domains', 0)} 个域")
+                logger.info(
+                    f"✅ 聚类完成: {clustering_result.get('clustering_summary', {}).get('total_domains', 0)} 个域"
+                )
 
                 # 🔄 步骤2：自动运行不确定性分析
                 from kode.tools.domain_uncertainty_analyzer import DomainUncertaintyAnalyzer
+
                 analyzer = DomainUncertaintyAnalyzer()
                 uncertainty_result_str = analyzer._run(
                     connection_name=connection_name,
@@ -272,7 +294,9 @@ class OntologyBuilderTool(KodeTool):
                 uncertainty_result = json.loads(uncertainty_result_str)
 
                 if uncertainty_result.get("status") != "success":
-                    logger.warning(f"⚠️ 不确定性分析失败: {uncertainty_result.get('message', '未知错误')}")
+                    logger.warning(
+                        f"⚠️ 不确定性分析失败: {uncertainty_result.get('message', '未知错误')}"
+                    )
                     # 不确定性分析失败不阻塞，继续构建
                 else:
                     stats = uncertainty_result.get("statistics", {})
@@ -326,22 +350,27 @@ class OntologyBuilderTool(KodeTool):
                             "total_high_count": len(high_uncertainties),
                             "sample_questions": question_list,
                             # 【关键改动】引导用户去侧边栏填写问卷
-                            "suggestion": (
+                            "user_message": (
                                 "建议先回答高优先级问题以提高本体质量。\n"
                                 "用户可以：\n"
                                 "1. 点击界面右上角的「不确定性」按钮，在侧边栏中填写问卷\n"
                                 "2. 或者告诉我「跳过问卷，直接构建本体」（会影响本体质量）"
                             ),
-                            # 保留旧的 action_required 给 Agent 使用
-                            "action_required": (
-                                f"如果用户选择跳过，使用 OntologyBuilder(connection_name='{connection_name}', skip_uncertainty_check=True)"
-                            ),
+                            # ⚠️ Agent 必须读取此字段！告诉 Agent 如何处理用户选择跳过的情况
+                            "next_action": {
+                                "trigger": "用户说跳过/不回答/直接构建",
+                                "tool": "OntologyBuilder",
+                                "params": {
+                                    "connection_name": connection_name,
+                                    "skip_uncertainty_check": True,
+                                },
+                                "example_call": f"OntologyBuilder(connection_name='{connection_name}', skip_uncertainty_check=True)",
+                            },
                             "sidebar_action": {
                                 "type": "open_questionnaire",
                                 "connection_name": connection_name,
                                 "unresolved_count": len(unresolved_high),
                             },
-                            "note": "用户可在侧边栏随时填写问卷，无需阻塞对话流程。",
                         },
                         indent=2,
                         ensure_ascii=False,
@@ -969,8 +998,8 @@ class OntologyBuilderTool(KodeTool):
             uncertainty_section += uncertainty_rules
             uncertainty_section += "\n**重要**: 构建本体时必须严格遵循上述规则！\n"
 
-        # 🔥 完全使用产品经理的提示词（V3 格式）
-        prompt = f"""模拟一名专业的语义层数据建模师（Semantic-Layer Modeling Agent）。
+        # 🔥 完全使用产品经理的提示词（V3 格式 + 新版改进）
+        prompt = f"""你是一名专业的语义层数据建模师（Semantic-Layer Modeling Agent）。
 
 任务是：根据用户回答的业务问题 + 用户的数据库的 schema，构建一个语义清晰、可审计、可映射的数据本体（Ontology），并基于用户需求引导本体执行各种分析类需求，交付结果。
 
@@ -987,9 +1016,27 @@ class OntologyBuilderTool(KodeTool):
 
 ---
 
+# Input 1: 业务描述（应然层）
+
+{business_context_section if business_context_section else "**无业务上下文**：用户未提供业务描述，仅基于数据库结构推断。"}
+
+用户会描述他们的场景，可能包括：
+- 这是什么：一句话描述（如"个人知识库"、"电商平台"、"SaaS订阅服务"）
+- 核心目标：想达成什么（如"帮助用户整理知识"、"提升转化率"）
+- 主要对象：业务中的核心概念（如"文章、标签、用户"）
+- 关键动作：主要操作流程（如"发布文章、添加评论、搜索"）
+- 业务规则：特殊约束（如"试用期只能用基础功能"）
+- 目标指标：关键指标（如"月活、转化率、GMV"）
+
+**注意**：业务描述通常是不完整的，需要你通过提问补充。
+
+---
+
 # Input 2: 数据库结构（实然层）
 
 {domain_schema_text}
+
+**注意**：数据库结构是客观的，但可能包含冗余或不规范的设计。
 
 ---
 
@@ -998,17 +1045,38 @@ class OntologyBuilderTool(KodeTool):
 ## 第一步：双向提取
 
 ### 从业务描述提取（应然）：
-- **核心实体**: 从名词提取，如"用户"、"订单"、"课程"
-- **关键动作**: 从动词提取，如"购买"、"发布"、"评论"
-- **业务规则**: 从约束提取，如"满100包邮"、"VIP专属"
-- **目标指标**: 从KPI提取，如"转化率"、"留存率"
+
+**应然推理原则（奥卡姆剃刀）**：只提取业务描述中明确需要的概念，不做泛化推理。
+
+**允许提取**：
+- 业务描述中直接提到的实体、动作、规则
+- 业务目标逻辑上必需的概念（如"订阅收入"必然需要"订阅"和"收入"）
+- 商业模式内在的必要概念（如 SaaS 必然有订阅/续费/流失）
+
+**禁止推理**：
+- ❌ "用户系统一般有性别/城市/生日" → 和业务没有直接关系就不是应然
+
+**判断标准**：
+这个概念是否在业务描述中被直接或间接提及？
+- 直接提及 → 应然有
+- 业务目标逻辑必需 → 应然有
+- 仅基于"一般XX系统都有"的推测 → 不是应然
+
+**提取内容**：
+- **核心实体**: 从业务描述的名词提取，如"用户"、"订单"、"课程"
+- **关键动作**: 从业务描述的动词提取，如"购买"、"发布"、"评论"
+- **业务规则**: 从业务描述的约束提取，如"满100包邮"、"VIP专属"
+- **目标指标**: 从业务描述的KPI提取，如"转化率"、"留存率"
 
 ### 从数据库结构提取（实然）：
-- **实体类**: 每个表 → 一个类
-- **属性**: 表的列 → 类的属性
-- **关系**: 外键 → belongs_to/has_many，关联表 → many_to_many
-- **约束**: NOT NULL, UNIQUE, CHECK → 业务规则
-- **生命周期**: 状态字段 → lifecycle_states
+
+数据模型 = {{
+    候选实体: [每个表作为候选，按业务含义决定是否建类、是否合并、是否拆分],
+    属性: [表的列 → 类的属性],
+    关系: [外键 → belongs_to/has_many, 关联表 → many_to_many],
+    约束: [NOT NULL, UNIQUE, CHECK → 业务规则],
+    生命周期: [状态字段 → lifecycle_states]
+}}
 
 ## 第二步：四象限对齐矩阵
 
@@ -1020,30 +1088,65 @@ class OntologyBuilderTool(KodeTool):
 **示例**:
 - 业务描述："用户可以发布文章"
 - 数据库：有 users 表和 posts 表，posts.author_id 关联 users.id
-- **输出**: 完整的 User 类、Post 类和 Author_Post 关系
+- **输出**:
+  - schema.classes.User (完整属性)
+  - schema.classes.Post (完整属性)
+  - schema.relationships.Author_Post (1:N关系)
+
+---
 
 ### 象限2：应然有 ∩ 实然无（需求缺失）⚠️
+
+**注意**：只有通过"应然推理原则"判定为应然的概念，才进入此象限。
+
 **处理**:
-- 如果是核心概念 → 记录到 uncertainties (severity: high, type: missing_in_database)
-- 如果是次要概念 → 记录到 uncertainties (severity: medium/low, type: missing_in_database)
+1. 如果是核心概念 → 记录到 uncertainties (severity: high, type: missing_in_database)
+2. 如果是次要概念 → 记录到 uncertainties (severity: medium/low, type: missing_in_database)
 
 **示例**:
 - 业务描述："用户可以关注其他用户"
 - 数据库：没有 follows 表
-- **判断**: 如果这是核心功能 → severity: high
-- **输出**: 记录到 uncertainties，建议创建 follows 表
+- **判断**:
+  - IF 这是核心功能 THEN
+    uncertainties.push({{
+      id: "UC_XXX",
+      entity: "[missing] follows",
+      type: "missing_in_database",
+      severity: "high",
+      data_source: "business",
+      issues: [{{
+        question: "用户关注功能需要 follows 表，但数据库中不存在"
+      }}],
+      suggested_action: "创建 follows 表 (follower_id, followee_id)"
+    }})
+
+---
 
 ### 象限3：应然无 ∩ 实然有（数据库有但业务没提）🤔
 **处理**: 分情况
-1. 可能是用户遗漏 → 推断业务含义，加入模型，标注 data_source: "inferred"
+1. 可能是用户遗漏 → 推断业务含义和相关性，加入模型，标注 data_source: "inferred"
 2. 技术实现细节 → 记录但标注为 technical
 3. 冗余/废弃字段 → 标注 deprecated: true
 
 **示例**:
 - 数据库：posts 表有 view_count 字段
 - 业务描述：没提到浏览统计
-- **推断**: 这可能是重要的分析指标
-- **输出**: 加入 Post.view_count，标注 data_source: "inferred"
+- **推断**:
+  - 这可能是重要的分析指标，用户可能忘了提
+- **输出**:
+  - 加入 schema.classes.Post.view_count
+  - 在 uncertainties 中添加：
+    {{
+      entity: "posts.view_count",
+      type: "missing_context",
+      severity: "low",
+      data_source: "inferred",
+      issues: [{{
+        question: "业务描述中未提及浏览统计，已从数据库推断加入，请确认是否需要相关的统计功能"
+      }}]
+    }}
+
+---
 
 ### 象限4：应然无 ∩ 实然无（都没有）
 **处理**: 不处理（不存在的东西不建模）
@@ -1128,7 +1231,11 @@ class OntologyBuilderTool(KodeTool):
 
 **示例值规范**:
 
-属性的 example 字段必须使用真实示例值（如 "U_123456"、"user@example.com"），禁止使用占位符（如 "【填写ID】"、"TODO"）。
+1. **example 必须基于数据库中的真实数据，禁止编造**
+2. 如果字段实际数据全为 NULL 或无有效值，不填写 example，改为标注：
+   `"actual_data": "全为NULL"` 或 `"actual_data": "无有效数据"`
+3. **禁止使用占位符**（如 "【填写ID】"、"TODO"、"张三"）
+4. **禁止基于字段名推测示例值**（如看到 sex 就填 "1"，看到 nick_name 就填 "张三"）
 
 ---
 
@@ -1136,14 +1243,33 @@ class OntologyBuilderTool(KodeTool):
 
 ## 1. meta（元信息）
 
+**数据来源**：从 业务描述（应然层）块中 提取业务信息填充。
+
+**字段映射**：
+
+| meta 字段 | 来源 |
+|----------|------|
+| ontology_name | `{{domain_name}}_Ontology` |
+| version | 默认 "1.0.0"，后续迭代递增 |
+| domain_type | 从 业务描述（应然层）块中提取 |
+| scenario_description | 从 业务描述（应然层）块中提取一句话概述 |
+| core_goal | 从 业务描述（应然层）块中提取 "核心目标"或"想达成什么"提取 |
+| key_activities | 从 业务描述（应然层）块中提取 "关键动作"或"主要操作流程"提取 |
+| design_note | 本体设计说明（可选） |
+
+**必须填充**：所有字段不得为空。如果 business_context.json 中缺少相关信息，在 uncertainties 中记录，并基于数据库结构推断一个初始值。
+
 ```json
 {{{{
-  "ontology_name": "{domain_name}_Ontology",
-  "version": "1.0.0",
-  "domain_type": "根据业务上下文判断",
-  "scenario_description": "一句话描述该域的业务场景",
-  "core_goal": "该域的核心目标",
-  "key_activities": ["核心活动1", "核心活动2"]
+  "meta": {{{{
+    "ontology_name": "{domain_name}_Ontology",
+    "version": "1.0.0",
+    "domain_type": "根据业务上下文判断（如 SaaS-Subscription、E-Commerce、Content-Platform）",
+    "scenario_description": "从 business_context.json 提取的一句话业务场景描述",
+    "core_goal": "从 business_context.json 提取的核心目标",
+    "key_activities": ["从 business_context.json 提取的关键动作"],
+    "design_note": "本体设计说明（可选）"
+  }}}}
 }}}}
 ```
 
@@ -1151,7 +1277,17 @@ class OntologyBuilderTool(KodeTool):
 
 ### 2.1 classes（业务类）
 
-每个表转换为一个业务类，使用**嵌套对象格式**（先按 domain 分组，再按表名）：
+业务类是对业务概念的抽象，不必与数据库表一一对应。
+
+**类与表的关系**：
+- 一个类可以映射到多个表（如 User 整合 users + user_profiles）
+- 一个表可以拆分为多个类（如按业务边界拆分）
+- 类可以没有对应的表（业务概念，待实现）
+- 表可以不建类（技术细节，非业务概念）
+
+类与表的具体映射关系在 `mappings.objects` 中定义。
+
+按业务域分组，使用**对象格式**：
 
 ```json
 {{{{
@@ -1340,6 +1476,15 @@ THEN
 
 ## 4. mappings（数据源映射）
 
+**映射场景说明**：
+
+| 场景 | tables | primary_table | join_logic |
+|------|--------|---------------|------------|
+| **场景1：单表映射（1类 → 1表）** | `["posts"]` | `"posts"` | 不需要 |
+| **场景2：多表合并（1类 → N表）** | `["users", "user_profiles"]` | `"users"` | `"users.id = user_profiles.user_id"` |
+| **场景3：表拆分（N类 → 1表）** | 每个类的 mappings 指向同一个表的不同字段子集 | - | - |
+| **场景4：无表映射** | 不填写 mappings，在 uncertainties 中记录 | - | - |
+
 ```json
 {{{{
   "mappings": {{{{
@@ -1347,11 +1492,13 @@ THEN
       "ClassName": {{{{
         "source": {{{{
           "type": "postgresql/mysql/sqlserver",
-          "table": "table_name",
-          "primary_key": "id"
+          "tables": ["table_name"],
+          "primary_table": "table_name",
+          "primary_key": "id",
+          "join_logic": "多表时的关联逻辑（可选）"
         }}}},
         "field_mapping": {{{{
-          "business_field": "db_column"
+          "business_field": "table_name.db_column"
         }}}},
         "indexes": {{{{
           "primary": "id",
@@ -1365,9 +1512,9 @@ THEN
         "description": "指标描述",
         "definition": "业务定义",
         "calculation": {{{{
-          "formula": "计算公式（基于类和属性）"
+          "formula": "计算公式或SQL"
         }}}},
-        "why": "为什么这个指标重要"
+        "refresh_frequency": "刷新频率（可选）"
       }}}}
     }}}}
   }}}}
@@ -1376,9 +1523,24 @@ THEN
 
 ## 5. uncertainties（不确定性清单）
 
-**重要**: 将所有发现的问题、缺失、冲突统一记录到此处。**禁止同一实体重复出现多次。**
+**重要**: 将所有发现的问题、缺失、冲突统一记录到此处。
+
+### type 类型定义：
+
+| type | 含义 | 典型场景 |
+|------|------|---------|
+| `missing_in_database` | 业务需要但数据库缺失 | 象限2：业务提到的表/字段不存在 |
+| `missing_context` | 数据库有但业务未说明 | 象限3：推断加入，需确认用途 |
+| `definition_conflict` | 业务与数据库定义冲突 | 枚举值不一致、约束不匹配 |
+| `schema_ambiguity` | 数据库结构不明确 | 缺少外键、字段含义模糊 |
+| `field_ambiguity` | 字段业务含义不明 | 多个相似字段，用途不清 |
+| `naming_inconsistency` | 跨表命名不统一 | 同一概念不同表用不同字段名 |
+| `table_not_found` | 表缺失 | 业务流程需要但表不存在 |
+| `multiple_issues` | 单实体多问题聚合 | 一个表有多个不同类型问题 |
 
 ### 聚合规则（必须遵守）
+
+**禁止**: 同一 entity 在 uncertainties 中重复出现。当多个表存在同样的问题时，聚合为模式级问题。
 
 | 情况 | 处理方式 |
 |-----|---------|
@@ -1386,9 +1548,8 @@ THEN
 | 多表的同类问题 | 提取为 `[pattern]` 级问题，记录 `affected_tables` |
 | 同一字段的多角度问题 | 合并为一条，在 `issues` 中分项描述 |
 
-**禁止**: 同一 entity 在 uncertainties 中重复出现。当多个表存在同样的问题时，聚合为模式级问题。
+### 严重性判断
 
-**严重性判断**:
 - `high`: 核心逻辑冲突，必须立即解决（如关系基数错误）
 - `medium`: 需要明确但可以暂时假设（如字段含义不明）
 - `low`: 轻微不一致，不影响主流程（如命名风格）
@@ -1399,7 +1560,7 @@ THEN
     {{{{
       "id": "UC_001",
       "entity": "表名 或 [标注] 表名",
-      "type": "field_ambiguity/naming_inconsistency/table_not_found/multiple_issues/missing_in_database/definition_conflict",
+      "type": "missing_in_database/missing_context/definition_conflict/schema_ambiguity/field_ambiguity/naming_inconsistency/table_not_found/multiple_issues",
       "severity": "high/medium/low",
       "data_source": "business/database/inferred",
       "issues": [
@@ -1411,7 +1572,6 @@ THEN
         }}}}
       ],
       "affected_tables": ["table_a", "table_b"],
-      "affected_count": 12,
       "options": [
         {{{{"option": "A", "solution": "方案描述"}}}}
       ],
@@ -1540,13 +1700,14 @@ THEN
       "orders": {{{{
         "source": {{{{
           "type": "postgresql",
-          "table": "orders",
+          "tables": ["orders"],
+          "primary_table": "orders",
           "primary_key": "id"
         }}}},
         "field_mapping": {{{{
-          "订单ID": "id",
-          "订单状态": "status",
-          "订单金额": "total_amount"
+          "订单ID": "orders.id",
+          "订单状态": "orders.status",
+          "订单金额": "orders.total_amount"
         }}}},
         "indexes": {{{{
           "primary": "id",
@@ -1588,7 +1749,6 @@ THEN
       "severity": "low",
       "data_source": "database",
       "affected_tables": ["orders", "users", "products", "order_items"],
-      "affected_count": 4,
       "issues": [
         {{{{
           "question": "审计字段命名不统一",
@@ -1860,15 +2020,21 @@ THEN
                         # 属性已存在，合并 used_by 列表
                         existing_used_by = merged_properties[prop_name].get("used_by", [])
                         new_used_by = prop_data.get("used_by", [])
-                        merged_properties[prop_name]["used_by"] = list(set(existing_used_by + new_used_by))
+                        merged_properties[prop_name]["used_by"] = list(
+                            set(existing_used_by + new_used_by)
+                        )
 
                         # 合并 naming_variants（如果存在）
                         if "naming_variants" in prop_data:
-                            existing_variants = merged_properties[prop_name].get("naming_variants", {})
+                            existing_variants = merged_properties[prop_name].get(
+                                "naming_variants", {}
+                            )
                             new_variants = prop_data.get("naming_variants", {})
                             for field, variants in new_variants.items():
                                 if field in existing_variants:
-                                    existing_variants[field] = list(set(existing_variants[field] + variants))
+                                    existing_variants[field] = list(
+                                        set(existing_variants[field] + variants)
+                                    )
                                 else:
                                     existing_variants[field] = variants
                             merged_properties[prop_name]["naming_variants"] = existing_variants

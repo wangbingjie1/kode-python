@@ -69,6 +69,14 @@ export class SSEHeartbeatService {
             this.notifyConnectionChange(true)
           } else if (data.type === 'heartbeat') {
             this.lastHeartbeat = data.metadata?.timestamp || Date.now() / 1000
+
+            // 🔥 关键修复：如果服务器返回新 token，更新本地存储
+            if (data.metadata?.new_token) {
+              const newToken = data.metadata.new_token
+              localStorage.setItem('access_token', newToken)
+              console.log('[Heartbeat] Token refreshed automatically')
+            }
+
             // console.log('[Heartbeat] Received at', new Date(this.lastHeartbeat * 1000).toLocaleTimeString())
           } else if (data.type === 'disconnected') {
             console.log('[Heartbeat] Server disconnected')
