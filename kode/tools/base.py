@@ -18,6 +18,7 @@ class KodeTool(BaseTool, ABC):
     Base class for all Kode tools.
 
     Extends LangChain's BaseTool with Kode-specific functionality.
+    支持用户上下文注入（用于多租户隔离）。
     """
 
     requires_permission: bool = True
@@ -25,6 +26,9 @@ class KodeTool(BaseTool, ABC):
 
     permission_level: str = "ask_each_time"
     """Default permission level for this tool."""
+
+    _execution_context: Optional[Dict[str, Any]] = None
+    """执行上下文，包含 user_id, conversation_id 等信息"""
 
     @abstractmethod
     def _run(self, *args: Any, **kwargs: Any) -> str:
@@ -44,6 +48,59 @@ class KodeTool(BaseTool, ABC):
         Override for true async support.
         """
         return self._run(*args, **kwargs)
+
+    def set_execution_context(self, context: Dict[str, Any]) -> None:
+        """
+        设置执行上下文（在 ConversationService 中调用）
+
+        Args:
+            context: 执行上下文字典，包含：
+                - user_id: 当前用户ID（必需）
+                - conversation_id: 当前对话ID（可选）
+                - project_id: 当前项目ID（可选）
+        """
+        self._execution_context = context
+
+    def get_current_user_id(self) -> str:
+        """
+        获取当前用户ID
+
+        Returns:
+            用户ID
+
+        Raises:
+            RuntimeError: 如果执行上下文未设置
+        """
+        if not self._execution_context:
+            raise RuntimeError("执行上下文未设置，请确保在 ConversationService 中调用了 set_execution_context")
+
+        user_id = self._execution_context.get("user_id")
+        if not user_id:
+            raise RuntimeError("执行上下文中缺少 user_id")
+
+        return user_id
+
+    def get_current_conversation_id(self) -> Optional[str]:
+        """
+        获取当前对话ID（可选）
+
+        Returns:
+            对话ID，如果未设置则返回 None
+        """
+        if not self._execution_context:
+            return None
+        return self._execution_context.get("conversation_id")
+
+    def get_current_project_id(self) -> Optional[str]:
+        """
+        获取当前项目ID（可选）
+
+        Returns:
+            项目ID，如果未设置则返回 None
+        """
+        if not self._execution_context:
+            return None
+        return self._execution_context.get("project_id")
 
     def get_permission_details(self, **kwargs: Any) -> Dict[str, Any]:
         """

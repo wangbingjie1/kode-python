@@ -2,6 +2,7 @@
 新版本本体文件存储管理
 
 负责管理业务上下文和新格式本体的文件持久化
+支持用户隔离和版本管理
 """
 
 from pathlib import Path
@@ -13,20 +14,28 @@ from datetime import datetime
 class OntologyStorageV2:
     """新版本本体文件存储管理器
 
-    存储结构：
+    存储结构（已更新为用户隔离）：
     ontology_store/
-        {connection_name}/
-            business_context.json  # 业务理解五问答案
-            ontology_v3.json       # V3格式本体（主格式，优先使用）
-            ontology_v2.json       # V2格式本体（兼容旧版）
-            schema.json            # 数据库schema缓存
+        {user_id}/
+            {connection_name}/
+                versions/
+                    v1/, v2/, v3/...       # 版本化本体文件
+                vectors/
+                    v1/, v2/, v3/...       # 版本化向量索引
+                    current -> v3/          # 软链接指向当前版本
+                business_context.json      # 业务理解五问答案（兼容旧版）
     """
 
-    def __init__(self, base_path: str = "ontology_store"):
+    def __init__(self, user_id: str, base_path: str = "ontology_store"):
+        if not user_id:
+            raise ValueError("user_id 是必需参数，用于多租户隔离")
+        self.user_id = user_id
         self.base_path = Path(base_path)
 
     def _get_ontology_file_path(self, connection_name: str, for_write: bool = False) -> Path:
-        """获取本体文件路径（内部方法）
+        """获取本体文件路径（内部方法，兼容旧版逻辑）
+
+        注意：新版本应使用 OntologyVersionManager，此方法仅用于向后兼容
 
         Args:
             connection_name: 数据库连接名
@@ -35,7 +44,7 @@ class OntologyStorageV2:
         Returns:
             本体文件路径
         """
-        conn_dir = self.base_path / connection_name
+        conn_dir = self.base_path / self.user_id / connection_name
 
         if for_write:
             # 写入时总是使用 v3
@@ -50,7 +59,7 @@ class OntologyStorageV2:
 
     def _ensure_connection_dir(self, connection_name: str) -> Path:
         """确保连接目录存在"""
-        conn_dir = self.base_path / connection_name
+        conn_dir = self.base_path / self.user_id / connection_name
         conn_dir.mkdir(parents=True, exist_ok=True)
         return conn_dir
 
@@ -99,7 +108,7 @@ class OntologyStorageV2:
         Returns:
             业务上下文数据，不存在时返回None
         """
-        path = self.base_path / connection_name / "business_context.json"
+        path = self.base_path / self.user_id / connection_name / "business_context.json"
         if not path.exists():
             return None
 
@@ -217,7 +226,7 @@ class OntologyStorageV2:
         Returns:
             是否存在
         """
-        conn_dir = self.base_path / connection_name
+        conn_dir = self.base_path / self.user_id / connection_name
         v3_path = conn_dir / "ontology_v3.json"
         v2_path = conn_dir / "ontology_v2.json"
         return v3_path.exists() or v2_path.exists()
@@ -225,21 +234,22 @@ class OntologyStorageV2:
     # ============ 工具方法 ============
 
     def list_connections(self) -> list[str]:
-        """列出所有已有的连接名
+        """列出当前用户的所有连接名
 
         Returns:
             连接名列表
         """
-        if not self.base_path.exists():
+        user_dir = self.base_path / self.user_id
+        if not user_dir.exists():
             return []
 
         return [
-            d.name for d in self.base_path.iterdir()
+            d.name for d in user_dir.iterdir()
             if d.is_dir() and not d.name.startswith('.')
         ]
 
     def get_connection_info(self, connection_name: str) -> Dict[str, Any]:
-        """获取连接的元信息
+        """获取当前用户连接的元信息
 
         Args:
             connection_name: 数据库连接名
@@ -247,15 +257,17 @@ class OntologyStorageV2:
         Returns:
             包含各类文件存在状态的字典
         """
-        conn_dir = self.base_path / connection_name
+        conn_dir = self.base_path / self.user_id / connection_name
         if not conn_dir.exists():
             return {
                 "exists": False,
+                "user_id": self.user_id,
                 "connection_name": connection_name
             }
 
         return {
             "exists": True,
+            "user_id": self.user_id,
             "connection_name": connection_name,
             "has_business_context": (conn_dir / "business_context.json").exists(),
             "has_ontology_v2": self.ontology_v2_exists(connection_name),  # 检查 v3 或 v2

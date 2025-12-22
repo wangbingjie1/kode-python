@@ -112,7 +112,7 @@ class AsyncConversationService:
                     UncertaintyQAManager(),  # 不确定性问答管理
                     OntologyBuilderTool(),  # 本体构建器（V3格式）
                     OntologySearchTool(),
-                    OntologyUpdateTool(),  # 本体增量更新工具（Phase 1）
+                    OntologyUpdateTool(),  # 本体增量更新工具（包含 Domain 迁移）
                     OntologyReflectTool(),  # 本体反思工具（Phase 3）
                     MetricCalculatorTool(),  # 指标计算工具
                     DataInstanceExtractorTool(),  # 数据实例抽取工具

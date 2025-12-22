@@ -149,7 +149,7 @@ class OntologyBuilderTool(KodeTool):
                         "status": "error",
                         "gate_check_failed": True,
                         "reason": "missing_business_understanding",
-                        "message": "❌ 请先运行 BusinessUnderstanding 完成业务理解五问",
+                        "message": "❌ 请先运行 BusinessUnderstanding 完成业务理解",
                         "suggestion": "使用 BusinessUnderstanding(connection_name='{}') 开始业务理解".format(
                             connection_name
                         ),
@@ -240,7 +240,6 @@ class OntologyBuilderTool(KodeTool):
             else:
                 logger.info(f"🔄 强制重建模式：跳过本体存在性检查，直接构建")
 
-            # 【智能门禁检查】检查不确定性分析状态（从各领域文件中读取）
             # ✨ 新架构：不确定性数据已分散存储在各 domain JSON 文件中
             domains_dir = Path(schema_path) / get_safe_connection_path(connection_name) / "domains"
             domain_index_file = (
@@ -2517,28 +2516,49 @@ class OntologySearchTool(KodeTool):
                         }
                     )
 
+            # 提取 meta 业务信息（V3 格式特有）
+            meta_info = ontology.get("meta", {})
+            business_context = {}
+            if meta_info:
+                # 提取关键业务字段
+                business_context = {
+                    "product_name": meta_info.get("product_name", ""),
+                    "business_model": meta_info.get("business_model", ""),
+                    "revenue_formula": meta_info.get("revenue_formula", ""),
+                    "conversion_path": meta_info.get("conversion_path", ""),
+                    "key_metrics": meta_info.get("key_metrics", ""),
+                }
+                # 移除空值字段
+                business_context = {k: v for k, v in business_context.items() if v}
+
             # Return with related uncertainties content
             ontology_version = ontology.get("version", "2.0")
-            return json.dumps(
-                {
-                    "status": "success",
-                    "query": query,
-                    "search_type": search_type,
-                    "results": results,  # Keep search results (usually small)
-                    "ontology_version": ontology_version,
-                    "ontology_file": str(ontology_file),
-                    "uncertainties": {
-                        "related_to_results": entity_related_uncertainties,  # 与搜索结果实体相关的不确定性
-                        "related_count": len(entity_related_uncertainties),
-                        "unresolved_count": len(
-                            [u for u in uncertainties if u.get("status") != "resolved"]
-                        ),
-                        "total_count": len(uncertainties),
-                        "resolved_count": len(
-                            [u for u in uncertainties if u.get("status") == "resolved"]
-                        ),
-                    },
+            response_data = {
+                "status": "success",
+                "query": query,
+                "search_type": search_type,
+                "results": results,  # Keep search results (usually small)
+                "ontology_version": ontology_version,
+                "ontology_file": str(ontology_file),
+                "uncertainties": {
+                    "related_to_results": entity_related_uncertainties,  # 与搜索结果实体相关的不确定性
+                    "related_count": len(entity_related_uncertainties),
+                    "unresolved_count": len(
+                        [u for u in uncertainties if u.get("status") != "resolved"]
+                    ),
+                    "total_count": len(uncertainties),
+                    "resolved_count": len(
+                        [u for u in uncertainties if u.get("status") == "resolved"]
+                    ),
                 },
+            }
+
+            # 如果有业务上下文信息，添加到响应中
+            if business_context:
+                response_data["business_context"] = business_context
+
+            return json.dumps(
+                response_data,
                 indent=2,
                 ensure_ascii=False,
             )

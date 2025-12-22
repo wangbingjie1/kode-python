@@ -35,6 +35,7 @@ class User(Base):
     # Relationships
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
     database_connections = relationship("DatabaseConnectionModel", back_populates="user", cascade="all, delete-orphan")
+    ontology_versions = relationship("OntologyVersion", back_populates="user", cascade="all, delete-orphan")
     # Note: Access conversations through user.projects[i].conversations
     # 不要使用 secondary="projects" 的错误定义，因为 projects 不是多对多中间表
 

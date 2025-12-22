@@ -14,6 +14,7 @@ from .subscription import Subscription, SubscriptionStatus
 from .usage import Usage
 from .api_call_trace import APICallTrace
 from .ontology_change import OntologyChange, ChangeType, ChangeStatus
+from .ontology_version import OntologyVersion
 
 __all__ = [
     "User",
@@ -29,4 +30,5 @@ __all__ = [
     "OntologyChange",
     "ChangeType",
     "ChangeStatus",
+    "OntologyVersion",
 ]

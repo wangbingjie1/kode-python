@@ -4,8 +4,9 @@ Ontology Change Model
 Tracks all changes made to database ontologies for audit and reflection purposes.
 """
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Enum as SQLEnum, ForeignKey
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from kode.database.session import Base
 import enum
 
@@ -23,6 +24,9 @@ class ChangeType(enum.Enum):
     ADD_CLASS = "add_class"                        # 添加新类
     ADD_PROPERTY = "add_property"                  # 添加新属性
     ADD_RELATIONSHIP = "add_relationship"          # 添加新关系
+
+    # Layer 2.5: Domain 重新聚类变更
+    MOVE_TABLE_DOMAIN = "move_table_domain"        # 将表从一个 Domain 移动到另一个 Domain
 
     # Layer 3: 全局一致性变更
     MERGE_CLASSES = "merge_classes"                # 合并类
@@ -52,9 +56,11 @@ class OntologyChange(Base):
     # 主键
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
 
-    # 关联信息
+    # 关联信息（用户隔离）
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, comment="用户ID")
     connection_name = Column(String(100), nullable=False, index=True, comment="数据库连接名称")
     conversation_id = Column(Integer, nullable=True, index=True, comment="对话ID（如果通过对话触发）")
+    ontology_version_id = Column(String(36), ForeignKey("ontology_versions.id", ondelete="SET NULL"), nullable=True, index=True, comment="关联的本体版本ID")
 
     # 变更元数据
     change_type = Column(SQLEnum(ChangeType), nullable=False, index=True, comment="变更类型")
@@ -83,6 +89,10 @@ class OntologyChange(Base):
     # 批次管理（用于批量优化）
     batch_id = Column(String(50), nullable=True, index=True, comment="批次ID（高频修改时使用）")
 
+    # Relationships
+    user = relationship("User")
+    ontology_version = relationship("OntologyVersion", back_populates="changes")
+
     def __repr__(self):
         return (
             f"<OntologyChange("
@@ -98,8 +108,10 @@ class OntologyChange(Base):
         """转换为字典格式"""
         return {
             "id": self.id,
+            "user_id": self.user_id,
             "connection_name": self.connection_name,
             "conversation_id": self.conversation_id,
+            "ontology_version_id": self.ontology_version_id,
             "change_type": self.change_type.value,
             "target_path": self.target_path,
             "old_value": self.old_value,

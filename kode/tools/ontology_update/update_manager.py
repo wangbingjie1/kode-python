@@ -135,12 +135,15 @@ class OntologyUpdateManager:
                 )
 
                 # 2. 立即修改内存中的本体
-                if change.change_type in ["add_enum_value", "update_property_desc", "update_class_desc"]:
+                if change.change_type in ["add_enum_value", "update_property_desc", "update_class_desc", "update_class_mapping", "update_column_mapping"]:
                     # Layer 1: 直接JSON操作（<10ms）
                     self._apply_metadata_change(change)
                 elif change.change_type in ["add_class", "add_property", "add_relationship"]:
                     # Layer 2: 添加新实体（也是JSON操作，但需要更新影响图）
                     self._apply_entity_addition(change)
+                elif change.change_type == "move_table_domain":
+                    # Layer 2.5: Domain 级别的表迁移
+                    self._apply_domain_change(change)
                 else:
                     # 其他复杂变更
                     self._apply_complex_change(change)
@@ -534,3 +537,124 @@ class OntologyUpdateManager:
         """强制刷新到磁盘（同步操作）"""
         with self._lock:
             self._write_to_disk()
+
+    def _apply_domain_change(self, change: Change):
+        """
+        应用 Domain 级别的变更（Layer 2.5）
+
+        支持：
+        - move_table_domain: 将表从一个 Domain 移动到另一个 Domain
+
+        change.new_value 格式:
+        {
+            "table_name": "user",
+            "from_domain": "user_management",
+            "to_domain": "order_payment"
+        }
+        """
+        if change.change_type == "move_table_domain":
+            # 从 new_value 获取参数
+            table_name = change.new_value.get("table_name")
+            from_domain = change.new_value.get("from_domain")
+            to_domain = change.new_value.get("to_domain")
+
+            if not all([table_name, from_domain, to_domain]):
+                logger.error(f"❌ move_table_domain 参数不完整: {change.new_value}")
+                return
+
+            version = self.ontology.get("version", "1.0")
+            if not version.startswith("3"):
+                logger.error(f"❌ move_table_domain 仅支持 V3 格式本体")
+                return
+
+            schema = self.ontology.get("schema", {})
+            classes = schema.get("classes", {})
+
+            # 验证源 domain 和表存在
+            if from_domain not in classes:
+                logger.error(f"❌ 源 Domain '{from_domain}' 不存在")
+                return
+
+            if table_name not in classes[from_domain]:
+                logger.error(f"❌ 表 '{table_name}' 在 Domain '{from_domain}' 中不存在")
+                return
+
+            # 创建目标 domain（如果不存在）
+            if to_domain not in classes:
+                logger.info(f"目标 Domain '{to_domain}' 不存在，自动创建")
+                classes[to_domain] = {}
+
+            # 1. 移动表定义
+            logger.info(f"移动表定义: {table_name}")
+            table_def = classes[from_domain].pop(table_name)
+            classes[to_domain][table_name] = table_def
+
+            # 2. 更新 relationships
+            relationships = schema.get("relationships", {})
+            updated_rels = 0
+
+            for rel_id, rel_data in relationships.items():
+                from_class = rel_data.get("from", "") or rel_data.get("from_class", "")
+                to_class = rel_data.get("to", "") or rel_data.get("to_class", "")
+
+                if from_class == table_name and "from_domain" in rel_data:
+                    rel_data["from_domain"] = to_domain
+                    updated_rels += 1
+
+                if to_class == table_name and "to_domain" in rel_data:
+                    rel_data["to_domain"] = to_domain
+                    updated_rels += 1
+
+            logger.info(f"更新了 {updated_rels} 个关系引用")
+
+            # 3. 更新 properties
+            properties = schema.get("properties", {})
+            updated_props = 0
+
+            for prop_name, prop_data in properties.items():
+                used_by = prop_data.get("used_by", [])
+                new_used_by = []
+
+                for usage in used_by:
+                    if "." in usage:
+                        parts = usage.split(".", 1)
+                        if parts[0] == from_domain and parts[1].split(".")[0] == table_name:
+                            new_used_by.append(f"{to_domain}.{parts[1]}")
+                            updated_props += 1
+                        else:
+                            new_used_by.append(usage)
+                    else:
+                        new_used_by.append(usage)
+
+                prop_data["used_by"] = new_used_by
+
+            logger.info(f"更新了 {updated_props} 个共享属性引用")
+
+            # 4. 更新 uncertainties
+            uncertainties = self.ontology.get("uncertainties", [])
+            updated_ucs = 0
+
+            for uc in uncertainties:
+                entity = uc.get("entity", "")
+                if entity.startswith(f"{from_domain}.{table_name}"):
+                    uc["entity"] = entity.replace(
+                        f"{from_domain}.{table_name}",
+                        f"{to_domain}.{table_name}",
+                        1
+                    )
+                    if uc.get("domain") == from_domain:
+                        uc["domain"] = to_domain
+                    updated_ucs += 1
+
+            logger.info(f"更新了 {updated_ucs} 个不确定性记录")
+
+            # 5. 更新 meta.domains
+            if to_domain not in self.ontology.get("meta", {}).get("domains", []):
+                logger.info(f"将 {to_domain} 添加到 meta.domains")
+                if "meta" not in self.ontology:
+                    self.ontology["meta"] = {}
+                if "domains" not in self.ontology["meta"]:
+                    self.ontology["meta"]["domains"] = []
+                self.ontology["meta"]["domains"].append(to_domain)
+
+            logger.info(f"✅ 成功将表 '{table_name}' 从 '{from_domain}' 迁移到 '{to_domain}'")
