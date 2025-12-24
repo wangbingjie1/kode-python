@@ -491,15 +491,32 @@ class AnthropicStreamingAgent:
             if self.message_queue and not self.message_queue.empty():
                 try:
                     appended_msg = self.message_queue.get_nowait()
-                    messages.append(appended_msg)
-                    logger.info(
-                        f"[Append] Appended user message: {appended_msg.get('content', '')[:50]}..."
-                    )
-                    yield {
-                        "type": "message_appended",
-                        "content": appended_msg.get("content", ""),
-                        "metadata": {"iteration": iteration},
-                    }
+
+                    # 区分进度消息和对话消息
+                    msg_type = appended_msg.get("type")
+
+                    if msg_type == "progress":
+                        # 进度消息：直接转发给前端，不添加到对话历史
+                        logger.info(
+                            f"[Progress] Forwarding progress message: {appended_msg.get('content', '')[:50]}..."
+                        )
+                        yield appended_msg
+                    elif appended_msg.get("role") == "user":
+                        # 用户消息：添加到对话历史并通知前端
+                        messages.append(appended_msg)
+                        logger.info(
+                            f"[Append] Appended user message: {appended_msg.get('content', '')[:50]}..."
+                        )
+                        yield {
+                            "type": "message_appended",
+                            "content": appended_msg.get("content", ""),
+                            "metadata": {"iteration": iteration},
+                        }
+                    else:
+                        # 其他消息类型：记录警告
+                        logger.warning(
+                            f"[Append] Ignored message with unknown type/role: {msg_type}, role={appended_msg.get('role')}"
+                        )
                 except asyncio.QueueEmpty:
                     pass
 

@@ -29,17 +29,34 @@ from kode.schemas.uncertainty import (
 )
 from kode.utils.config import ConfigManager
 from kode.utils.logger import setup_logger
+from kode.utils.context import get_current_user_id
+from kode.utils.path_utils import get_safe_connection_path
 from datetime import datetime
 
 logger = setup_logger(__name__)
 router = APIRouter()
 
 
-def _get_ontology_file(connection_name: str) -> Path:
-    """获取本体文件路径（优先 v3，回退到 v2）"""
+def _get_ontology_file(connection_name: str, user_id: str = None) -> Path:
+    """获取本体文件路径（优先 v3，回退到 v2）
+
+    Args:
+        connection_name: 数据库连接名
+        user_id: 用户 ID（如果为 None，则自动获取当前用户）
+
+    Returns:
+        本体文件的 Path 对象
+    """
     config = ConfigManager()
     ontology_path = config.get("storage.ontology_path", "./ontology_store")
-    base_path = Path(ontology_path) / connection_name
+
+    # 获取用户 ID（支持用户隔离）
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    # 构建用户隔离路径：ontology_store/{user_id}/{connection_name}/
+    safe_conn_name = get_safe_connection_path(connection_name)
+    base_path = Path(ontology_path) / user_id / safe_conn_name
 
     # 优先使用 v3 版本
     v3_file = base_path / "ontology_v3.json"
@@ -50,12 +67,60 @@ def _get_ontology_file(connection_name: str) -> Path:
     return base_path / "ontology_v2.json"
 
 
+def _get_domains_dir(connection_name: str, user_id: str = None) -> Path:
+    """获取领域不确定性分析目录
+
+    Args:
+        connection_name: 数据库连接名
+        user_id: 用户 ID（如果为 None，则自动获取当前用户）
+
+    Returns:
+        领域目录的 Path 对象
+    """
+    config = ConfigManager()
+    ontology_path = config.get("storage.ontology_path", "./ontology_store")
+
+    # 获取用户 ID
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    # 构建路径：ontology_store/{user_id}/{connection_name}/domains/
+    safe_conn_name = get_safe_connection_path(connection_name)
+    return Path(ontology_path) / user_id / safe_conn_name / "domains"
+
+
 def _load_ontology(ontology_file: Path) -> Dict[str, Any]:
     """加载本体文件"""
     if not ontology_file.exists():
         return None
     with open(ontology_file, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _load_all_domain_files(domains_dir: Path) -> list:
+    """加载指定目录下所有领域分析文件
+
+    Args:
+        domains_dir: 领域文件目录
+
+    Returns:
+        领域数据列表
+    """
+    domain_data_list = []
+    if not domains_dir.exists():
+        return domain_data_list
+
+    for domain_file in domains_dir.glob("*.json"):
+        try:
+            with open(domain_file, "r", encoding="utf-8") as f:
+                domain_data = json.load(f)
+                domain_data["_file_path"] = str(domain_file)
+                domain_data_list.append(domain_data)
+        except Exception as e:
+            logger.warning(f"Failed to load domain file {domain_file}: {e}")
+            continue
+
+    return domain_data_list
 
 
 @router.post("/load", response_model=LoadUncertaintiesResponse)
