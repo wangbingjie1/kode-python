@@ -117,7 +117,10 @@ class OntologyUpdateTool(KodeTool):
         with _GLOBAL_LOCK:
             if connection_name not in _GLOBAL_MANAGERS:
                 # 确定本体文件路径（优先 v3，回退到 v2）
-                ontology_base = Path(f"ontology_store/{connection_name}")
+                # 🔑 修复：添加 user_id 隔离
+                from kode.utils.context import get_current_user_id
+                user_id = get_current_user_id()
+                ontology_base = Path(f"ontology_store/{user_id}/{connection_name}")
                 ontology_path = ontology_base / "ontology_v3.json"
                 if not ontology_path.exists():
                     ontology_path = ontology_base / "ontology_v2.json"

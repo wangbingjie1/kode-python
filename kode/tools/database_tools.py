@@ -13,6 +13,7 @@ from sqlalchemy import text
 from kode.services.database_manager import DatabaseConnection, db_manager
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
+from kode.utils.context import get_current_user_id
 from kode.utils.path_utils import get_safe_connection_path
 
 
@@ -1210,9 +1211,10 @@ class DatabaseSchemaExtractorTool(KodeTool):
             config = ConfigManager()
             storage_path = config.get("storage.schema_path", "./schema_store")
 
-            # Create storage directory
+            # Create storage directory with user isolation
+            user_id = get_current_user_id()
             base_dir = Path(storage_path)
-            conn_dir = base_dir / get_safe_connection_path(connection_name)
+            conn_dir = base_dir / user_id / get_safe_connection_path(connection_name)
             conn_dir.mkdir(parents=True, exist_ok=True)
 
             # Generate version
@@ -1800,12 +1802,13 @@ class SchemaQueryTool(KodeTool):
             Table schema as JSON
         """
         try:
-            # Construct schema file path
+            # Construct schema file path with user isolation
             config = ConfigManager()
             storage_path = config.get("storage.schema_path", "./schema_store")
+            user_id = get_current_user_id()
             safe_conn_name = get_safe_connection_path(connection_name)
 
-            schema_file = Path(storage_path) / safe_conn_name / "schema_latest.json"
+            schema_file = Path(storage_path) / user_id / safe_conn_name / "schema_latest.json"
 
             if not schema_file.exists():
                 return json.dumps(

@@ -13,7 +13,7 @@ class ConversationCreate(BaseModel):
     """Request schema for creating conversation"""
 
     title: Optional[str] = Field(None, max_length=200)
-    project_id: str = Field(..., description="ID of the project this conversation belongs to")
+    project_id: Optional[str] = Field(None, description="ID of the project this conversation belongs to (optional, will use default project if not provided)")
 
 
 class ConversationResponse(BaseModel):

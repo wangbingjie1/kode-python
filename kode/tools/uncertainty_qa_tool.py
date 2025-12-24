@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
+from kode.utils.context import get_current_user_id
 from kode.utils.logger import setup_logger
 from kode.exceptions import UserInputRequired
 from kode.utils.path_utils import get_safe_connection_path
@@ -268,11 +269,12 @@ class UncertaintyQAManager(KodeTool):
             )
 
     def _get_domains_dir(self, connection_name: str) -> Path:
-        """获取领域文件所在目录"""
+        """获取领域文件所在目录 (with user isolation)"""
         config = ConfigManager()
         schema_path = config.get("storage.schema_path", "./schema_store")
+        user_id = get_current_user_id()
         safe_conn_name = get_safe_connection_path(connection_name)
-        return Path(schema_path) / safe_conn_name / "domains"
+        return Path(schema_path) / user_id / safe_conn_name / "domains"
 
     def _load_all_domain_files(self, domains_dir: Path) -> List[Dict[str, Any]]:
         """加载所有领域文件的数据"""

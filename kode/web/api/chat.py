@@ -111,15 +111,35 @@ async def create_conversation(
     # Check quota before creating conversation
     await check_user_quota(current_user.id, db)
 
-    # Verify project exists and belongs to current user
-    project = await verify_project_ownership(
-        conversation.project_id, current_user.id, db
-    )
+    # Get or create project
+    if conversation.project_id:
+        # If project_id provided, verify it belongs to current user
+        project = await verify_project_ownership(
+            conversation.project_id, current_user.id, db
+        )
+    else:
+        # Otherwise, get or create default project for user
+        result = await db.execute(
+            select(Project)
+            .where(Project.user_id == current_user.id)
+            .order_by(Project.created_at)
+        )
+        project = result.scalar_one_or_none()
+
+        if not project:
+            # Create default project if user has none
+            project = Project(
+                name="默认项目",
+                description="自动创建的默认项目",
+                user_id=current_user.id,
+            )
+            db.add(project)
+            await db.flush()  # Flush to get project.id
 
     # Create conversation
     db_conversation = Conversation(
         title=conversation.title or "New Conversation",
-        project_id=conversation.project_id,
+        project_id=project.id,
     )
 
     db.add(db_conversation)

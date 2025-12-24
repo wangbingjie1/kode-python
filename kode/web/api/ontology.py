@@ -9,13 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from pydantic import BaseModel
 
-from kode.database.session import get_async_session
+from kode.database.session import get_db
 from kode.models.user import User
 from kode.models.ontology_version import OntologyVersion
 from kode.services.ontology_version_manager import OntologyVersionManager
 from kode.services.vector_index_manager import VectorIndexManager
 from kode.services.ontology_tasks import build_vector_index_task, rebuild_vector_index_on_change_task
-from kode.web.middleware.auth import get_current_user
+from kode.web.dependencies import get_current_user
 from kode.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -78,7 +78,7 @@ async def list_ontology_versions(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     列出指定连接的所有本体版本
@@ -129,7 +129,7 @@ async def list_ontology_versions(
 async def get_current_version(
     connection_name: str,
     current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     获取当前活跃版本
@@ -174,7 +174,7 @@ async def get_version_by_number(
     connection_name: str,
     version_number: int,
     current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     根据版本号获取版本
@@ -221,7 +221,7 @@ async def rollback_to_version(
     connection_name: str,
     request: RollbackRequest,
     current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     回滚到指定版本
@@ -273,7 +273,7 @@ async def rebuild_vector_index(
     version_number: int,
     request: RebuildIndexRequest,
     current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     手动触发向量索引重建
@@ -338,7 +338,7 @@ async def delete_version(
     connection_name: str,
     version_number: int,
     current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     删除指定版本（软删除）
@@ -393,7 +393,7 @@ async def get_vector_index_status(
     connection_name: str,
     version_number: int,
     current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     查询向量索引状态

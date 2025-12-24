@@ -2,13 +2,14 @@
 新版本本体文件存储管理
 
 负责管理业务上下文和新格式本体的文件持久化
-支持用户隔离和版本管理
+支持用户隔离和版本管理（通过 contextvars 自动获取 user_id）
 """
 
 from pathlib import Path
 import json
 from typing import Optional, Dict, Any
 from datetime import datetime
+from kode.utils.context import get_current_user_id
 
 
 class OntologyStorageV2:
@@ -26,11 +27,24 @@ class OntologyStorageV2:
                 business_context.json      # 业务理解五问答案（兼容旧版）
     """
 
-    def __init__(self, user_id: str, base_path: str = "ontology_store"):
-        if not user_id:
-            raise ValueError("user_id 是必需参数，用于多租户隔离")
-        self.user_id = user_id
+    def __init__(self, base_path: str = "ontology_store"):
+        """初始化本体存储管理器
+
+        Args:
+            base_path: 存储根目录
+
+        Note:
+            user_id 通过 contextvars 自动获取，无需手动设置
+        """
         self.base_path = Path(base_path)
+
+    def _get_user_id(self) -> str:
+        """从 contextvars 获取当前用户ID
+
+        Returns:
+            用户ID（开发环境降级到 'default'）
+        """
+        return get_current_user_id()
 
     def _get_ontology_file_path(self, connection_name: str, for_write: bool = False) -> Path:
         """获取本体文件路径（内部方法，兼容旧版逻辑）
@@ -44,7 +58,7 @@ class OntologyStorageV2:
         Returns:
             本体文件路径
         """
-        conn_dir = self.base_path / self.user_id / connection_name
+        conn_dir = self.base_path / self._get_user_id() / connection_name
 
         if for_write:
             # 写入时总是使用 v3
@@ -59,7 +73,7 @@ class OntologyStorageV2:
 
     def _ensure_connection_dir(self, connection_name: str) -> Path:
         """确保连接目录存在"""
-        conn_dir = self.base_path / self.user_id / connection_name
+        conn_dir = self.base_path / self._get_user_id() / connection_name
         conn_dir.mkdir(parents=True, exist_ok=True)
         return conn_dir
 
@@ -108,7 +122,7 @@ class OntologyStorageV2:
         Returns:
             业务上下文数据，不存在时返回None
         """
-        path = self.base_path / self.user_id / connection_name / "business_context.json"
+        path = self.base_path / self._get_user_id() / connection_name / "business_context.json"
         if not path.exists():
             return None
 
@@ -226,7 +240,7 @@ class OntologyStorageV2:
         Returns:
             是否存在
         """
-        conn_dir = self.base_path / self.user_id / connection_name
+        conn_dir = self.base_path / self._get_user_id() / connection_name
         v3_path = conn_dir / "ontology_v3.json"
         v2_path = conn_dir / "ontology_v2.json"
         return v3_path.exists() or v2_path.exists()
@@ -239,7 +253,7 @@ class OntologyStorageV2:
         Returns:
             连接名列表
         """
-        user_dir = self.base_path / self.user_id
+        user_dir = self.base_path / self._get_user_id()
         if not user_dir.exists():
             return []
 
@@ -257,17 +271,18 @@ class OntologyStorageV2:
         Returns:
             包含各类文件存在状态的字典
         """
-        conn_dir = self.base_path / self.user_id / connection_name
+        user_id = self._get_user_id()
+        conn_dir = self.base_path / user_id / connection_name
         if not conn_dir.exists():
             return {
                 "exists": False,
-                "user_id": self.user_id,
+                "user_id": user_id,
                 "connection_name": connection_name
             }
 
         return {
             "exists": True,
-            "user_id": self.user_id,
+            "user_id": user_id,
             "connection_name": connection_name,
             "has_business_context": (conn_dir / "business_context.json").exists(),
             "has_ontology_v2": self.ontology_v2_exists(connection_name),  # 检查 v3 或 v2

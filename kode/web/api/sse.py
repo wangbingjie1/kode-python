@@ -597,6 +597,10 @@ async def event_generator(
                 except json.JSONDecodeError:
                     logger.error(f"[SSE] Chart content is string but not valid JSON")
 
+            # 📡 progress 消息：只转发到前端，不保存到数据库（临时进度提示）
+            if chunk_type == "progress":
+                logger.info(f"[SSE] Forwarding progress: {chunk.get('content', '')[:100]}")
+
             event_data = json.dumps(serialized_chunk, ensure_ascii=False)
             yield f"data: {event_data}\n\n"
 
@@ -1138,7 +1142,12 @@ async def send_message_sse(
 
     # Return SSE stream
     return StreamingResponse(
-        event_generator(conversation_id, task, conversation_service),
+        event_generator(
+            conversation_id,
+            task,
+            conversation_service,
+            current_user.id,  # 🔑 修复：传入用户ID
+        ),
         media_type="text/event-stream; charset=utf-8",
         headers={
             "Cache-Control": "no-cache",
@@ -1152,8 +1161,8 @@ async def send_message_sse(
 async def submit_user_response(
     conversation_id: str,
     response: UserInputResponse = Body(...),
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     接收用户对交互式提问的响应。
@@ -1197,6 +1206,8 @@ async def submit_user_response(
         )
 
     # TODO: Verify user owns this conversation (add owner_id to Conversation model)
+
+    # ✅ user_id 上下文由 UserContextMiddleware 自动设置（无需手动调用 set_user_context）
 
     # Submit response to session manager
     logger.info(f"[User Response] Received for conversation {conversation_id}: {response.dict()}")

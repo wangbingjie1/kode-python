@@ -13,6 +13,7 @@ from pathlib import Path
 from kode.agents.base import KodeAgent, AgentConfig
 from kode.agents.anthropic_streaming import AnthropicStreamingAgent
 from kode.core.model_manager import ModelManager
+from kode.utils.context import set_user_context, clear_user_context
 from kode.tools import (
     # 数据分析必需工具
     MemoryReadTool,
@@ -584,11 +585,16 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
         # Check schema cache
         schema_dir = Path(schema_path)
         if schema_dir.exists():
-            cached_schemas = list(schema_dir.glob("*/schema_latest.json"))
+            # 支持两种路径结构：
+            # 1. {schema_path}/{user_id}/{conn_name}/schema_latest.json (多租户)
+            # 2. {schema_path}/{conn_name}/schema_latest.json (旧版/单用户)
+            cached_schemas = list(schema_dir.glob("*/schema_latest.json")) + \
+                            list(schema_dir.glob("*/*/schema_latest.json"))
             context_parts.append(f"数据库结构文件所在路径: {schema_path}")
             if cached_schemas:
                 context_parts.append("## 已缓存的数据库Schema")
                 for schema_file in cached_schemas:
+                    # 提取 connection_name（可能是 parent.name 或 parent.parent.name）
                     conn_name = schema_file.parent.name
                     context_parts.append(f"- {conn_name}: {schema_file.absolute()}")
 
@@ -626,9 +632,13 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
         # Check ontology cache (v3 优先，回退到 v2)
         ontology_dir = Path(ontology_path)
         if ontology_dir.exists():
-            # 优先查找 v3，如果没有再查找 v2
-            cached_ontologies_v3 = list(ontology_dir.glob("*/ontology_v3.json"))
-            cached_ontologies_v2 = list(ontology_dir.glob("*/ontology_v2.json"))
+            # 支持两种路径结构：
+            # 1. {ontology_path}/{user_id}/{conn_name}/ontology_v*.json (多租户)
+            # 2. {ontology_path}/{conn_name}/ontology_v*.json (旧版/单用户)
+            cached_ontologies_v3 = list(ontology_dir.glob("*/ontology_v3.json")) + \
+                                  list(ontology_dir.glob("*/*/ontology_v3.json"))
+            cached_ontologies_v2 = list(ontology_dir.glob("*/ontology_v2.json")) + \
+                                  list(ontology_dir.glob("*/*/ontology_v2.json"))
 
             # 合并，v3 优先（同一个连接只保留 v3）
             v3_conns = {f.parent.name for f in cached_ontologies_v3}
@@ -759,6 +769,16 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
         if chat_history is None:
             chat_history = []
 
+        # 🔑 关键修复：无论 middleware 是否设置，这里都重新设置一次 user_context
+        # 确保工具内部调用 get_current_user_id() 时能获取到正确的值
+        # 即使 middleware 已经设置过，重复设置也是安全的（会覆盖）
+        set_user_context(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            project_id=None
+        )
+        logger.info(f"[ConversationService] Set user_context: user_id={user_id}, conversation_id={conversation_id}")
+
         try:
             # Reload database connections to ensure we have latest info from DB
             # 每次对话开始时刷新一次,确保获取最新的数据库连接配置
@@ -823,6 +843,17 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
             api_key = self.config.get("apiKeys", {}).get("anthropic")
             if not api_key:
                 raise ValueError("ANTHROPIC_API_KEY not configured in .kode.json or environment")
+
+            # ✨ 设置 tools 的执行上下文（包含 message_queue，用于发送进度消息）
+            execution_context = {
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "message_queue": message_queue,
+            }
+            for tool in self.tools:
+                if hasattr(tool, "set_execution_context"):
+                    tool.set_execution_context(execution_context)
+            logger.info(f"[ConversationService] Set execution_context for {len(self.tools)} tools")
 
             try:
                 streaming_agent = AnthropicStreamingAgent(
@@ -916,6 +947,11 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
                 "content": f"Error: {str(e)}",
                 "metadata": {"error": str(e), "error_type": type(e).__name__},
             }
+
+        finally:
+            # ✅ 清理用户上下文
+            clear_user_context()
+            logger.debug(f"User context cleared for conversation {conversation_id}")
 
     async def get_conversation_history(self, conversation_id: str, user_id: str) -> List[Dict]:
         """

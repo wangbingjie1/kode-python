@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from kode.core.model_manager import ModelManager
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
+from kode.utils.context import get_current_user_id
 from kode.utils.path_utils import get_safe_connection_path
 
 
@@ -223,8 +224,11 @@ class DatabaseSchemaClusterer(KodeTool):
         """
         config = ConfigManager()
         ontology_path = config.get("storage.ontology_path", "./ontology_store")
+        # 🔑 修复：添加 user_id 隔离
+        from kode.utils.context import get_current_user_id
+        user_id = get_current_user_id()
         safe_conn_name = get_safe_connection_path(connection_name)
-        context_file = Path(ontology_path) / safe_conn_name / "business_context.json"
+        context_file = Path(ontology_path) / user_id / safe_conn_name / "business_context.json"
 
         if not context_file.exists():
             return {"tables": [], "prefixes": [], "reasons": {}}
@@ -479,9 +483,10 @@ IMPORTANT: Ensure ALL {len(table_features)} tables are assigned to exactly one d
         try:
             config = ConfigManager()
             storage_path = config.get("storage.schema_path", "./schema_store")
+            user_id = get_current_user_id()
 
             safe_conn_name = get_safe_connection_path(connection_name)
-            base_dir = Path(storage_path) / safe_conn_name
+            base_dir = Path(storage_path) / user_id / safe_conn_name
             domains_dir = base_dir / "domains"
             domains_dir.mkdir(parents=True, exist_ok=True)
 

@@ -73,7 +73,7 @@ export interface UserInputQuestion {
 
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant' | 'system' | 'tool' | 'chart' | 'insight'
+  role: 'user' | 'assistant' | 'system' | 'tool' | 'chart' | 'insight' | 'progress'
   content: string
   timestamp: Date
   isStreaming?: boolean
@@ -877,6 +877,35 @@ export const useChatStore = defineStore('chat', () => {
         }
         console.log('[ChatStore] Adding insight message:', insightMessage)
         messages.value.push(insightMessage)
+        break
+      }
+
+      case 'progress': {
+        // 处理进度消息（如本体构建进度）
+        // 进度消息是临时的，用于实时显示进度，不保存到数据库
+        // 我们可以选择：1) 显示在消息列表中（临时） 2) 显示在独立的进度条中
+        // 这里选择显示在消息列表中，但每次新进度会替换旧的相同阶段的进度
+        const stage = chunk.metadata?.stage || 'default'
+
+        // 查找相同 stage 的现有进度消息并移除
+        const existingProgressIndex = messages.value.findIndex(
+          msg => msg.role === 'progress' && msg.metadata?.stage === stage
+        )
+        if (existingProgressIndex !== -1) {
+          messages.value.splice(existingProgressIndex, 1)
+        }
+
+        // 添加新的进度消息
+        const progressMessage = {
+          id: `progress-${Date.now()}-${Math.random()}`,
+          role: 'progress' as const,
+          content: chunk.content,
+          timestamp: new Date(),
+          isStreaming: false,
+          metadata: chunk.metadata
+        }
+        console.log('[ChatStore] Adding/updating progress message:', progressMessage)
+        messages.value.push(progressMessage)
         break
       }
 

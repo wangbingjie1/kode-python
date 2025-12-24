@@ -30,6 +30,65 @@ class KodeTool(BaseTool, ABC):
     _execution_context: Optional[Dict[str, Any]] = None
     """执行上下文，包含 user_id, conversation_id 等信息"""
 
+    async def send_progress(
+        self,
+        content: str,
+        stage: Optional[str] = None,
+        current: Optional[int] = None,
+        total: Optional[int] = None,
+        **extra_metadata: Any
+    ) -> None:
+        """
+        发送进度消息到前端（通过 SSE）
+
+        用于长时间运行的工具（如本体构建），实时向用户展示进度。
+
+        Args:
+            content: 进度描述文本（如 "🚀 开始构建 user_management（11 个表）"）
+            stage: 阶段标识（如 "ontology_build"）
+            current: 当前进度（如第 1 个）
+            total: 总数（如共 6 个）
+            **extra_metadata: 额外的元数据
+
+        Example:
+            await self.send_progress(
+                content="🚀 开始构建 user_management（11 个表）",
+                stage="ontology_build",
+                domain="user_management",
+                current=1,
+                total=6
+            )
+        """
+        if not self._execution_context:
+            return  # 没有执行上下文时静默跳过（向后兼容）
+
+        message_queue = self._execution_context.get("message_queue")
+        if not message_queue:
+            return  # 没有消息队列时静默跳过
+
+        # 构建进度消息
+        metadata = {
+            "timestamp": __import__("datetime").datetime.now().isoformat(),
+        }
+        if stage:
+            metadata["stage"] = stage
+        if current is not None:
+            metadata["current"] = current
+        if total is not None:
+            metadata["total"] = total
+            if current is not None:
+                metadata["percent"] = round(current / total * 100, 1)
+        metadata.update(extra_metadata)
+
+        progress_message = {
+            "type": "progress",
+            "content": content,
+            "metadata": metadata
+        }
+
+        # 异步放入队列
+        await message_queue.put(progress_message)
+
     @abstractmethod
     def _run(self, *args: Any, **kwargs: Any) -> str:
         """

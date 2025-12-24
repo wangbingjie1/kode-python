@@ -117,61 +117,95 @@ class AnthropicStreamingAgent:
 
         return anthropic_tools
 
-    def _add_cache_control_to_messages(self, messages: List[Dict]) -> List[Dict]:
-        """在最后一条消息末尾注入当前时间，并添加 cache_control。
+    def _add_cache_control_to_messages(
+        self, messages: List[Dict], inject_date: bool = False
+    ) -> List[Dict]:
+        """在最后一条用户消息的最后一个 content block 上添加 cache_control。
 
-        策略：
-        1. 把当前时间注入到最后一条消息的文本末尾（不破坏之前消息的缓存）
-        2. 在最后一个 content block 上添加 cache_control 作为缓存边界
+        Prompt Caching 优化策略（基于 Anthropic 官方 cookbook）：
+        1. 找到最后一条 role="user" 的消息
+        2. 在该消息的最后一个 content block 上添加 cache_control
+        3. 可选地在第一次调用时注入当前日期（仅日期，不含时分秒）
+        4. 同一天内的所有请求会有相同的日期信息，缓存可以复用
 
-        这样既保证 AI 能感知当前时间，又不破坏 Prompt Caching。
+        缓存层级（从外到内）：
+        - tools 定义（在 _prepare_tools 中标记最后一个 tool）
+        - system prompt（在 stream_response 中标记）
+        - 历史消息（在这里标记最后一条用户消息）
+
+        这样可以最大化 Prompt Caching 的效果，确保工具调用循环中的历史消息可以命中缓存。
+
+        参考：https://github.com/anthropics/anthropic-cookbook/blob/main/misc/prompt_caching.ipynb
 
         Args:
             messages: 原始消息列表
+            inject_date: 是否注入当前日期（仅在第一次迭代时为 True）
 
         Returns:
-            添加了时间信息和 cache_control 的消息列表（深拷贝）
+            添加了 cache_control 的消息列表（深拷贝）
         """
         if not messages:
             return messages
 
         # 深拷贝避免修改原始数据
         import copy
-        from kode.utils.system_info import format_system_info_dynamic
 
         messages_copy = copy.deepcopy(messages)
 
-        # 获取当前时间
-        time_info = format_system_info_dynamic()
+        # 获取当前日期（仅在需要时）
+        date_info = ""
+        if inject_date:
+            from kode.utils.system_info import format_system_info_dynamic
 
-        # 找到最后一条消息
-        last_msg = messages_copy[-1]
-        content = last_msg.get("content")
+            date_info = format_system_info_dynamic()
 
-        # 处理不同的 content 类型，注入时间到末尾
+        # 🔥 关键修改：找到最后一条 role="user" 的消息（而不是最后一条消息）
+        last_user_msg = None
+        last_user_idx = -1
+        for i in range(len(messages_copy) - 1, -1, -1):
+            if messages_copy[i].get("role") == "user":
+                last_user_msg = messages_copy[i]
+                last_user_idx = i
+                break
+
+        if not last_user_msg:
+            # 没有用户消息，直接返回
+            return messages_copy
+
+        content = last_user_msg.get("content")
+
+        # 处理不同的 content 类型
         if isinstance(content, str):
-            # 字符串类型 → 追加时间，转换为 content block 格式并添加 cache_control
-            last_msg["content"] = [
+            # 字符串类型 → 转换为 content block 格式并添加 cache_control
+            text_content = content
+            if inject_date:
+                text_content = f"{content}\n\n<current_date>{date_info}</current_date>"
+            last_user_msg["content"] = [
                 {
                     "type": "text",
-                    "text": f"{content}\n\n<current_time>{time_info}</current_time>",
+                    "text": text_content,
                     "cache_control": {"type": "ephemeral"},
                 }
             ]
         elif isinstance(content, list) and len(content) > 0:
-            # 列表类型 → 在最后一个 text block 追加时间，并添加 cache_control
+            # 列表类型 → 在最后一个 content block 上添加 cache_control
             last_block = content[-1]
             if isinstance(last_block, dict):
-                # 如果是 text 类型，追加时间信息
-                if last_block.get("type") == "text":
-                    last_block["text"] = f"{last_block.get('text', '')}\n\n<current_time>{time_info}</current_time>"
-                else:
+                # 如果需要注入日期，且最后一个是 text 类型
+                if inject_date and last_block.get("type") == "text":
+                    last_block["text"] = (
+                        f"{last_block.get('text', '')}\n\n<current_date>{date_info}</current_date>"
+                    )
+                elif inject_date:
                     # 不是 text 类型（如 tool_result），追加一个新的 text block
-                    content.append({
-                        "type": "text",
-                        "text": f"<current_time>{time_info}</current_time>",
-                    })
+                    content.append(
+                        {
+                            "type": "text",
+                            "text": f"<current_date>{date_info}</current_date>",
+                        }
+                    )
                     last_block = content[-1]
+                # 在最后一个 block 上添加 cache_control
                 last_block["cache_control"] = {"type": "ephemeral"}
 
         return messages_copy
@@ -499,9 +533,11 @@ class AnthropicStreamingAgent:
                 }
             ]
 
-            # 在最后一条消息的最后一个 content block 上添加 cache_control
-            # 这样可以让对话历史也被缓存，实现增量缓存
-            messages_with_cache = self._add_cache_control_to_messages(messages)
+            # 在每次迭代时都在最后一条消息上添加 cache_control（实现增量缓存）
+            # 但只在第一次迭代时注入日期，后续迭代不注入（确保消息内容一致，可以命中缓存）
+            messages_with_cache = self._add_cache_control_to_messages(
+                messages, inject_date=(iteration == 1)
+            )
 
             # Stream response from Anthropic (with retry for network errors)
             full_text = ""
@@ -1243,8 +1279,11 @@ class AnthropicStreamingAgent:
                         }
                     )
 
-            # Add tool results to messages
-            messages.append({"role": "user", "content": tool_results})
+            # Add tool results to messages (only if not empty)
+            if tool_results:
+                messages.append({"role": "user", "content": tool_results})
+            else:
+                logger.warning("[Tool Loop] No tool results to append, skipping message append")
 
             # 🔥 不需要检查 requires_user_input，让工具循环继续
             # Agent 会自动等待用户提交答案（前端会发送新消息）

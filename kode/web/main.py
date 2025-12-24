@@ -14,6 +14,7 @@ from kode.utils.logger import setup_logger
 from kode.utils.config import ConfigManager
 from kode.web.middleware.locale import LocaleMiddleware
 from kode.web.middleware.quota_check import QuotaCheckMiddleware
+from kode.web.middleware.user_context import UserContextMiddleware
 
 # Setup logger
 logger = setup_logger(__name__)
@@ -36,6 +37,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
     allow_headers=["*"],
 )
+
+# User context middleware (用户上下文自动设置) - 必须在认证后、业务逻辑前执行
+app.add_middleware(UserContextMiddleware)
 
 # Quota check middleware (配额检查)
 app.add_middleware(QuotaCheckMiddleware)

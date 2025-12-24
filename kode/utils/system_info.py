@@ -104,20 +104,24 @@ def format_system_info_static() -> str:
 
 def format_system_info_dynamic() -> str:
     """
-    格式化动态系统信息（当前时间）
+    格式化动态系统信息（当前日期）
 
-    这部分会每次变化，应该注入到 user message 而非 system prompt。
+    为了优化 Prompt Caching 效果，只返回日期（不含时分秒）。
+    这样同一天内的所有请求都会有相同的时间信息，缓存可以复用。
+
+    注意：这部分应该注入到 user message 而非 system prompt。
 
     Returns:
-        格式化的动态系统信息文本
+        格式化的动态系统信息文本（仅日期）
     """
     now = datetime.now()
     # 星期映射（避免 locale 问题）
     weekday_names_cn = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
     weekday_name = weekday_names_cn[now.weekday()]
 
-    current_time = now.strftime('%Y-%m-%d %H:%M:%S')
-    return f"**当前时间**: {current_time} ({weekday_name})"
+    # 只返回日期，不包含时分秒（优化缓存命中率）
+    current_date = now.strftime('%Y-%m-%d')
+    return f"**当前日期**: {current_date} ({weekday_name})"
 
 
 def format_system_info_for_prompt() -> str:

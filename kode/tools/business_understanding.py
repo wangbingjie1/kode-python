@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage
 
 from kode.tools.base import InteractiveTool
+from kode.utils.context import get_current_user_id
 from kode.utils.ontology_storage import OntologyStorageV2
 from kode.utils.logger import setup_logger
 
@@ -99,7 +100,8 @@ class BusinessUnderstandingTool(InteractiveTool):
             表结构摘要，格式：{"tables": [{"name": "...", "comment": "...", "sample_rows": [...]}]}
             如果缓存不存在，返回 None
         """
-        schema_file = self.schema_store_path / connection_name / "schema_latest.json"
+        user_id = get_current_user_id()
+        schema_file = self.schema_store_path / user_id / connection_name / "schema_latest.json"
 
         if not schema_file.exists():
             logger.warning(f"Schema 缓存不存在: {schema_file}")
@@ -468,8 +470,9 @@ class BusinessUnderstandingTool(InteractiveTool):
             message_parts.append("")
 
         # 保存位置
+        user_id = get_current_user_id()
         message_parts.append(f"📁 业务上下文已保存到：")
-        message_parts.append(f"   `ontology_store/{connection_name}/business_context.json`")
+        message_parts.append(f"   `ontology_store/{user_id}/{connection_name}/business_context.json`")
         message_parts.append("")
 
         # 下一步提示
@@ -535,7 +538,10 @@ class BusinessUnderstandingTool(InteractiveTool):
             "updated_at": datetime.now().isoformat(),
         }
 
-        context_file = self.storage.base_path / connection_name / "business_context.json"
+        # 🔑 修复：使用正确的路径构建（包含 user_id）
+        from kode.utils.context import get_current_user_id
+        user_id = get_current_user_id()
+        context_file = self.storage.base_path / user_id / connection_name / "business_context.json"
         context_file.parent.mkdir(parents=True, exist_ok=True)
 
         with open(context_file, "w", encoding="utf-8") as f:
