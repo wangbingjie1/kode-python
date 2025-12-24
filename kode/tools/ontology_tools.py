@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from kode.tools.base import KodeTool
 from kode.core.model_manager import ModelManager
 from kode.utils.config import ConfigManager
+from kode.utils.context import get_current_user_id
 from kode.utils.logger import setup_logger
 from kode.utils.path_utils import get_safe_connection_path
 
@@ -141,6 +142,26 @@ class OntologyBuilderTool(KodeTool):
             # 🔒 步骤0：检查业务理解是否完成（V2 前置条件）
             from kode.tools.business_understanding import BusinessUnderstandingTool
             from kode.utils.ontology_storage import OntologyStorageV2
+            from kode.utils.context import get_current_user_id
+
+            # 🐛 调试日志：检查当前 user_id
+            try:
+                current_user_id = get_current_user_id()
+                logger.info(f"[OntologyBuilder] Current user_id in tool: {current_user_id}")
+            except RuntimeError as e:
+                logger.error(f"[OntologyBuilder] User context not set: {e}")
+                # 不应该发生，但如果发生了，需要明确报错
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "gate_check_failed": True,
+                        "reason": "user_context_not_set",
+                        "message": "❌ 系统错误：用户上下文未设置",
+                        "suggestion": "这是一个bug，请联系管理员。工具调用时应该有 user_id 上下文。",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
 
             business_tool = BusinessUnderstandingTool()
             if not business_tool.is_completed(connection_name):
@@ -158,12 +179,12 @@ class OntologyBuilderTool(KodeTool):
                     ensure_ascii=False,
                 )
 
-            # Load schema from saved file
+            # Load schema from saved file (with user isolation)
             config = ConfigManager()
             schema_path = config.get("storage.schema_path", "./schema_store")
-            schema_file = (
-                Path(schema_path) / get_safe_connection_path(connection_name) / "schema_latest.json"
-            )
+            user_id = get_current_user_id()
+            safe_conn_name = get_safe_connection_path(connection_name)
+            schema_file = Path(schema_path) / user_id / safe_conn_name / "schema_latest.json"
 
             if not schema_file.exists():
                 return json.dumps(
@@ -171,6 +192,7 @@ class OntologyBuilderTool(KodeTool):
                         "status": "error",
                         "message": f"Schema file not found for connection '{connection_name}'",
                         "expected_path": str(schema_file),
+                        "user_id": user_id,
                         "suggestion": "Run DatabaseSchemaExtractor first to extract schema",
                     },
                     indent=2,
@@ -180,7 +202,8 @@ class OntologyBuilderTool(KodeTool):
             # 🔍 检查本体是否已存在（仅当未强制重建时）- 优先 V3，回退 V2
             if not force_rebuild:
                 ontology_path = config.get("storage.ontology_path", "./ontology_store")
-                conn_path = Path(ontology_path) / get_safe_connection_path(connection_name)
+                # 🔑 修复：添加 user_id 隔离
+                conn_path = Path(ontology_path) / user_id / get_safe_connection_path(connection_name)
 
                 # 优先查找 v3
                 existing_ontology_file = conn_path / "ontology_v3.json"
@@ -240,10 +263,10 @@ class OntologyBuilderTool(KodeTool):
             else:
                 logger.info(f"🔄 强制重建模式：跳过本体存在性检查，直接构建")
 
-            # ✨ 新架构：不确定性数据已分散存储在各 domain JSON 文件中
-            domains_dir = Path(schema_path) / get_safe_connection_path(connection_name) / "domains"
+            # ✨ 新架构：不确定性数据已分散存储在各 domain JSON 文件中 (with user isolation)
+            domains_dir = Path(schema_path) / user_id / get_safe_connection_path(connection_name) / "domains"
             domain_index_file = (
-                Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
+                Path(schema_path) / user_id / get_safe_connection_path(connection_name) / "domain_index.json"
             )
 
             # 🔑 如果没有 domains 目录，自动运行聚类和不确定性分析
@@ -254,6 +277,8 @@ class OntologyBuilderTool(KodeTool):
                 from kode.tools.schema_clustering_tool import DatabaseSchemaClusterer
 
                 clusterer = DatabaseSchemaClusterer()
+                # 🔑 确保子工具也能访问用户上下文（虽然当前在主线程，但保持一致性）
+                # 注意：这里不需要显式传递，因为还在主线程中，ContextVar 是可用的
                 clustering_result_str = clusterer._run(
                     connection_name=connection_name,
                     schema_file=str(schema_file),
@@ -398,9 +423,9 @@ class OntologyBuilderTool(KodeTool):
             else:
                 schema_metadata = schema_data
 
-            # 🚀 新的简化流程：优先使用 domain_index.json（如果存在）
+            # 🚀 新的简化流程：优先使用 domain_index.json（如果存在）(with user isolation)
             domain_index_file = (
-                Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
+                Path(schema_path) / user_id / get_safe_connection_path(connection_name) / "domain_index.json"
             )
             database = schema_metadata.get("database", "未知")
             db_schema = schema_metadata.get("schema")
@@ -411,9 +436,17 @@ class OntologyBuilderTool(KodeTool):
             if domain_index_file.exists():
                 logger.info(f"✅ 检测到 domain_index.json，使用简化并行构建流程")
 
+                # 🔑 关键修复：在新线程执行前，保存当前上下文
+                from kode.utils.context import get_current_user_id, get_current_conversation_id, set_user_context
+                current_user_id = get_current_user_id()  # 提前获取（在主线程）
+                current_conversation_id = get_current_conversation_id()
+
                 # 🔥 关键：在已运行的事件循环中，需要在新线程中运行 asyncio.run
                 def run_async_in_thread():
                     """在新线程中运行异步任务（避免嵌套事件循环冲突）"""
+                    # 🔑 在新线程中重新设置用户上下文（ContextVar 不跨线程传递）
+                    set_user_context(user_id=current_user_id, conversation_id=current_conversation_id)
+
                     return asyncio.run(
                         self._build_ontology_from_domains_async(
                             connection_name, database, db_schema, schema_path
@@ -437,6 +470,20 @@ class OntologyBuilderTool(KodeTool):
                     {
                         "status": "error",
                         "message": "domain_index.json not found. Please run DomainClusteringTool first to cluster the schema into domains.",
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+
+            # 🔍 验证本体质量（防止保存空本体或错误本体）
+            validation_error = self._validate_ontology(ontology)
+            if validation_error:
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"❌ 本体构建失败: {validation_error}",
+                        "meta": ontology.get("meta", {}),
+                        "suggestion": "请检查 schema 是否正确提取，或重新运行构建流程"
                     },
                     indent=2,
                     ensure_ascii=False,
@@ -476,6 +523,52 @@ class OntologyBuilderTool(KodeTool):
                 },
                 indent=2,
             )
+
+    def _validate_ontology(self, ontology: Dict[str, Any]) -> Optional[str]:
+        """
+        验证本体质量，防止保存空本体或错误本体。
+
+        Args:
+            ontology: 本体数据
+
+        Returns:
+            错误信息（如果验证失败），否则返回 None
+        """
+        # 检查必需字段
+        if not isinstance(ontology, dict):
+            return "本体格式错误：不是字典类型"
+
+        # 检查 meta 中是否有错误
+        meta = ontology.get("meta", {})
+        if "error" in meta:
+            return f"构建过程出错: {meta['error']}"
+
+        # 检查是否为空本体（核心字段都为空）
+        # 🔑 修复：V3 格式的 classes 在 schema.classes 里，不是顶层
+        schema = ontology.get("schema", {})
+        classes = schema.get("classes", {})  # V3 格式是字典（domain > tables）
+        domains = ontology.get("meta", {}).get("domains", [])
+
+        # V3 格式：classes 是字典，检查是否为空
+        if isinstance(classes, dict):
+            is_empty = len(classes) == 0
+        elif isinstance(classes, list):
+            is_empty = len(classes) == 0
+        else:
+            is_empty = not classes
+
+        if is_empty and not domains:
+            return "本体为空：未构建任何业务类或领域"
+
+        # 检查统计信息是否合理
+        stats = ontology.get("statistics", {})
+        class_count = stats.get("class_count", 0)
+
+        if class_count == 0:
+            return "本体无效：class_count 为 0"
+
+        # 一切正常
+        return None
 
     def _prepare_schema_for_ai(self, schema_metadata: Dict[str, Any]) -> str:
         """
@@ -598,9 +691,10 @@ class OntologyBuilderTool(KodeTool):
             config = ConfigManager()
             storage_path = config.get("storage.ontology_path", "./ontology_store")
 
-            # Create storage directory
+            # 🔑 修复：添加 user_id 隔离（与 schema_store 保持一致）
+            user_id = get_current_user_id()
             base_dir = Path(storage_path)
-            conn_dir = base_dir / get_safe_connection_path(connection_name)
+            conn_dir = base_dir / user_id / get_safe_connection_path(connection_name)
             conn_dir.mkdir(parents=True, exist_ok=True)
 
             # V3 格式：直接保存 ontology 数据
@@ -814,9 +908,10 @@ class OntologyBuilderTool(KodeTool):
             import time
             from langchain_core.messages import HumanMessage
 
-            # 1. 读取 domain_index.json
+            # 1. 读取 domain_index.json (with user isolation)
+            user_id = get_current_user_id()
             domain_index_file = (
-                Path(schema_path) / get_safe_connection_path(connection_name) / "domain_index.json"
+                Path(schema_path) / user_id / get_safe_connection_path(connection_name) / "domain_index.json"
             )
             with open(domain_index_file, "r", encoding="utf-8") as f:
                 domain_index = json.load(f)
@@ -824,13 +919,19 @@ class OntologyBuilderTool(KodeTool):
             domains = domain_index["domains"]
             logger.info(f"📋 加载到 {len(domains)} 个业务域")
 
-            # 2. 初始化模型
+            # 2. 初始化模型（添加超时和重试配置）
             config_manager = ConfigManager()
             config = config_manager.get_all()
             model_manager = ModelManager(config)
             model = model_manager.get_model("main")
             model.temperature = 0.0
             model.max_tokens = 64000
+
+            # 配置 Anthropic API 客户端的超时和重试
+            if hasattr(model, '_async_client'):
+                # 设置更长的超时时间（60秒）和重试次数
+                model._async_client.timeout = 60.0
+                model._async_client.max_retries = 3
 
             # 3. 并行构建所有域
             t_start = time.time()
@@ -893,20 +994,44 @@ class OntologyBuilderTool(KodeTool):
         """
         并行构建所有业务域的本体（核心性能优化）。
 
-        使用 asyncio.gather() + Semaphore(5) 限流，避免 API 限速。
+        使用 asyncio.gather() + Semaphore(10) 限流，避免 API 限速。
         """
         import asyncio
         import time
 
-        async def build_single_domain(domain_info: Dict[str, Any]) -> tuple:
+        # 📡 发送总体开始消息
+        total_tables = sum(d.get('table_count', 0) for d in domains)
+        start_msg = f"📋 开始并行构建本体：共 {len(domains)} 个业务域，{total_tables} 个表"
+        logger.info(start_msg)
+        await self.send_progress(
+            content=start_msg,
+            stage="ontology_build_start",
+            total_domains=len(domains),
+            total_tables=total_tables
+        )
+
+        async def build_single_domain(domain_info: Dict[str, Any], domain_index: int) -> tuple:
             """异步构建单个域。"""
             domain_name = domain_info["name"]
             t_start = time.time()
-            logger.info(f"🚀 开始构建 {domain_name}（{domain_info['table_count']} 个表）")
 
-            # 读取领域的完整 schema
+            # 📡 发送进度消息到前端
+            progress_msg = f"🚀 开始构建 {domain_name}（{domain_info['table_count']} 个表）"
+            logger.info(progress_msg)
+            await self.send_progress(
+                content=progress_msg,
+                stage="ontology_build",
+                domain=domain_name,
+                current=domain_index + 1,
+                total=len(domains),
+                table_count=domain_info['table_count']
+            )
+
+            # 读取领域的完整 schema (with user isolation)
+            user_id = get_current_user_id()
             domain_file = (
                 Path(schema_path)
+                / user_id
                 / get_safe_connection_path(connection_name)
                 / domain_info["file_path"]
             )
@@ -926,25 +1051,87 @@ class OntologyBuilderTool(KodeTool):
             t_ai_elapsed = time.time() - t_ai_start
 
             t_elapsed = time.time() - t_start
-            logger.info(
-                f"✅ {domain_name} 完成（{domain_info['table_count']} 个表，AI耗时 {t_ai_elapsed:.2f}s，总耗时 {t_elapsed:.2f}s）"
+
+            # 📡 发送完成消息到前端
+            complete_msg = f"✅ {domain_name} 完成（{domain_info['table_count']} 个表，AI耗时 {t_ai_elapsed:.2f}s，总耗时 {t_elapsed:.2f}s）"
+            logger.info(complete_msg)
+            await self.send_progress(
+                content=complete_msg,
+                stage="ontology_build_complete",
+                domain=domain_name,
+                current=domain_index + 1,
+                total=len(domains),
+                ai_time=round(t_ai_elapsed, 2),
+                total_time=round(t_elapsed, 2)
             )
+
             return domain_name, domain_ont
 
-        # 限流并发（最多5个同时）
+        # 限流并发（最多10个同时）
         from asyncio import Semaphore
 
-        semaphore = Semaphore(10)
+        # 降低并发数到 3，避免触发 Anthropic API 限流
+        semaphore = Semaphore(3)
 
-        async def bounded_task(domain_info):
+        async def bounded_task(domain_info_with_index):
+            domain_info, domain_index = domain_info_with_index
             async with semaphore:
-                return await build_single_domain(domain_info)
+                # 添加重试机制（最多重试 3 次）
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        return await build_single_domain(domain_info, domain_index)
+                    except Exception as e:
+                        if attempt == max_retries - 1:
+                            # 最后一次重试失败，抛出异常
+                            logger.error(f"❌ 域 {domain_info['domain_name']} 构建失败（重试 {max_retries} 次后）: {str(e)}")
+                            raise
+                        else:
+                            # 重试前等待（指数退避）
+                            wait_time = 2 ** attempt
+                            logger.warning(f"⚠️ 域 {domain_info['domain_name']} 构建失败（第 {attempt + 1}/{max_retries} 次尝试），{wait_time}s 后重试: {str(e)}")
+                            await asyncio.sleep(wait_time)
 
-        # 并行执行
-        results = await asyncio.gather(*[bounded_task(d) for d in domains])
+        # 并行执行（传递索引以便计算进度）
+        # 使用 return_exceptions=True 确保单个域失败不影响整体
+        overall_start = time.time()
+        results = await asyncio.gather(
+            *[bounded_task((d, i)) for i, d in enumerate(domains)],
+            return_exceptions=True
+        )
+        overall_elapsed = time.time() - overall_start
 
-        # 转换为字典
-        return {domain_name: ontology for domain_name, ontology in results}
+        # 分离成功和失败的结果
+        successful_results = []
+        failed_domains = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                domain_name = domains[i]['domain_name']
+                failed_domains.append(domain_name)
+                logger.error(f"❌ 域 {domain_name} 构建失败: {str(result)}")
+            else:
+                successful_results.append(result)
+
+        # 📡 发送总体完成消息
+        success_count = len(successful_results)
+        fail_count = len(failed_domains)
+        finish_msg = f"🎉 本体构建完成！成功 {success_count}/{len(domains)} 个域"
+        if fail_count > 0:
+            finish_msg += f"，失败 {fail_count} 个域: {', '.join(failed_domains)}"
+        finish_msg += f"，总耗时 {overall_elapsed:.2f}s"
+
+        logger.info(finish_msg)
+        await self.send_progress(
+            content=finish_msg,
+            stage="ontology_build_finish",
+            total_domains=len(domains),
+            success_domains=success_count,
+            failed_domains=fail_count,
+            total_time=round(overall_elapsed, 2)
+        )
+
+        # 转换为字典（只包含成功的结果）
+        return {domain_name: ontology for domain_name, ontology in successful_results}
 
     async def _ai_build_domain_ontology(
         self,
@@ -2356,6 +2543,9 @@ class OntologySearchTool(KodeTool):
         try:
             config = ConfigManager()
             ontology_base = config.get("storage.ontology_path", "./ontology_store")
+            # 🔑 获取 user_id 用于路径隔离
+            from kode.utils.context import get_current_user_id
+            user_id = get_current_user_id()
 
             # 🔍 智能路径检测和纠正
             ontology_path_obj = Path(ontology_path)
@@ -2366,8 +2556,8 @@ class OntologySearchTool(KodeTool):
                 and "/" not in ontology_path
                 and "\\" not in ontology_path
             ):
-                # 尝试作为 connection_name 处理
-                corrected_path = Path(ontology_base) / ontology_path
+                # 尝试作为 connection_name 处理（包含 user_id 隔离）
+                corrected_path = Path(ontology_base) / user_id / ontology_path
                 if corrected_path.exists():
                     logger.info(f"✅ 识别为 connection_name: {ontology_path} → {corrected_path}")
                     ontology_path_obj = corrected_path
@@ -2377,16 +2567,24 @@ class OntologySearchTool(KodeTool):
                 # 用户传入了文件路径，尝试自动纠正
                 logger.warning(f"⚠️ OntologySearch: 检测到文件路径 {ontology_path}，自动纠正为目录")
 
-                # 情况1：传入的是 schema_store/.../xxx.json → 应该是 ontology_store/connection_name
+                # 情况1：传入的是 schema_store/.../xxx.json → 应该是 ontology_store/{user_id}/connection_name
                 if "schema_store" in str(ontology_path):
-                    # 提取 connection_name (schema_store/{connection_name}/...)
+                    # 提取 connection_name (schema_store/{user_id}/{connection_name}/... 或 schema_store/{connection_name}/...)
                     parts = ontology_path_obj.parts
                     if len(parts) >= 2 and "schema_store" in parts:
                         schema_idx = parts.index("schema_store")
-                        if schema_idx + 1 < len(parts):
+                        if schema_idx + 2 < len(parts):
+                            # 假设是 schema_store/{user_id}/{connection_name}
+                            connection_name = parts[schema_idx + 2]
+                        elif schema_idx + 1 < len(parts):
+                            # 兼容旧版 schema_store/{connection_name}
                             connection_name = parts[schema_idx + 1]
-                            # 纠正路径
-                            corrected_path = Path(ontology_base) / connection_name
+                        else:
+                            connection_name = None
+
+                        if connection_name:
+                            # 纠正路径（包含 user_id）
+                            corrected_path = Path(ontology_base) / user_id / connection_name
                             logger.info(
                                 f"✅ 自动纠正: schema 路径 → ontology 路径 {corrected_path}"
                             )
