@@ -1084,12 +1084,12 @@ class OntologyBuilderTool(KodeTool):
                     except Exception as e:
                         if attempt == max_retries - 1:
                             # 最后一次重试失败，抛出异常
-                            logger.error(f"❌ 域 {domain_info['domain_name']} 构建失败（重试 {max_retries} 次后）: {str(e)}")
+                            logger.error(f"❌ 域 {domain_info['name']} 构建失败（重试 {max_retries} 次后）: {str(e)}")
                             raise
                         else:
                             # 重试前等待（指数退避）
                             wait_time = 2 ** attempt
-                            logger.warning(f"⚠️ 域 {domain_info['domain_name']} 构建失败（第 {attempt + 1}/{max_retries} 次尝试），{wait_time}s 后重试: {str(e)}")
+                            logger.warning(f"⚠️ 域 {domain_info['name']} 构建失败（第 {attempt + 1}/{max_retries} 次尝试），{wait_time}s 后重试: {str(e)}")
                             await asyncio.sleep(wait_time)
 
         # 并行执行（传递索引以便计算进度）
@@ -1106,7 +1106,7 @@ class OntologyBuilderTool(KodeTool):
         failed_domains = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                domain_name = domains[i]['domain_name']
+                domain_name = domains[i]['name']
                 failed_domains.append(domain_name)
                 logger.error(f"❌ 域 {domain_name} 构建失败: {str(result)}")
             else:
@@ -2031,10 +2031,12 @@ THEN
         try:
             config = ConfigManager()
             schema_path = config.get("storage.schema_path", "./schema_store")
+            user_id = get_current_user_id()
 
-            # ✨ 从领域JSON文件读取
+            # ✨ 从领域JSON文件读取（带 user_id 隔离）
             domain_file = (
                 Path(schema_path)
+                / user_id
                 / get_safe_connection_path(connection_name)
                 / "domains"
                 / f"{domain_name}.json"
@@ -2073,10 +2075,12 @@ THEN
         try:
             config = ConfigManager()
             schema_path = config.get("storage.schema_path", "./schema_store")
+            user_id = get_current_user_id()
 
-            # ✨ 新逻辑：从领域JSON文件中读取 uncertainties
+            # ✨ 新逻辑：从领域JSON文件中读取 uncertainties（带 user_id 隔离）
             domain_file = (
                 Path(schema_path)
+                / user_id
                 / get_safe_connection_path(connection_name)
                 / "domains"
                 / f"{domain_name}.json"
