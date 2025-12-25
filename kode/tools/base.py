@@ -59,12 +59,19 @@ class KodeTool(BaseTool, ABC):
                 total=6
             )
         """
+        from kode.utils.logger import get_logger
+        logger = get_logger(__name__)
+
         if not self._execution_context:
+            logger.warning(f"[send_progress] 没有执行上下文，跳过: {content[:50]}")
             return  # 没有执行上下文时静默跳过（向后兼容）
 
         message_queue = self._execution_context.get("message_queue")
         if not message_queue:
+            logger.warning(f"[send_progress] 没有消息队列，跳过: {content[:50]}")
             return  # 没有消息队列时静默跳过
+
+        logger.info(f"[send_progress] 准备发送进度消息: {content[:50]}")
 
         # 构建进度消息
         metadata = {
@@ -86,8 +93,23 @@ class KodeTool(BaseTool, ABC):
             "metadata": metadata
         }
 
-        # 异步放入队列
-        await message_queue.put(progress_message)
+        # 🔥 线程安全地放入队列
+        # 支持两种队列类型：
+        # 1. queue.Queue (标准库，线程安全) - 用于跨线程场景
+        # 2. asyncio.Queue - 用于同一事件循环内
+        import queue as thread_queue
+        try:
+            if isinstance(message_queue, thread_queue.Queue):
+                # 标准库 Queue，线程安全，直接 put
+                message_queue.put_nowait(progress_message)
+                logger.info(f"[send_progress] ✅ 已放入队列(thread Queue): {content[:50]}")
+            else:
+                # asyncio.Queue，需要在正确的事件循环中操作
+                # 使用 put_nowait 避免阻塞（假设队列不会满）
+                message_queue.put_nowait(progress_message)
+                logger.info(f"[send_progress] ✅ 已放入队列(asyncio Queue): {content[:50]}")
+        except Exception as e:
+            logger.error(f"[send_progress] ❌ 放入队列失败: {e}")
 
     @abstractmethod
     def _run(self, *args: Any, **kwargs: Any) -> str:

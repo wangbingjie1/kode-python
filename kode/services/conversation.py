@@ -802,7 +802,9 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
             logger.info(f"Agent loaded: {agent_config.name}")
 
             # Setup progress tracking
-            progress_queue = asyncio.Queue()
+            # 🔥 使用标准库 queue.Queue（线程安全），因为工具可能在不同线程中运行
+            import queue as thread_queue
+            progress_queue = thread_queue.Queue()
 
             async def on_tool_start(tool_name: str, tool_args: dict):
                 """Callback when tool execution starts."""
@@ -844,11 +846,12 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
             if not api_key:
                 raise ValueError("ANTHROPIC_API_KEY not configured in .kode.json or environment")
 
-            # ✨ 设置 tools 的执行上下文（包含 message_queue，用于发送进度消息）
+            # ✨ 设置 tools 的执行上下文（包含 progress_queue，用于发送进度消息）
+            # 🔥 注意：使用 progress_queue 而非 message_queue，因为 stream_with_progress 读取的是 progress_queue
             execution_context = {
                 "user_id": user_id,
                 "conversation_id": conversation_id,
-                "message_queue": message_queue,
+                "message_queue": progress_queue,  # 工具的进度消息应发送到 progress_queue
             }
             for tool in self.tools:
                 if hasattr(tool, "set_execution_context"):
@@ -881,7 +884,9 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
 
             # Stream chunks from agent
             async def stream_with_progress():
-                """Merge agent streaming with progress updates."""
+                """Stream agent responses with progress updates."""
+                import queue as thread_queue
+
                 # 注入动态上下文到 chat_history 头部（仅在首次消息时）
                 enhanced_history = chat_history.copy() if chat_history else []
 
@@ -906,31 +911,38 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
                     max_iterations=agent_config.max_iterations,
                 )
 
+                # 🔥 简化方案：在每个 chunk 前后检查 progress_queue
                 chunk_count = 0
+
+                def drain_progress_queue():
+                    """清空进度队列并返回所有消息"""
+                    messages = []
+                    while True:
+                        try:
+                            msg = progress_queue.get_nowait()
+                            messages.append(msg)
+                        except thread_queue.Empty:
+                            break
+                    return messages
+
                 async for chunk in agent_stream:
                     chunk_count += 1
                     logger.info(f"[DEBUG] Received chunk #{chunk_count}: type={chunk.get('type')}")
 
-                    # First drain any pending progress updates
-                    while not progress_queue.empty():
-                        try:
-                            progress = progress_queue.get_nowait()
-                            yield progress
-                        except asyncio.QueueEmpty:
-                            break
+                    # 在 yield chunk 之前，先 yield 所有 progress 消息
+                    for progress in drain_progress_queue():
+                        logger.info(f"[DEBUG] Yielding progress: {progress.get('content', '')[:50]}")
+                        yield progress
 
-                    # Then yield the agent chunk
+                    # 然后 yield agent chunk
                     yield chunk
 
                 logger.info(f"[DEBUG] stream_response completed, total chunks: {chunk_count}")
 
-                # Final drain of any remaining progress updates
-                while not progress_queue.empty():
-                    try:
-                        progress = progress_queue.get_nowait()
-                        yield progress
-                    except asyncio.QueueEmpty:
-                        break
+                # 最终清空进度队列
+                for progress in drain_progress_queue():
+                    logger.info(f"[DEBUG] Final progress: {progress.get('content', '')[:50]}")
+                    yield progress
 
             # Stream all chunks
             async for chunk in stream_with_progress():

@@ -171,6 +171,9 @@ class OntologyUpdateTool(KodeTool):
             更新结果（JSON字符串）
         """
         try:
+            # 获取用户 ID
+            user_id = get_current_user_id()
+
             # 1. 获取更新管理器
             manager = self._get_manager(connection_name)
 
@@ -199,7 +202,7 @@ class OntologyUpdateTool(KodeTool):
             # 4. 异步记录到数据库
             threading.Thread(
                 target=self._record_change_to_db,
-                args=(change, connection_name, result),
+                args=(change, connection_name, result, user_id),
                 daemon=True,
             ).start()
 
@@ -224,7 +227,7 @@ class OntologyUpdateTool(KodeTool):
             )
 
     def _record_change_to_db(
-        self, change: Change, connection_name: str, result: Dict[str, Any]
+        self, change: Change, connection_name: str, result: Dict[str, Any], user_id: str
     ):
         """
         异步记录变更到数据库
@@ -233,6 +236,7 @@ class OntologyUpdateTool(KodeTool):
             change: 变更对象
             connection_name: 连接名称
             result: 应用结果
+            user_id: 用户 ID
         """
         try:
             # 使用同步 Session
@@ -240,6 +244,7 @@ class OntologyUpdateTool(KodeTool):
 
             # 创建变更记录
             db_change = OntologyChange(
+                user_id=user_id,
                 connection_name=connection_name,
                 conversation_id=change.conversation_id,
                 change_type=ChangeType[change.change_type.upper()],

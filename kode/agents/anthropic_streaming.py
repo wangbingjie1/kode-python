@@ -1011,11 +1011,67 @@ class AnthropicStreamingAgent:
                     try:
                         tool = self.tool_map[tool_name]
 
-                        # Execute tool (async if available)
-                        if hasattr(tool, "ainvoke"):
-                            result = await tool.ainvoke(tool_args)
-                        else:
-                            result = tool.invoke(tool_args)
+                        # Execute tool
+                        # 🔥 使用 ThreadPoolExecutor + 进度轮询模式，同时传递 user_context
+                        import concurrent.futures
+                        import queue as thread_queue
+                        from kode.utils.context import get_current_user_id, get_current_conversation_id, set_user_context
+
+                        # 获取工具的 execution_context 中的 progress_queue
+                        progress_queue = None
+                        if hasattr(tool, "_execution_context") and tool._execution_context:
+                            progress_queue = tool._execution_context.get("message_queue")
+                            logger.info(f"[Tool Execution] Tool {tool_name} has progress_queue: {progress_queue is not None}")
+
+                        # 🔑 提前获取当前的 user_context（ContextVar 不会自动跨线程传递）
+                        current_user_id = None
+                        current_conversation_id = None
+                        try:
+                            current_user_id = get_current_user_id()
+                            current_conversation_id = get_current_conversation_id()
+                        except RuntimeError:
+                            logger.warning(f"[Tool Execution] No user context available")
+
+                        def invoke_with_context():
+                            """在新线程中执行工具，并恢复 user_context"""
+                            if current_user_id:
+                                set_user_context(
+                                    user_id=current_user_id,
+                                    conversation_id=current_conversation_id
+                                )
+                            return tool.invoke(tool_args)
+
+                        # 在线程池中执行工具
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                            future = executor.submit(invoke_with_context)
+
+                            # 周期性检查进度队列，直到工具执行完成
+                            while not future.done():
+                                # 检查 progress_queue 并 yield 进度消息
+                                if progress_queue:
+                                    while True:
+                                        try:
+                                            progress_msg = progress_queue.get_nowait()
+                                            logger.info(f"[Tool Execution] Yielding progress: {progress_msg.get('content', '')[:50]}")
+                                            yield progress_msg
+                                        except thread_queue.Empty:
+                                            break
+
+                                # 等待一小段时间再检查
+                                await asyncio.sleep(0.2)
+
+                            # 获取工具执行结果
+                            result = future.result()
+
+                            # 最终清空 progress_queue
+                            if progress_queue:
+                                while True:
+                                    try:
+                                        progress_msg = progress_queue.get_nowait()
+                                        logger.info(f"[Tool Execution] Final progress: {progress_msg.get('content', '')[:50]}")
+                                        yield progress_msg
+                                    except thread_queue.Empty:
+                                        break
 
                         if self.verbose:
                             logger.info(f"Tool result: {str(result)[:200]}")

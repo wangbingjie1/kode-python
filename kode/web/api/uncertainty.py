@@ -38,7 +38,7 @@ router = APIRouter()
 
 
 def _get_ontology_file(connection_name: str, user_id: str = None) -> Path:
-    """获取本体文件路径（优先 v3，回退到 v2）
+    """获取本体文件路径（优先 v3，回退到 v2，再回退到 business_context）
 
     Args:
         connection_name: 数据库连接名
@@ -64,7 +64,12 @@ def _get_ontology_file(connection_name: str, user_id: str = None) -> Path:
         return v3_file
 
     # 回退到 v2 版本
-    return base_path / "ontology_v2.json"
+    v2_file = base_path / "ontology_v2.json"
+    if v2_file.exists():
+        return v2_file
+
+    # 再回退到 business_context.json（业务理解问卷结果）
+    return base_path / "business_context.json"
 
 
 def _get_domains_dir(connection_name: str, user_id: str = None) -> Path:
@@ -379,6 +384,28 @@ async def sidebar_load_uncertainties(request: SidebarLoadRequest):
 
         # 从本体文件中提取 uncertainties
         all_uncertainties = ontology_data.get("uncertainties", [])
+
+        # 检查是否是 business_context.json（业务理解问卷结果，没有 uncertainties）
+        # 判断依据：有 "answers" 或 "qa_pairs" 字段，但没有 "uncertainties" 或 "entities"
+        is_business_context_only = (
+            ("answers" in ontology_data or "qa_pairs" in ontology_data) and
+            "entities" not in ontology_data and
+            len(all_uncertainties) == 0
+        )
+
+        if is_business_context_only:
+            return SidebarLoadResponse(
+                status="business_context_only",
+                connection_name=request.connection_name,
+                total_count=0,
+                filtered_count=0,
+                groups=[],
+                summary={"high": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
+                         "medium": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
+                         "low": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0}},
+                can_build_ontology=False,
+                message="业务理解问卷已完成，但本体尚未构建。请让 AI 继续构建数据库本体。"
+            )
 
         # 计算总统计
         summary = _compute_summary(all_uncertainties)
