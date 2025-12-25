@@ -13,6 +13,9 @@ from pathlib import Path
 
 from kode.core.model_manager import ModelManager
 from kode.tools.ontology_update.update_tool import OntologyUpdateTool
+from kode.utils.context import get_current_user_id
+from kode.utils.path_utils import get_safe_connection_path
+from kode.utils.config import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +325,7 @@ class OntologyDescriptionUpdater:
         uncertainty: Dict,
         answer: str,
         conversation_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         从不确定性回答中更新本体实体描述
@@ -333,6 +337,7 @@ class OntologyDescriptionUpdater:
             uncertainty: 不确定性问题对象（包含 entity, question 等字段）
             answer: 用户的答案
             conversation_id: 对话ID（用于记录变更）
+            user_id: 用户 ID（用于用户隔离路径，如果为 None 则自动获取）
 
         Returns:
             {
@@ -378,8 +383,19 @@ class OntologyDescriptionUpdater:
                     "message": f"无法解析实体: {entity_str}",
                 }
 
-            # 2. 加载本体文件（优先 v3，回退到 v2）
-            ontology_base = Path("ontology_store") / connection_name
+            # 2. 加载本体文件（优先 v3，回退到 v2）- 支持用户隔离路径
+            # 获取用户 ID（支持用户隔离）
+            if user_id is None:
+                user_id = get_current_user_id()
+
+            # 获取配置的 ontology_path
+            config = ConfigManager()
+            ontology_path = config.get("storage.ontology_path", "./ontology_store")
+
+            # 构建用户隔离路径：ontology_store/{user_id}/{connection_name}/
+            safe_conn_name = get_safe_connection_path(connection_name)
+            ontology_base = Path(ontology_path) / user_id / safe_conn_name
+
             ontology_file = ontology_base / "ontology_v3.json"
             if not ontology_file.exists():
                 ontology_file = ontology_base / "ontology_v2.json"

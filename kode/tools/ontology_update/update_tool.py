@@ -13,6 +13,9 @@ from pathlib import Path
 from kode.tools.base import KodeTool
 from kode.tools.ontology_update.update_manager import OntologyUpdateManager, Change
 from kode.utils.logger import get_logger
+from kode.utils.context import get_current_user_id
+from kode.utils.path_utils import get_safe_connection_path
+from kode.utils.config import ConfigManager
 from kode.database.session import SessionLocal
 from kode.models.ontology_change import OntologyChange, ChangeType, ChangeStatus
 
@@ -114,13 +117,20 @@ class OntologyUpdateTool(KodeTool):
         """
         global _GLOBAL_MANAGERS, _GLOBAL_LOCK
 
+        # 获取用户 ID 用于隔离
+        user_id = get_current_user_id()
+        cache_key = f"{user_id}/{connection_name}"
+
         with _GLOBAL_LOCK:
-            if connection_name not in _GLOBAL_MANAGERS:
+            if cache_key not in _GLOBAL_MANAGERS:
+                # 获取配置的 ontology_path
+                config = ConfigManager()
+                ontology_store_path = config.get("storage.ontology_path", "./ontology_store")
+
                 # 确定本体文件路径（优先 v3，回退到 v2）
-                # 🔑 修复：添加 user_id 隔离
-                from kode.utils.context import get_current_user_id
-                user_id = get_current_user_id()
-                ontology_base = Path(f"ontology_store/{user_id}/{connection_name}")
+                # 使用用户隔离路径：ontology_store/{user_id}/{connection_name}/
+                safe_conn_name = get_safe_connection_path(connection_name)
+                ontology_base = Path(ontology_store_path) / user_id / safe_conn_name
                 ontology_path = ontology_base / "ontology_v3.json"
                 if not ontology_path.exists():
                     ontology_path = ontology_base / "ontology_v2.json"
@@ -130,10 +140,10 @@ class OntologyUpdateTool(KodeTool):
 
                 # 创建管理器
                 manager = OntologyUpdateManager(connection_name, str(ontology_path))
-                _GLOBAL_MANAGERS[connection_name] = manager
-                logger.info(f"✅ 创建本体更新管理器: {connection_name}")
+                _GLOBAL_MANAGERS[cache_key] = manager
+                logger.info(f"✅ 创建本体更新管理器: {cache_key}")
 
-            return _GLOBAL_MANAGERS[connection_name]
+            return _GLOBAL_MANAGERS[cache_key]
 
     def _run(
         self,
