@@ -1364,36 +1364,44 @@ class HeartbeatSessionManager:
     """
     管理 SSE 心跳连接。
 
-    每个用户维持一个心跳连接，用于：
+    支持同一用户多端同时连接（多标签页/多设备）：
     1. 验证连接是否存活
     2. 防止代理/负载均衡器断开空闲连接
     3. 前端据此显示"已连接"状态
     """
 
     def __init__(self):
-        self._sessions: Dict[str, asyncio.Event] = {}  # user_id -> cancel_event
+        # user_id -> List[session_id -> cancel_event]
+        # 支持同一用户多个并发连接
+        self._sessions: Dict[str, Dict[str, asyncio.Event]] = {}
 
-    def register(self, user_id: str) -> asyncio.Event:
-        """注册心跳会话，返回取消事件"""
-        # 如果已有会话，先取消旧的
-        if user_id in self._sessions:
-            self._sessions[user_id].set()
+    def register(self, user_id: str, session_id: str) -> asyncio.Event:
+        """注册心跳会话，返回取消事件（支持多端）"""
+        if user_id not in self._sessions:
+            self._sessions[user_id] = {}
 
         cancel_event = asyncio.Event()
-        self._sessions[user_id] = cancel_event
-        logger.info(f"[Heartbeat] Registered session for user {user_id}")
+        self._sessions[user_id][session_id] = cancel_event
+        logger.info(f"[Heartbeat] Registered session {session_id} for user {user_id} (total: {len(self._sessions[user_id])})")
         return cancel_event
 
-    def cancel(self, user_id: str):
-        """取消用户的心跳会话"""
-        if user_id in self._sessions:
-            self._sessions[user_id].set()
-            del self._sessions[user_id]
-            logger.info(f"[Heartbeat] Cancelled session for user {user_id}")
+    def cancel(self, user_id: str, session_id: str):
+        """取消用户的特定心跳会话"""
+        if user_id in self._sessions and session_id in self._sessions[user_id]:
+            self._sessions[user_id][session_id].set()
+            del self._sessions[user_id][session_id]
+            logger.info(f"[Heartbeat] Cancelled session {session_id} for user {user_id} (remaining: {len(self._sessions.get(user_id, {}))})")
+
+            # 如果该用户没有剩余连接，清理用户条目
+            if not self._sessions[user_id]:
+                del self._sessions[user_id]
 
     def is_connected(self, user_id: str) -> bool:
         """检查用户是否有活跃的心跳连接"""
-        return user_id in self._sessions and not self._sessions[user_id].is_set()
+        if user_id not in self._sessions:
+            return False
+        # 至少有一个未取消的连接
+        return any(not event.is_set() for event in self._sessions[user_id].values())
 
 
 heartbeat_session_manager = HeartbeatSessionManager()
@@ -1401,6 +1409,7 @@ heartbeat_session_manager = HeartbeatSessionManager()
 
 async def heartbeat_generator(
     user_id: str,
+    session_id: str,
     cancel_event: asyncio.Event,
     interval: int = 30,
 ) -> AsyncGenerator[str, None]:
@@ -1418,10 +1427,14 @@ async def heartbeat_generator(
         connect_data = json.dumps({
             "type": "connected",
             "content": "",
-            "metadata": {"user_id": user_id, "timestamp": time.time()}
+            "metadata": {
+                "user_id": user_id,
+                "session_id": session_id,
+                "timestamp": time.time()
+            }
         }, ensure_ascii=False)
         yield f"data: {connect_data}\n\n"
-        logger.info(f"[Heartbeat] Started for user {user_id}")
+        logger.info(f"[Heartbeat] Started session {session_id} for user {user_id}")
 
         while not cancel_event.is_set():
             # 等待 interval 秒或被取消
@@ -1441,6 +1454,7 @@ async def heartbeat_generator(
                     "type": "heartbeat",
                     "content": "",
                     "metadata": {
+                        "session_id": session_id,
                         "timestamp": time.time(),
                         "new_token": new_token  # 前端应更新 token
                     }
@@ -1448,19 +1462,22 @@ async def heartbeat_generator(
                 yield f"data: {heartbeat_data}\n\n"
 
     except asyncio.CancelledError:
-        logger.info(f"[Heartbeat] Cancelled for user {user_id}")
+        logger.info(f"[Heartbeat] Cancelled session {session_id} for user {user_id}")
     except Exception as e:
-        logger.error(f"[Heartbeat] Error for user {user_id}: {e}")
+        logger.error(f"[Heartbeat] Error in session {session_id} for user {user_id}: {e}")
     finally:
-        heartbeat_session_manager.cancel(user_id)
+        heartbeat_session_manager.cancel(user_id, session_id)
         # 发送断开事件
         disconnect_data = json.dumps({
             "type": "disconnected",
             "content": "",
-            "metadata": {"user_id": user_id}
+            "metadata": {
+                "user_id": user_id,
+                "session_id": session_id
+            }
         }, ensure_ascii=False)
         yield f"data: {disconnect_data}\n\n"
-        logger.info(f"[Heartbeat] Ended for user {user_id}")
+        logger.info(f"[Heartbeat] Ended session {session_id} for user {user_id}")
 
 
 @router.get("/heartbeat")
@@ -1468,12 +1485,17 @@ async def sse_heartbeat(
     current_user: User = Depends(get_user_from_token_or_header),
 ):
     """
-    SSE 心跳端点 - 维持长连接状态。
+    SSE 心跳端点 - 维持长连接状态（支持多端同时连接）。
 
     前端应在登录后立即建立此连接，用于：
     1. 显示"已连接"状态
     2. 每 30 秒接收心跳，保持连接存活
     3. 检测网络断开
+
+    **支持多端登录**:
+    - 同一账号可以从多个标签页/设备同时连接
+    - 每个连接都有独立的 session_id
+    - 关闭一个标签不影响其他标签
 
     **Usage:**
     ```javascript
@@ -1487,15 +1509,20 @@ async def sse_heartbeat(
     ```
 
     **Events:**
-    - `connected`: 连接建立成功
-    - `heartbeat`: 每 30 秒一次
+    - `connected`: 连接建立成功（包含 session_id）
+    - `heartbeat`: 每 30 秒一次（包含新 token）
     - `disconnected`: 连接断开
     """
-    # 注册心跳会话
-    cancel_event = heartbeat_session_manager.register(current_user.id)
+    import uuid
+
+    # 生成唯一 session_id（用于区分多端连接）
+    session_id = str(uuid.uuid4())
+
+    # 注册心跳会话（支持同一用户多个并发连接）
+    cancel_event = heartbeat_session_manager.register(current_user.id, session_id)
 
     return StreamingResponse(
-        heartbeat_generator(current_user.id, cancel_event),
+        heartbeat_generator(current_user.id, session_id, cancel_event),
         media_type="text/event-stream; charset=utf-8",
         headers={
             "Cache-Control": "no-cache",
