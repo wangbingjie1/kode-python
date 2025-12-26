@@ -843,9 +843,21 @@ async def ai_analyze_uncertainties(
     try:
         user_id = get_current_user_id()
     except RuntimeError:
-        # 如果没有用户上下文，使用默认值（兼容非登录场景）
-        user_id = "default"
-        logger.warning("[AI分析] 无法获取用户上下文，使用默认用户")
+        # 用户上下文未设置，返回错误
+        logger.error("[AI分析] 无法获取用户上下文，需要登录")
+
+        async def error_generator():
+            yield f"data: {json.dumps({'type': 'error', 'content': '用户未登录或会话已过期，请重新登录', 'metadata': {'error_type': 'auth_error'}})}\n\n"
+
+        return StreamingResponse(
+            error_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     async def event_generator():
         try:
@@ -1006,6 +1018,15 @@ async def accept_ai_answer(request: AcceptAIAnswerRequest):
 
                 if update_result.get("status") == "success":
                     logger.info(f"✅ 本体描述已自动更新: {update_result.get('entity')}")
+
+                    # 强制同步写入磁盘，避免前端重新加载时文件还没写完
+                    try:
+                        from kode.tools.ontology_update.update_tool import OntologyUpdateTool
+                        update_tool = OntologyUpdateTool()
+                        update_tool.force_flush_all()
+                        logger.info("✅ 本体变更已同步写入磁盘")
+                    except Exception as flush_error:
+                        logger.warning(f"⚠️ 强制刷新磁盘失败（不影响功能）: {flush_error}")
         except Exception as e:
             logger.error(f"❌ 自动更新本体异常（已忽略）: {e}")
 

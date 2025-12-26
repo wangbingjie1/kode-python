@@ -225,28 +225,32 @@ class UncertaintyAnalyzer:
             return {
                 "question_id": question_id,
                 "question": question,
-                "status": "failed",
-                "error": "无法从问题中提取表名",
+                "status": "skipped",
+                "error": "此问题涉及多个表或跨表分析，建议人工回答",
                 "answer": None,
                 "confidence": None,
+                "skip_reason": "no_valid_table",
             }
 
         # 2. 验证表是否存在
         valid_tables = []
+        missing_tables = []
         for table in tables:
             if self._table_exists(connection_name, table):
                 valid_tables.append(table)
             else:
+                missing_tables.append(table)
                 logger.warning(f"[AI分析] 表不存在: {table}")
 
         if not valid_tables:
             return {
                 "question_id": question_id,
                 "question": question,
-                "status": "failed",
-                "error": f"涉及的表都不存在: {tables}",
+                "status": "skipped",
+                "error": f"涉及的表在数据库中不存在（{', '.join(missing_tables)}），建议人工回答",
                 "answer": None,
                 "confidence": None,
+                "skip_reason": "tables_not_found",
             }
 
         # 3. 生成 SQL 查询
@@ -255,7 +259,11 @@ class UncertaintyAnalyzer:
             tables=valid_tables,
             fields=fields,
             schema_context=schema_context,
+            connection_name=connection_name,
         )
+        logger.info(f"[AI分析] 生成 SQL 数量: {len(sql_queries) if sql_queries else 0}")
+        for i, sq in enumerate(sql_queries or []):
+            logger.info(f"[AI分析] SQL[{i}]: {sq.get('sql', '')[:150]}...")
 
         if not sql_queries:
             return {
@@ -289,6 +297,7 @@ class UncertaintyAnalyzer:
                 })
                 executed_sqls.append(sql)
             except asyncio.TimeoutError:
+                logger.warning(f"[AI分析] SQL 超时: {sql[:100]}...")
                 query_results.append({
                     "sql": sql,
                     "purpose": purpose,
@@ -296,6 +305,8 @@ class UncertaintyAnalyzer:
                     "error": "查询超时",
                 })
             except Exception as e:
+                logger.error(f"[AI分析] SQL 执行失败: {sql[:200]}...")
+                logger.error(f"[AI分析] 错误详情: {e}", exc_info=True)
                 query_results.append({
                     "sql": sql,
                     "purpose": purpose,
@@ -306,11 +317,18 @@ class UncertaintyAnalyzer:
         # 检查是否有成功的查询
         successful_queries = [q for q in query_results if q["status"] == "success"]
         if not successful_queries:
+            # 汇总错误原因
+            error_msgs = []
+            for qr in query_results:
+                if qr.get("error"):
+                    error_msgs.append(qr["error"][:100])
+            error_summary = "; ".join(error_msgs[:2]) if error_msgs else "未知错误"
+
             return {
                 "question_id": question_id,
                 "question": question,
                 "status": "failed",
-                "error": "所有 SQL 查询都失败了",
+                "error": f"SQL 查询失败: {error_summary}",
                 "sql_executed": executed_sqls,
                 "query_results": query_results,
                 "answer": None,
@@ -362,7 +380,7 @@ class UncertaintyAnalyzer:
         if match:
             tables.append(match.group(1))
             fields.extend([f.strip() for f in match.group(2).split(",")])
-            return tables, fields
+            return self._filter_valid_table_names(tables), fields
 
         # 检查是否有 table.field 格式
         if "." in entity and "(" not in entity:
@@ -370,7 +388,7 @@ class UncertaintyAnalyzer:
             if len(parts) == 2:
                 tables.append(parts[0].strip())
                 fields.append(parts[1].strip())
-                return tables, fields
+                return self._filter_valid_table_names(tables), fields
 
         # 逗号分隔的表名
         for part in entity.split(","):
@@ -383,7 +401,42 @@ class UncertaintyAnalyzer:
                 else:
                     tables.append(part)
 
-        return tables, fields
+        return self._filter_valid_table_names(tables), fields
+
+    def _filter_valid_table_names(self, tables: List[str]) -> List[str]:
+        """
+        过滤掉无效的表名（中文、纯描述性文字等）
+
+        有效表名规则：
+        - 只包含字母、数字、下划线
+        - 不以数字开头
+        - 不是纯中文或包含中文
+        """
+        valid_tables = []
+        for table in tables:
+            # 跳过空值
+            if not table:
+                continue
+
+            # 跳过包含中文字符的
+            if re.search(r'[\u4e00-\u9fff]', table):
+                logger.debug(f"[AI分析] 跳过中文表名: {table}")
+                continue
+
+            # 跳过不符合表名格式的（只允许字母数字下划线，且不以数字开头）
+            if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table):
+                logger.debug(f"[AI分析] 跳过无效表名格式: {table}")
+                continue
+
+            # 跳过常见的描述性词汇
+            skip_words = {'fields', 'field', 'table', 'tables', 'timestamp', 'multiple', 'various'}
+            if table.lower() in skip_words:
+                logger.debug(f"[AI分析] 跳过描述性词汇: {table}")
+                continue
+
+            valid_tables.append(table)
+
+        return valid_tables
 
     def _table_exists(self, connection_name: str, table_name: str) -> bool:
         """检查表是否存在"""
@@ -400,6 +453,7 @@ class UncertaintyAnalyzer:
         tables: List[str],
         fields: List[str],
         schema_context: Dict,
+        connection_name: str = None,
     ) -> List[Dict]:
         """
         使用 LLM 生成分析 SQL
@@ -412,6 +466,23 @@ class UncertaintyAnalyzer:
         q_type = uncertainty.get("type", "")
         entity = uncertainty.get("entity", "")
 
+        # 获取数据库类型
+        db_type = "MySQL"  # 默认
+        if connection_name:
+            try:
+                engine = db_manager.get_engine(connection_name)
+                dialect = engine.dialect.name
+                db_type_map = {
+                    "mysql": "MySQL",
+                    "postgresql": "PostgreSQL",
+                    "sqlite": "SQLite",
+                    "mssql": "SQL Server",
+                    "oracle": "Oracle",
+                }
+                db_type = db_type_map.get(dialect, dialect.upper())
+            except Exception:
+                pass
+
         # 获取相关表的 schema 信息
         table_schemas = []
         for table in tables:
@@ -423,8 +494,16 @@ class UncertaintyAnalyzer:
 
         schema_str = "\n".join(table_schemas) if table_schemas else "无可用 schema 信息"
 
+        # 根据数据库类型设置 LIMIT 语法
+        limit_hint = "LIMIT 100"
+        if db_type == "SQL Server":
+            limit_hint = "TOP 100"
+        elif db_type == "Oracle":
+            limit_hint = "FETCH FIRST 100 ROWS ONLY (或 ROWNUM <= 100)"
+
         prompt = f"""根据以下不确定性问题，生成用于分析的 SQL 查询。
 
+数据库类型: {db_type}
 问题类型: {q_type}
 问题: {question}
 上下文: {context}
@@ -437,8 +516,9 @@ class UncertaintyAnalyzer:
 要求:
 1. 生成 1-3 个 SQL 查询来验证/回答这个问题
 2. 每个查询必须有明确目的
-3. 所有 SELECT 查询必须加 LIMIT 100
-4. 返回 JSON 格式，格式如下:
+3. 所有 SELECT 查询必须限制返回行数（使用 {limit_hint}）
+4. SQL 语法必须兼容 {db_type}
+5. 返回 JSON 格式，格式如下:
 
 ```json
 [
@@ -454,6 +534,7 @@ class UncertaintyAnalyzer:
                 None,
                 lambda: model.invoke(prompt).content
             )
+            logger.debug(f"[AI分析] LLM 生成 SQL 响应: {response[:500]}...")
 
             # 解析 JSON
             json_match = re.search(r"\[[\s\S]*\]", response)
@@ -464,10 +545,13 @@ class UncertaintyAnalyzer:
                 for q in queries:
                     if isinstance(q, dict) and "sql" in q:
                         valid_queries.append(q)
+                logger.info(f"[AI分析] 解析出 {len(valid_queries)} 个有效 SQL")
                 return valid_queries
+            else:
+                logger.warning(f"[AI分析] 无法从响应中解析 JSON: {response[:200]}...")
 
         except Exception as e:
-            logger.error(f"生成 SQL 失败: {e}")
+            logger.error(f"生成 SQL 失败: {e}", exc_info=True)
 
         # 回退：使用预定义的 SQL 模板
         return self._generate_fallback_sql(tables, fields, q_type)

@@ -15,6 +15,9 @@
         <svg v-else-if="result.status === 'partial'" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01" />
         </svg>
+        <svg v-else-if="result.status === 'skipped'" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
         <svg v-else class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -48,9 +51,15 @@
           </div>
         </div>
 
-        <!-- 错误信息 -->
-        <div v-if="result.error" class="mt-2 rounded-lg bg-rose-50 p-3">
-          <p class="text-sm text-rose-600">{{ result.error }}</p>
+        <!-- 错误/跳过信息 -->
+        <div
+          v-if="result.error"
+          class="mt-2 rounded-lg p-3"
+          :class="result.status === 'skipped' ? 'bg-slate-50' : 'bg-rose-50'"
+        >
+          <p class="text-sm" :class="result.status === 'skipped' ? 'text-slate-600' : 'text-rose-600'">
+            {{ result.error }}
+          </p>
         </div>
 
         <!-- 已采纳/已忽略状态 -->
@@ -128,6 +137,8 @@ const itemClass = computed(() => {
       return 'border-amber-200 bg-white'
     case 'failed':
       return 'border-rose-200 bg-white'
+    case 'skipped':
+      return 'border-slate-200 bg-slate-50/50'
     default:
       return 'border-[#eadfd3] bg-white'
   }
@@ -141,6 +152,8 @@ const iconClass = computed(() => {
       return 'bg-amber-100 text-amber-600'
     case 'failed':
       return 'bg-rose-100 text-rose-600'
+    case 'skipped':
+      return 'bg-slate-100 text-slate-500'
     default:
       return 'bg-gray-100 text-gray-600'
   }

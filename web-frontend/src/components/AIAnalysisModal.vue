@@ -96,7 +96,7 @@
           <!-- 统计信息 -->
           <div class="rounded-xl bg-[#f8f6f3] p-4">
             <div class="flex items-center justify-between">
-              <div class="flex items-center gap-4 text-sm">
+              <div class="flex items-center gap-4 text-sm flex-wrap">
                 <span class="flex items-center gap-1.5">
                   <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
                   已解决: {{ resolvedCount }}
@@ -105,7 +105,11 @@
                   <span class="h-2 w-2 rounded-full bg-amber-500"></span>
                   部分解决: {{ partialCount }}
                 </span>
-                <span class="flex items-center gap-1.5">
+                <span v-if="skippedCount > 0" class="flex items-center gap-1.5">
+                  <span class="h-2 w-2 rounded-full bg-slate-400"></span>
+                  需人工: {{ skippedCount }}
+                </span>
+                <span v-if="failedCount > 0" class="flex items-center gap-1.5">
                   <span class="h-2 w-2 rounded-full bg-rose-500"></span>
                   失败: {{ failedCount }}
                 </span>
@@ -193,6 +197,7 @@ let eventSource: EventSource | null = null
 const resolvedCount = computed(() => results.value.filter(r => r.status === 'resolved').length)
 const partialCount = computed(() => results.value.filter(r => r.status === 'partial').length)
 const failedCount = computed(() => results.value.filter(r => r.status === 'failed').length)
+const skippedCount = computed(() => results.value.filter(r => r.status === 'skipped').length)
 const acceptedCount = computed(() => results.value.filter(r => r.accepted).length)
 
 // 开始分析
@@ -202,9 +207,13 @@ const startAnalysis = () => {
   results.value = []
   progress.value = { current: 0, total: 0 }
 
-  // 构建 SSE URL
+  // 构建 SSE URL（EventSource 不支持自定义 headers，需要通过 query parameter 传递 token）
   const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
-  const url = `${baseUrl}/api/uncertainty/sidebar/ai-analyze?connection_name=${encodeURIComponent(props.connectionName)}`
+  const token = localStorage.getItem('access_token')
+  let url = `${baseUrl}/api/uncertainty/sidebar/ai-analyze?connection_name=${encodeURIComponent(props.connectionName)}`
+  if (token) {
+    url += `&token=${encodeURIComponent(token)}`
+  }
 
   eventSource = new EventSource(url)
 
@@ -276,6 +285,9 @@ const cancelAnalysis = () => {
   isAnalyzing.value = false
 }
 
+// 记录是否有任何采纳操作（用于关闭时通知父组件刷新）
+const hasAccepted = ref(false)
+
 // 采纳答案
 const acceptAnswer = async (result: AnalysisResult) => {
   if (!result.answer || result.accepted) return
@@ -292,7 +304,8 @@ const acceptAnswer = async (result: AnalysisResult) => {
     })
 
     result.accepted = true
-    emit('accepted')
+    hasAccepted.value = true
+    // 不在这里 emit('accepted')，等关闭弹窗时再统一刷新
   } catch (error: any) {
     console.error('采纳答案失败:', error)
     errorMessage.value = error.message || '采纳失败'
@@ -310,6 +323,10 @@ const ignoreAnswer = (result: AnalysisResult) => {
 const handleClose = () => {
   if (isAnalyzing.value) {
     cancelAnalysis()
+  }
+  // 如果有采纳过答案，通知父组件刷新列表
+  if (hasAccepted.value) {
+    emit('accepted')
   }
   emit('close')
 }
