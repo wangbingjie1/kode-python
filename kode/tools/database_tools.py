@@ -2,10 +2,12 @@
 
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import signal
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -83,12 +85,12 @@ class DatabaseExecuteQueryInput(BaseModel):
         description="Parameters for parameterized query (e.g., {'id': 123, 'name': 'test'})"
     )
     fetch_limit: int = Field(
-        default=100,
-        description="Maximum number of rows to fetch (for SELECT queries)"
+        default=50,
+        description="Maximum number of rows to fetch (for SELECT queries). Keep small to avoid context overflow."
     )
     timeout: int = Field(
-        default=30,
-        description="Query timeout in seconds"
+        default=15,
+        description="Query timeout in seconds. If query times out, simplify it (add WHERE, LIMIT, or use aggregation)."
     )
 
 
@@ -1408,34 +1410,33 @@ class DatabaseExecuteQueryTool(KodeTool):
     name: str = "DatabaseExecuteQuery"
     description: str = """Execute SQL queries on a database.
 
-**时间占位符（自动转换）**：
-格式: `@时间描述:格式@`，格式可选：ms(默认)、s、date、datetime
+⚠️ **查询优化要求（必读）**：
+1. **超时限制**: 默认 15 秒超时，大表查询务必添加 WHERE 条件或 LIMIT
+2. **结果行数**: 默认最多返回 50 行，结果会进入上下文，避免查询返回大量数据
+3. **避免全表扫描**: 禁止 `SELECT * FROM 大表` 无条件查询
+4. **优先聚合**: 统计类需求用 COUNT/SUM/AVG，不要返回明细
+5. **超时后策略**: 如果查询超时，请简化查询（加 WHERE、减少 JOIN、用聚合替代明细）
 
-支持的时间描述：
-- 绝对: @2025年10月@, @2025-10@, @2024年12月@
-- 相对: @本月@, @上月@, @今年@, @去年@, @今天@, @昨天@
-- 动态: @最近7天@, @最近30天@
-
-输出格式（后缀）：
-- 无后缀或 :ms → 毫秒时间戳 (1759248000000)
-- :s → 秒时间戳 (1759248000)
-- :date → 日期字符串 ('2025-10-01')
-- :datetime → 日期时间字符串 ('2025-10-01 00:00:00')
-
-示例：
+**推荐做法**：
 ```sql
--- 时间戳字段（毫秒）
-WHERE pay_at >= @2025年10月@ AND pay_at < @2025年11月@
+-- ✅ 好：有条件限制
+SELECT * FROM orders WHERE created_at > @最近7天@ LIMIT 20
 
--- datetime 字段
-WHERE created_at >= @上月:datetime@ AND created_at < @本月:datetime@
+-- ✅ 好：聚合统计
+SELECT COUNT(*), SUM(amount) FROM orders WHERE status = 'paid'
 
--- date 字段
-WHERE order_date >= @最近30天:date@
+-- ❌ 差：无条件全表查询（会超时或返回过多数据）
+SELECT * FROM orders
 ```
 
+**时间占位符（自动转换）**：
+格式: `@时间描述:格式@`，格式可选：ms(默认)、s、date、datetime
+- 绝对: @2025年10月@, @2025-10@
+- 相对: @本月@, @上月@, @今年@, @今天@, @昨天@
+- 动态: @最近7天@, @最近30天@
+
 **其他功能**：
-- SELECT: 只读查询，返回结果（受 fetch_limit 限制）
+- SELECT: 只读查询，受 fetch_limit 和 timeout 限制
 - INSERT/UPDATE/DELETE: 需要权限确认"""
 
     args_schema: Type[BaseModel] = DatabaseExecuteQueryInput
@@ -1570,23 +1571,118 @@ WHERE order_date >= @最近30天:date@
         replaced_sql = re.sub(pattern, replace_match, sql)
         return replaced_sql, replacements
 
+    # 结果大小限制（字符数）
+    MAX_RESULT_CHARS: ClassVar[int] = 50000  # 50KB，约 12500 个 token
+
+    def _execute_with_timeout(
+        self,
+        engine,
+        sql: str,
+        params: Optional[Dict[str, Any]],
+        timeout: int,
+        fetch_limit: int,
+        query_type: str
+    ) -> Dict[str, Any]:
+        """
+        在独立线程中执行查询，支持超时控制。
+
+        Args:
+            engine: SQLAlchemy engine
+            sql: SQL query
+            params: Query parameters
+            timeout: Timeout in seconds
+            fetch_limit: Max rows to fetch
+            query_type: Query type (SELECT, INSERT, etc.)
+
+        Returns:
+            Query result dict
+
+        Raises:
+            TimeoutError: If query exceeds timeout
+            Exception: Other query errors
+        """
+        result_container = {"result": None, "error": None}
+
+        def execute_query():
+            try:
+                with engine.connect() as conn:
+                    # Execute query
+                    if params:
+                        result = conn.execute(text(sql), params)
+                    else:
+                        result = conn.execute(text(sql))
+
+                    if query_type == "SELECT":
+                        rows = result.fetchmany(fetch_limit)
+                        columns = list(result.keys())
+                        has_more = len(rows) == fetch_limit
+                        result_container["result"] = {
+                            "rows": rows,
+                            "columns": columns,
+                            "has_more": has_more
+                        }
+                    else:
+                        conn.commit()
+                        affected_rows = result.rowcount if hasattr(result, 'rowcount') else 0
+                        result_container["result"] = {"affected_rows": affected_rows}
+            except Exception as e:
+                result_container["error"] = e
+
+        # 使用线程执行查询
+        thread = threading.Thread(target=execute_query)
+        thread.start()
+        thread.join(timeout=timeout)
+
+        if thread.is_alive():
+            # 查询超时 - 线程仍在运行
+            # 注意：Python 无法强制杀死线程，但连接会在下次请求时重置
+            raise TimeoutError(f"查询超时（{timeout}秒）。请简化查询：添加 WHERE 条件、减少 JOIN、使用 LIMIT、或改用聚合函数。")
+
+        if result_container["error"]:
+            raise result_container["error"]
+
+        return result_container["result"]
+
+    def _truncate_result(self, data: List[Dict], columns: List[str], max_chars: int) -> tuple:
+        """
+        截断结果以避免上下文爆炸。
+
+        Returns:
+            (truncated_data, was_truncated, char_count)
+        """
+        result_json = json.dumps(data, ensure_ascii=False)
+        if len(result_json) <= max_chars:
+            return data, False, len(result_json)
+
+        # 逐行截断
+        truncated = []
+        current_size = 2  # []
+        for row in data:
+            row_json = json.dumps(row, ensure_ascii=False)
+            if current_size + len(row_json) + 1 > max_chars:
+                break
+            truncated.append(row)
+            current_size += len(row_json) + 1  # +1 for comma
+
+        return truncated, True, len(result_json)
+
     def _run(
         self,
         connection_name: str,
         sql: str,
         params: Optional[Dict[str, Any]] = None,
-        fetch_limit: int = 100,
-        timeout: int = 30,
+        fetch_limit: int = 50,
+        timeout: int = 15,
     ) -> str:
         """
-        Execute SQL query.
+        Execute SQL query with timeout and result size limits.
 
         Args:
             connection_name: Connection name to execute on
             sql: SQL query to execute
             params: Parameters for parameterized query
-            fetch_limit: Max rows to fetch (SELECT only)
-            timeout: Query timeout in seconds
+            fetch_limit: Max rows to fetch (SELECT only), default 50
+            timeout: Query timeout in seconds, default 15
 
         Returns:
             Query results as JSON
@@ -1618,82 +1714,98 @@ WHERE order_date >= @最近30天:date@
                 # This will be caught by the permission system
                 pass
 
-            # Get engine and execute
+            # 限制 fetch_limit 最大值
+            fetch_limit = min(fetch_limit, 200)
+
+            # Get engine and execute with timeout
             engine = db_manager.get_engine(connection_name)
 
-            with engine.connect() as conn:
-                # Set timeout if supported
-                try:
-                    conn.execute(text(f"SET statement_timeout = {timeout * 1000}"))  # PostgreSQL
-                except Exception:
-                    pass  # Not all databases support this
+            query_result = self._execute_with_timeout(
+                engine=engine,
+                sql=sql,
+                params=params,
+                timeout=timeout,
+                fetch_limit=fetch_limit,
+                query_type=query_type
+            )
 
-                # Execute query
-                if params:
-                    result = conn.execute(text(sql), params)
-                else:
-                    result = conn.execute(text(sql))
+            # Process results based on query type
+            if query_type == "SELECT":
+                rows = query_result["rows"]
+                columns = query_result["columns"]
+                has_more = query_result["has_more"]
 
-                # Process results based on query type
-                if query_type == "SELECT":
-                    # Fetch results
-                    rows = result.fetchmany(fetch_limit)
-                    columns = list(result.keys())
+                # Convert to list of dicts
+                data = []
+                for row in rows:
+                    row_dict = {}
+                    for i, col in enumerate(columns):
+                        value = row[i]
+                        # Convert non-JSON-serializable types
+                        if isinstance(value, (datetime,)):
+                            value = value.isoformat()
+                        elif not isinstance(value, (str, int, float, bool, type(None))):
+                            value = str(value)
+                        row_dict[col] = value
+                    data.append(row_dict)
 
-                    # Convert to list of dicts
-                    data = []
-                    for row in rows:
-                        row_dict = {}
-                        for i, col in enumerate(columns):
-                            value = row[i]
-                            # Convert non-JSON-serializable types
-                            if isinstance(value, (datetime,)):
-                                value = value.isoformat()
-                            elif not isinstance(value, (str, int, float, bool, type(None))):
-                                value = str(value)
-                            row_dict[col] = value
-                        data.append(row_dict)
+                # 检查结果大小并截断
+                data, was_truncated, char_count = self._truncate_result(
+                    data, columns, self.MAX_RESULT_CHARS
+                )
 
-                    # Check if more rows available
-                    has_more = len(rows) == fetch_limit
+                message = f"查询返回 {len(data)} 行"
+                if has_more:
+                    message += f" (限制 {fetch_limit} 行，可能有更多)"
+                if was_truncated:
+                    message += f" ⚠️ 结果过大已截断（{char_count} 字符 → {self.MAX_RESULT_CHARS} 字符）"
 
-                    result_dict = {
-                        "status": "success",
-                        "query_type": query_type,
-                        "row_count": len(data),
-                        "has_more": has_more,
-                        "columns": columns,
-                        "data": data,
-                        "executed_sql": sql,  # 实际执行的 SQL（时间戳已替换）
-                        "connection_name": connection_name,
-                        "message": f"查询返回 {len(data)} 行" +
-                                  (f" (限制 {fetch_limit} 行，可能有更多)" if has_more else ""),
-                    }
-                    if time_replacements:
-                        result_dict["original_sql"] = original_sql  # AI 写的原始 SQL（带占位符）
-                        result_dict["time_replacements"] = time_replacements
-                    return json.dumps(result_dict, indent=2, ensure_ascii=False)
+                result_dict = {
+                    "status": "success",
+                    "query_type": query_type,
+                    "row_count": len(data),
+                    "has_more": has_more,
+                    "was_truncated": was_truncated,
+                    "columns": columns,
+                    "data": data,
+                    "executed_sql": sql,
+                    "connection_name": connection_name,
+                    "message": message,
+                }
+                if time_replacements:
+                    result_dict["original_sql"] = original_sql
+                    result_dict["time_replacements"] = time_replacements
+                return json.dumps(result_dict, indent=2, ensure_ascii=False)
 
-                else:
-                    # Write operation - commit and return affected rows
-                    conn.commit()
-                    affected_rows = result.rowcount if hasattr(result, 'rowcount') else 0
+            else:
+                # Write operation
+                affected_rows = query_result["affected_rows"]
 
-                    result_dict = {
-                        "status": "success",
-                        "query_type": query_type,
-                        "affected_rows": affected_rows,
-                        "executed_sql": sql,  # 实际执行的 SQL
-                        "connection_name": connection_name,
-                        "message": f"{query_type} 操作完成，影响 {affected_rows} 行",
-                    }
-                    if time_replacements:
-                        result_dict["original_sql"] = original_sql
-                        result_dict["time_replacements"] = time_replacements
-                    return json.dumps(result_dict, indent=2,
-                        ensure_ascii=False,
-                    )
+                result_dict = {
+                    "status": "success",
+                    "query_type": query_type,
+                    "affected_rows": affected_rows,
+                    "executed_sql": sql,
+                    "connection_name": connection_name,
+                    "message": f"{query_type} 操作完成，影响 {affected_rows} 行",
+                }
+                if time_replacements:
+                    result_dict["original_sql"] = original_sql
+                    result_dict["time_replacements"] = time_replacements
+                return json.dumps(result_dict, indent=2, ensure_ascii=False)
 
+        except TimeoutError as e:
+            return json.dumps(
+                {
+                    "status": "timeout",
+                    "message": str(e),
+                    "suggestion": "简化查询策略：1) 添加 WHERE 条件限制范围 2) 使用 LIMIT 限制行数 3) 用 COUNT/SUM 聚合替代明细 4) 减少 JOIN 数量",
+                    "query_type": self._get_query_type(sql),
+                    "executed_sql": sql,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
         except Exception as e:
             error_msg = str(e)
             # Extract useful error information
@@ -1701,8 +1813,8 @@ WHERE order_date >= @最近30天:date@
                 suggestion = "Check SQL syntax"
             elif "permission denied" in error_msg.lower() or "access denied" in error_msg.lower():
                 suggestion = "Check database permissions"
-            elif "timeout" in error_msg.lower():
-                suggestion = "Query timed out, try optimizing or increasing timeout"
+            elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+                suggestion = "查询超时，请简化查询：添加 WHERE 条件、使用 LIMIT、或改用聚合函数"
             else:
                 suggestion = "Check query and parameters"
 

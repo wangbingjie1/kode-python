@@ -168,3 +168,26 @@ class SkipQuestionResponse(BaseModel):
     message: str
     remaining_high_priority: int
     can_build_ontology: bool
+
+
+# ============== AI 分析相关 schemas ==============
+
+
+class AcceptAIAnswerRequest(BaseModel):
+    """采纳 AI 分析答案请求"""
+
+    connection_name: str = Field(..., description="数据库连接名称")
+    uncertainty_id: str = Field(..., description="问题 ID")
+    answer: str = Field(..., description="AI 生成的答案")
+    confidence: Optional[str] = Field(None, description="置信度 (high/medium/low)")
+    reasoning: Optional[str] = Field(None, description="推理过程")
+
+
+class AcceptAIAnswerResponse(BaseModel):
+    """采纳 AI 分析答案响应"""
+
+    status: str
+    uncertainty_id: str
+    message: str
+    remaining_high_priority: int = Field(..., description="剩余高优先级问题数")
+    can_build_ontology: bool

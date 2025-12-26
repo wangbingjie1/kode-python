@@ -96,7 +96,27 @@
               {{ filter === 'pending' ? '待回答' : '全部状态' }}
             </button>
           </div>
+          <!-- AI 分析按钮 -->
+          <button
+            class="ml-auto flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#5c4f43] to-[#7c6551] px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="!connectionName || pendingCount === 0"
+            @click="showAIAnalysisModal = true"
+          >
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a2.25 2.25 0 01-1.591.659H9.061a2.25 2.25 0 01-1.591-.659L5 14.5m14 0l.94 2.06a2.25 2.25 0 01-2.093 3.19H6.153a2.25 2.25 0 01-2.093-3.19L5 14.5" />
+            </svg>
+            AI 分析
+          </button>
         </div>
+
+        <!-- AI 分析弹窗 -->
+        <AIAnalysisModal
+          v-if="showAIAnalysisModal"
+          :connection-name="connectionName"
+          :pending-count="pendingCount"
+          @close="showAIAnalysisModal = false"
+          @accepted="handleAIAnswerAccepted"
+        />
 
         <!-- 问题列表 -->
         <div class="space-y-3">
@@ -266,6 +286,7 @@ import {
   type UncertaintyGroup,
   type SidebarLoadResponse
 } from '@/services/api'
+import AIAnalysisModal from './AIAnalysisModal.vue'
 
 interface Props {
   connectionName?: string
@@ -301,6 +322,12 @@ const answers = ref<Record<string, string>>({})
 const savingIds = ref<string[]>([])
 const skippingIds = ref<string[]>([])
 const editingIds = ref<string[]>([])
+const showAIAnalysisModal = ref(false)
+
+// 计算待处理问题数
+const pendingCount = computed(() => {
+  return summary.value.high?.remaining || 0
+})
 
 // 计算属性
 const highPriorityProgress = computed(() => {
@@ -433,6 +460,12 @@ const getGroupAnswered = (group: UncertaintyGroup) => {
 
 const getGroupProgress = (group: UncertaintyGroup) => {
   return getGroupAnswered(group)
+}
+
+// 处理 AI 答案采纳
+const handleAIAnswerAccepted = async () => {
+  // 重新加载问题列表以获取最新状态
+  await loadQuestions()
 }
 
 // 监听 connectionName 变化

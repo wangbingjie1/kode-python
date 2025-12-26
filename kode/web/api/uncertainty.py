@@ -4,10 +4,12 @@ Uncertainty Management API Routes
 REST endpoints for managing uncertainty Q&A workflow.
 """
 
-from fastapi import APIRouter, HTTPException, status
+import asyncio
+from fastapi import APIRouter, HTTPException, status, Request
+from fastapi.responses import StreamingResponse
 from pathlib import Path
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from kode.schemas.uncertainty import (
     LoadUncertaintiesRequest,
@@ -26,6 +28,9 @@ from kode.schemas.uncertainty import (
     SidebarBatchAnswerResponse,
     SkipQuestionRequest,
     SkipQuestionResponse,
+    # 新增：AI 分析 API
+    AcceptAIAnswerRequest,
+    AcceptAIAnswerResponse,
 )
 from kode.utils.config import ConfigManager
 from kode.utils.logger import setup_logger
@@ -801,4 +806,226 @@ async def sidebar_skip_question(request: SkipQuestionRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"跳过问题失败: {str(e)}"
+        )
+
+
+# ============== AI 分析 API ==============
+
+
+@router.get("/sidebar/ai-analyze")
+async def ai_analyze_uncertainties(
+    request: Request,
+    connection_name: str,
+    priority_filter: Optional[str] = None,
+    limit: int = 50,
+):
+    """
+    AI 自动分析不确定性问题（SSE 流式响应）
+
+    通过查询数据库数据来验证和解决不确定性问题。
+    结果需要用户确认后才会保存到本体文件。
+
+    SSE 事件类型:
+    - start: 开始分析
+    - progress: 进度更新
+    - question_result: 单个问题分析结果
+    - complete: 分析完成
+    - error: 错误
+    - cancelled: 用户取消
+
+    Args:
+        connection_name: 数据库连接名称
+        priority_filter: 优先级过滤，逗号分隔，如 'high,medium'
+        limit: 最大分析问题数，默认 50
+    """
+    # 🔥 重要：在创建生成器之前捕获 user_id
+    # SSE 生成器在 middleware 清理上下文之后才执行，所以必须提前获取
+    try:
+        user_id = get_current_user_id()
+    except RuntimeError:
+        # 如果没有用户上下文，使用默认值（兼容非登录场景）
+        user_id = "default"
+        logger.warning("[AI分析] 无法获取用户上下文，使用默认用户")
+
+    async def event_generator():
+        try:
+            # 延迟导入，避免循环依赖
+            from kode.services.uncertainty_analyzer import UncertaintyAnalyzer, get_schema_context
+            from kode.core.model_manager import ModelManager
+
+            # 1. 加载本体文件（使用预先捕获的 user_id）
+            ontology_file = _get_ontology_file(connection_name, user_id=user_id)
+            if not ontology_file.exists():
+                yield f"data: {json.dumps({'type': 'error', 'content': '未找到本体文件，请先构建本体', 'metadata': {'error_type': 'not_found'}})}\n\n"
+                return
+
+            ontology_data = _load_ontology(ontology_file)
+            if not ontology_data:
+                yield f"data: {json.dumps({'type': 'error', 'content': '本体文件加载失败', 'metadata': {'error_type': 'load_error'}})}\n\n"
+                return
+
+            uncertainties = ontology_data.get("uncertainties", [])
+            if not uncertainties:
+                yield f"data: {json.dumps({'type': 'error', 'content': '没有不确定性问题', 'metadata': {'error_type': 'no_questions'}})}\n\n"
+                return
+
+            # 2. 应用优先级过滤
+            if priority_filter:
+                priorities = [p.strip() for p in priority_filter.split(",")]
+                uncertainties = [u for u in uncertainties if u.get("priority", "medium") in priorities]
+
+            # 3. 只处理待解决的问题
+            pending_uncertainties = [u for u in uncertainties if u.get("status") not in ["resolved", "skipped"]]
+
+            # 4. 应用数量限制
+            if limit and limit > 0:
+                pending_uncertainties = pending_uncertainties[:limit]
+
+            if not pending_uncertainties:
+                yield f"data: {json.dumps({'type': 'complete', 'content': '没有待分析的问题', 'metadata': {'total_analyzed': 0, 'resolved_count': 0, 'partial_count': 0, 'failed_count': 0}})}\n\n"
+                return
+
+            # 5. 加载 schema 上下文（使用预先捕获的 user_id）
+            schema_context = get_schema_context(connection_name, user_id=user_id)
+
+            # 6. 创建分析器
+            config_manager = ConfigManager()
+            config = config_manager.get_all()
+            model_manager = ModelManager(config)
+            analyzer = UncertaintyAnalyzer(model_manager)
+
+            # 7. 执行流式分析
+            async for event in analyzer.analyze_uncertainties_stream(
+                connection_name=connection_name,
+                uncertainties=pending_uncertainties,
+                schema_context=schema_context,
+            ):
+                # 检查客户端是否断开
+                if await request.is_disconnected():
+                    logger.info("[AI分析] 客户端断开连接")
+                    break
+
+                yield f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
+
+        except Exception as e:
+            logger.error(f"AI 分析失败: {str(e)}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'content': f'分析失败: {str(e)}', 'metadata': {'error_type': 'internal'}})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+@router.post("/sidebar/accept-ai-answer", response_model=AcceptAIAnswerResponse)
+async def accept_ai_answer(request: AcceptAIAnswerRequest):
+    """
+    采纳 AI 分析答案
+
+    将 AI 生成的答案写入本体文件。
+    这个端点复用 sidebar_answer_single 的逻辑。
+
+    Args:
+        request: 采纳请求，包含问题 ID 和 AI 生成的答案
+
+    Returns:
+        AcceptAIAnswerResponse: 采纳结果
+    """
+    try:
+        ontology_file = _get_ontology_file(request.connection_name)
+
+        if not ontology_file.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="未找到本体文件"
+            )
+
+        # 加载本体文件
+        ontology_data = _load_ontology(ontology_file)
+        if not ontology_data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="本体文件加载失败"
+            )
+
+        # 查找并更新问题
+        found = False
+        uncertainties = ontology_data.get("uncertainties", [])
+
+        for u in uncertainties:
+            if u.get("id") == request.uncertainty_id:
+                u["status"] = "resolved"
+                u["answer"] = request.answer
+                u["answered_at"] = datetime.now().isoformat()
+                u["answer_source"] = "ai_analysis"  # 标记答案来源
+                if request.confidence:
+                    u["ai_confidence"] = request.confidence
+                if request.reasoning:
+                    u["ai_reasoning"] = request.reasoning
+                found = True
+                logger.info(f"[accept-ai-answer] 采纳 AI 答案: {request.uncertainty_id}")
+                break
+
+        if not found:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"未找到问题 ID: {request.uncertainty_id}"
+            )
+
+        # 保存本体文件
+        _save_ontology(ontology_file, ontology_data)
+
+        # 尝试更新本体实体描述（与 sidebar_answer_single 一致）
+        try:
+            from kode.services.ontology_updater import OntologyDescriptionUpdater
+            from kode.core.model_manager import ModelManager
+
+            target_uncertainty = None
+            for u in uncertainties:
+                if u.get("id") == request.uncertainty_id:
+                    target_uncertainty = u
+                    break
+
+            if target_uncertainty:
+                config_manager = ConfigManager()
+                config = config_manager.get_all()
+                model_manager = ModelManager(config)
+
+                updater = OntologyDescriptionUpdater(model_manager)
+                update_result = await updater.update_from_answer(
+                    connection_name=request.connection_name,
+                    uncertainty=target_uncertainty,
+                    answer=request.answer,
+                    conversation_id=None
+                )
+
+                if update_result.get("status") == "success":
+                    logger.info(f"✅ 本体描述已自动更新: {update_result.get('entity')}")
+        except Exception as e:
+            logger.error(f"❌ 自动更新本体异常（已忽略）: {e}")
+
+        # 计算剩余高优先级问题
+        summary = _compute_summary(uncertainties)
+        can_build = summary["high"]["remaining"] == 0
+
+        return AcceptAIAnswerResponse(
+            status="success",
+            uncertainty_id=request.uncertainty_id,
+            message="AI 答案已采纳并保存到本体文件",
+            remaining_high_priority=summary["high"]["remaining"],
+            can_build_ontology=can_build
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"采纳 AI 答案失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"采纳失败: {str(e)}"
         )

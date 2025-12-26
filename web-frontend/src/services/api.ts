@@ -657,4 +657,33 @@ export async function getUncertaintyStatus(
   return response.data
 }
 
+// ============== AI 分析相关 API ==============
+
+export interface AcceptAIAnswerRequest {
+  connection_name: string
+  uncertainty_id: string
+  answer: string
+  confidence?: string
+  reasoning?: string
+}
+
+export interface AcceptAIAnswerResponse {
+  status: string
+  uncertainty_id: string
+  message: string
+  remaining_high_priority: number
+  can_build_ontology: boolean
+}
+
+/**
+ * Accept AI analysis answer
+ * 采纳 AI 分析生成的答案，写入本体文件
+ */
+export async function acceptAIAnswer(
+  request: AcceptAIAnswerRequest
+): Promise<AcceptAIAnswerResponse> {
+  const response = await apiClient.post<AcceptAIAnswerResponse>('/uncertainty/sidebar/accept-ai-answer', request)
+  return response.data
+}
+
 export default apiClient
