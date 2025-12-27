@@ -129,3 +129,20 @@ class OntologySearchResult(BaseModel):
     entity: OntologyEntity
     score: float = Field(..., description="Relevance score")
     matched_field: str = Field(..., description="Field that matched the query")
+
+
+class OntologyExportRequest(BaseModel):
+    """Schema for ontology export request"""
+
+    format: str = Field(
+        "json",
+        description="Export format: json, csv, markdown"
+    )
+    include_concepts: bool = Field(True, description="Include concepts/entities")
+    include_relationships: bool = Field(True, description="Include relationships")
+    include_business_rules: bool = Field(True, description="Include business rules")
+    include_uncertainties: bool = Field(False, description="Include uncertainty questions")
+    selected_domains: Optional[List[str]] = Field(
+        None,
+        description="Filter by specific domains (None = all domains)"
+    )

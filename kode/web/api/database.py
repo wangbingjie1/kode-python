@@ -23,7 +23,11 @@ from kode.schemas.database import (
     OntologyResponse,
     OntologySearchQuery,
     OntologySearchResult,
+    OntologyExportRequest,
 )
+from fastapi.responses import Response
+import csv
+import io
 from kode.services.database_manager import (
     DatabaseConnection,
     DatabaseConnectionManager,
@@ -502,56 +506,78 @@ async def list_ontologies():
             return []
 
         ontologies = []
-        # Each connection has its own directory
-        for conn_dir in ontology_path.iterdir():
-            if not conn_dir.is_dir():
-                continue
 
+        def process_ontology_dir(conn_dir: Path):
+            """Process a connection directory and extract ontology metadata."""
             # Look for ontology file (v3 first, then v2)
             v3_file = conn_dir / "ontology_v3.json"
             v2_file = conn_dir / "ontology_v2.json"
             ontology_file = v3_file if v3_file.exists() else v2_file
-            if ontology_file.exists():
-                try:
-                    with open(ontology_file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
+            if not ontology_file.exists():
+                return None
 
-                        version = data.get("version", "2.0")
+            try:
+                with open(ontology_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
 
-                        # V3 格式：schema.classes.{domain}.{class_name}
-                        # V2 格式：classes 是列表
-                        if version.startswith("3"):
-                            schema_classes = data.get("schema", {}).get("classes", {})
-                            class_count = sum(len(domain_classes) for domain_classes in schema_classes.values())
-                            # V3 中 attributes 在每个 class 的 attributes 字段
-                            property_count = sum(
-                                len(cls.get("attributes", {}))
-                                for domain_classes in schema_classes.values()
-                                for cls in domain_classes.values()
-                            )
-                        else:
-                            classes = data.get("classes", [])
-                            class_count = len(classes)
-                            property_count = sum(len(cls.get("properties", [])) for cls in classes)
+                    version = data.get("version", "2.0")
 
-                        # 从 meta 获取创建时间
-                        meta = data.get("meta", {})
-                        created_at = meta.get("created_at") or data.get("created_at")
+                    # V3 格式：schema.classes.{domain}.{class_name}
+                    # V2 格式：classes 是列表
+                    if version.startswith("3"):
+                        schema_classes = data.get("schema", {}).get("classes", {})
+                        class_count = sum(len(domain_classes) for domain_classes in schema_classes.values())
+                        # V3 中 attributes 在每个 class 的 attributes 字段
+                        property_count = sum(
+                            len(cls.get("attributes", {}))
+                            for domain_classes in schema_classes.values()
+                            for cls in domain_classes.values()
+                        )
+                    else:
+                        classes = data.get("classes", [])
+                        class_count = len(classes)
+                        property_count = sum(len(cls.get("properties", [])) for cls in classes)
 
-                        ontologies.append({
-                            "connection_name": meta.get("source_connection") or data.get("connection_name", conn_dir.name),
-                            "version": version,
-                            "created_at": created_at,
-                            "class_count": class_count,
-                            "property_count": property_count,
-                            "relationship_count": len(data.get("relationships", [])),
-                            "business_rule_count": len(data.get("business_rules", [])),
-                            "uncertainty_count": len(data.get("uncertainties", [])),
-                            "has_domain_insights": bool(data.get("domains") or meta.get("domains")),
-                        })
-                except Exception as e:
-                    logger.warning(f"Error reading ontology file {ontology_file}: {e}")
-                    continue
+                    # 从 meta 获取创建时间
+                    meta = data.get("meta", {})
+                    created_at = meta.get("created_at") or data.get("created_at")
+
+                    return {
+                        "connection_name": meta.get("source_connection") or data.get("connection_name", conn_dir.name),
+                        "version": version,
+                        "created_at": created_at,
+                        "concept_count": class_count,
+                        "property_count": property_count,
+                        "relationship_count": len(data.get("relationships", [])),
+                        "business_rule_count": len(data.get("business_rules", [])),
+                        "uncertainty_count": len(data.get("uncertainties", [])),
+                        "has_domain_insights": bool(data.get("domains") or meta.get("domains")),
+                    }
+            except Exception as e:
+                logger.warning(f"Error reading ontology file {ontology_file}: {e}")
+                return None
+
+        # 遍历 ontology_store 目录
+        # 支持两种结构:
+        # 1. ontology_store/{connection_name}/ (旧结构)
+        # 2. ontology_store/{user_id}/{connection_name}/ (多租户结构)
+        for item in ontology_path.iterdir():
+            if not item.is_dir():
+                continue
+
+            # 检查是否是连接目录（包含 ontology 文件）
+            if (item / "ontology_v3.json").exists() or (item / "ontology_v2.json").exists():
+                # 旧结构: ontology_store/{connection_name}/
+                result = process_ontology_dir(item)
+                if result:
+                    ontologies.append(result)
+            else:
+                # 可能是用户 ID 目录，检查子目录
+                for sub_item in item.iterdir():
+                    if sub_item.is_dir():
+                        result = process_ontology_dir(sub_item)
+                        if result:
+                            ontologies.append(result)
 
         return ontologies
 
@@ -561,6 +587,34 @@ async def list_ontologies():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list ontologies: {str(e)}",
         )
+
+
+def _find_ontology_path(name: str) -> Path | None:
+    """
+    Find ontology directory by connection name.
+    Supports both old structure (ontology_store/{name}) and
+    multi-tenant structure (ontology_store/{user_id}/{name}).
+    """
+    ontology_store = Path("./ontology_store")
+    if not ontology_store.exists():
+        return None
+
+    # 先检查旧结构: ontology_store/{name}/
+    direct_path = ontology_store / name
+    if direct_path.exists() and direct_path.is_dir():
+        if (direct_path / "ontology_v3.json").exists() or (direct_path / "ontology_v2.json").exists():
+            return direct_path
+
+    # 检查多租户结构: ontology_store/{user_id}/{name}/
+    for user_dir in ontology_store.iterdir():
+        if not user_dir.is_dir():
+            continue
+        conn_path = user_dir / name
+        if conn_path.exists() and conn_path.is_dir():
+            if (conn_path / "ontology_v3.json").exists() or (conn_path / "ontology_v2.json").exists():
+                return conn_path
+
+    return None
 
 
 @router.get("/ontologies/{name}", response_model=Dict[str, Any])
@@ -583,7 +637,12 @@ async def get_ontology(name: str, version: str = "latest"):
                 detail="Invalid connection name. Please select a valid ontology.",
             )
 
-        ontology_path = Path("./ontology_store") / name
+        ontology_path = _find_ontology_path(name)
+        if not ontology_path:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Ontology for connection '{name}' not found. Please build ontology first.",
+            )
 
         # 优先使用 v3，回退到 v2
         if version == "latest":
@@ -678,6 +737,317 @@ async def search_ontology(name: str, search_query: OntologySearchQuery):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to search ontology: {str(e)}",
         )
+
+
+@router.post("/ontologies/{name}/export")
+async def export_ontology(name: str, export_request: OntologyExportRequest):
+    """
+    Export ontology in specified format with selective content.
+
+    Supports:
+    - JSON: Full structured export
+    - CSV: Tabular format (concepts and relationships in separate sections)
+    - Markdown: Human-readable documentation format
+
+    Args:
+        name: Database connection name
+        export_request: Export options (format, content selection, domain filter)
+
+    Returns:
+        File download response in requested format
+    """
+    try:
+        # Validate connection name
+        if not name or name in ["undefined", "null", ""]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid connection name",
+            )
+
+        # Load ontology using shared finder
+        ontology_path = _find_ontology_path(name)
+        if not ontology_path:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Ontology for connection '{name}' not found",
+            )
+
+        v3_path = ontology_path / "ontology_v3.json"
+        v2_path = ontology_path / "ontology_v2.json"
+        file_path = v3_path if v3_path.exists() else v2_path
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            ontology_data = json.load(f)
+
+        # Filter data based on export options
+        export_data = _filter_ontology_for_export(
+            ontology_data,
+            export_request.include_concepts,
+            export_request.include_relationships,
+            export_request.include_business_rules,
+            export_request.include_uncertainties,
+            export_request.selected_domains,
+        )
+
+        # Generate export content based on format
+        export_format = export_request.format.lower()
+
+        if export_format == "json":
+            content = json.dumps(export_data, ensure_ascii=False, indent=2)
+            media_type = "application/json"
+            filename = f"{name}_ontology.json"
+
+        elif export_format == "csv":
+            content = _convert_ontology_to_csv(export_data)
+            media_type = "text/csv"
+            filename = f"{name}_ontology.csv"
+
+        elif export_format == "markdown":
+            content = _convert_ontology_to_markdown(export_data, name)
+            media_type = "text/markdown"
+            filename = f"{name}_ontology.md"
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported format: {export_format}. Use json, csv, or markdown.",
+            )
+
+        return Response(
+            content=content.encode("utf-8"),
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": f"{media_type}; charset=utf-8",
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting ontology: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export ontology: {str(e)}",
+        )
+
+
+def _filter_ontology_for_export(
+    ontology_data: Dict[str, Any],
+    include_concepts: bool,
+    include_relationships: bool,
+    include_business_rules: bool,
+    include_uncertainties: bool,
+    selected_domains: List[str] = None,
+) -> Dict[str, Any]:
+    """Filter ontology data based on export options."""
+    result = {
+        "meta": ontology_data.get("meta", {}),
+        "version": ontology_data.get("version", "2.0"),
+    }
+
+    version = ontology_data.get("version", "2.0")
+
+    if include_concepts:
+        if version.startswith("3"):
+            # V3 format: schema.classes.{domain}.{class}
+            schema_classes = ontology_data.get("schema", {}).get("classes", {})
+            if selected_domains:
+                filtered_classes = {
+                    domain: classes
+                    for domain, classes in schema_classes.items()
+                    if domain in selected_domains
+                }
+            else:
+                filtered_classes = schema_classes
+            result["concepts"] = filtered_classes
+        else:
+            # V2 format: classes list
+            classes = ontology_data.get("classes", [])
+            if selected_domains:
+                filtered_classes = [
+                    c for c in classes
+                    if c.get("domain") in selected_domains
+                ]
+            else:
+                filtered_classes = classes
+            result["concepts"] = filtered_classes
+
+    if include_relationships:
+        relationships = ontology_data.get("relationships", [])
+        if selected_domains:
+            # Filter relationships by source/target domain
+            filtered_rels = []
+            for rel in relationships:
+                source_domain = rel.get("source_domain", "")
+                target_domain = rel.get("target_domain", "")
+                if source_domain in selected_domains or target_domain in selected_domains:
+                    filtered_rels.append(rel)
+            result["relationships"] = filtered_rels
+        else:
+            result["relationships"] = relationships
+
+    if include_business_rules:
+        result["business_rules"] = ontology_data.get("business_rules", [])
+
+    if include_uncertainties:
+        result["uncertainties"] = ontology_data.get("uncertainties", [])
+
+    return result
+
+
+def _convert_ontology_to_csv(export_data: Dict[str, Any]) -> str:
+    """Convert ontology data to CSV format."""
+    output = io.StringIO()
+
+    # Concepts section
+    concepts = export_data.get("concepts", {})
+    if concepts:
+        output.write("=== 概念/实体 ===\n")
+        writer = csv.writer(output)
+        writer.writerow(["领域", "技术名称", "业务名称", "描述", "数据来源", "重要性"])
+
+        if isinstance(concepts, dict):
+            # V3 format
+            for domain, classes in concepts.items():
+                for class_name, class_data in classes.items():
+                    writer.writerow([
+                        domain,
+                        class_data.get("technical_name", class_name),
+                        class_data.get("business_name_cn", ""),
+                        class_data.get("description", ""),
+                        class_data.get("data_source", ""),
+                        class_data.get("importance", ""),
+                    ])
+        else:
+            # V2 format (list)
+            for cls in concepts:
+                writer.writerow([
+                    cls.get("domain", ""),
+                    cls.get("technical_name", cls.get("name", "")),
+                    cls.get("business_name_cn", ""),
+                    cls.get("description", ""),
+                    cls.get("data_source", ""),
+                    cls.get("importance", ""),
+                ])
+
+    # Relationships section
+    relationships = export_data.get("relationships", [])
+    if relationships:
+        output.write("\n=== 关系 ===\n")
+        writer = csv.writer(output)
+        writer.writerow(["源概念", "关系类型", "目标概念", "强度", "描述"])
+        for rel in relationships:
+            writer.writerow([
+                rel.get("source_concept", ""),
+                rel.get("relationship_type", ""),
+                rel.get("target_concept", ""),
+                rel.get("strength", ""),
+                rel.get("description", ""),
+            ])
+
+    # Business rules section
+    business_rules = export_data.get("business_rules", [])
+    if business_rules:
+        output.write("\n=== 业务规则 ===\n")
+        writer = csv.writer(output)
+        writer.writerow(["规则名称", "描述", "相关实体"])
+        for rule in business_rules:
+            writer.writerow([
+                rule.get("name", ""),
+                rule.get("description", ""),
+                ", ".join(rule.get("related_entities", [])),
+            ])
+
+    return output.getvalue()
+
+
+def _convert_ontology_to_markdown(export_data: Dict[str, Any], connection_name: str) -> str:
+    """Convert ontology data to Markdown format."""
+    lines = []
+    meta = export_data.get("meta", {})
+
+    # Header
+    lines.append(f"# {connection_name} 业务本体")
+    lines.append("")
+    lines.append(f"**版本**: {export_data.get('version', '2.0')}")
+    if meta.get("created_at"):
+        lines.append(f"**创建时间**: {meta.get('created_at')}")
+    lines.append("")
+
+    # Concepts section
+    concepts = export_data.get("concepts", {})
+    if concepts:
+        lines.append("## 概念/实体")
+        lines.append("")
+
+        if isinstance(concepts, dict):
+            # V3 format: grouped by domain
+            for domain, classes in concepts.items():
+                lines.append(f"### {domain}")
+                lines.append("")
+                lines.append("| 技术名称 | 业务名称 | 描述 | 数据来源 |")
+                lines.append("|---------|---------|------|---------|")
+                for class_name, class_data in classes.items():
+                    tech_name = class_data.get("technical_name", class_name)
+                    biz_name = class_data.get("business_name_cn", "")
+                    desc = class_data.get("description", "").replace("\n", " ")[:100]
+                    source = class_data.get("data_source", "")
+                    lines.append(f"| {tech_name} | {biz_name} | {desc} | {source} |")
+                lines.append("")
+        else:
+            # V2 format
+            lines.append("| 技术名称 | 业务名称 | 描述 | 领域 |")
+            lines.append("|---------|---------|------|------|")
+            for cls in concepts:
+                tech_name = cls.get("technical_name", cls.get("name", ""))
+                biz_name = cls.get("business_name_cn", "")
+                desc = cls.get("description", "").replace("\n", " ")[:100]
+                domain = cls.get("domain", "")
+                lines.append(f"| {tech_name} | {biz_name} | {desc} | {domain} |")
+            lines.append("")
+
+    # Relationships section
+    relationships = export_data.get("relationships", [])
+    if relationships:
+        lines.append("## 关系")
+        lines.append("")
+        lines.append("| 源概念 | 关系类型 | 目标概念 | 强度 |")
+        lines.append("|-------|---------|---------|------|")
+        for rel in relationships:
+            source = rel.get("source_concept", "")
+            rel_type = rel.get("relationship_type", "")
+            target = rel.get("target_concept", "")
+            strength = rel.get("strength", "")
+            lines.append(f"| {source} | {rel_type} | {target} | {strength} |")
+        lines.append("")
+
+    # Business rules section
+    business_rules = export_data.get("business_rules", [])
+    if business_rules:
+        lines.append("## 业务规则")
+        lines.append("")
+        for rule in business_rules:
+            lines.append(f"### {rule.get('name', '规则')}")
+            lines.append("")
+            lines.append(rule.get("description", ""))
+            if rule.get("related_entities"):
+                lines.append("")
+                lines.append(f"**相关实体**: {', '.join(rule.get('related_entities', []))}")
+            lines.append("")
+
+    # Uncertainties section
+    uncertainties = export_data.get("uncertainties", [])
+    if uncertainties:
+        lines.append("## 待确认问题")
+        lines.append("")
+        for unc in uncertainties:
+            priority = unc.get("priority", "medium")
+            priority_badge = "🔴" if priority == "high" else "🟡" if priority == "medium" else "🟢"
+            lines.append(f"- {priority_badge} **{unc.get('entity', '')}**: {unc.get('question', '')}")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 @router.post("/connections/{name}/query", response_model=Dict[str, Any])

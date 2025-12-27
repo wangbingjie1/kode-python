@@ -6,6 +6,7 @@
       :active-tab="activeSidebarTab"
       :conversations="conversations"
       :active-conversation-id="currentConversationId"
+      :deleting-ids="deletingConversationIds"
       @toggle-collapse="handleSidebarToggle"
       @change-tab="handleTabChange"
       @new-conversation="handleNewConversation"
@@ -410,19 +411,39 @@ async function handleSelectConversation(conversationId: string) {
   activeSidebarTab.value = 'chats'
 }
 
+const deletingConversationIds = ref<Set<string>>(new Set())
+
 async function handleDeleteConversation(conversationId: string) {
+  // 防止重复删除
+  if (deletingConversationIds.value.has(conversationId)) {
+    return
+  }
+  deletingConversationIds.value.add(conversationId)
+
+  // 乐观更新：立即从列表移除
+  const originalConversations = [...conversations.value]
+  conversations.value = conversations.value.filter(c => c.id !== conversationId)
+
+  // 如果删除的是当前对话，立即跳转
+  if (conversationId === currentConversationId.value) {
+    chatStore.clearConversation()
+    router.push('/chat')
+  }
+
   try {
     await api.delete(`/chat/conversations/${conversationId}`)
-    await loadConversations()
-
-    if (conversationId === currentConversationId.value) {
-      await handleNewConversation()
+    // 删除成功，无需操作（已乐观更新）
+  } catch (error: any) {
+    // 404 说明已被删除，无需回滚
+    if (error?.response?.status === 404) {
+      return
     }
-
-    notification.success('会话已删除', '', 2000, true)
-  } catch (error) {
+    // 其他错误：回滚列表
     console.error('Error deleting conversation:', error)
+    conversations.value = originalConversations
     notification.error('删除失败', '暂时无法删除该对话。')
+  } finally {
+    deletingConversationIds.value.delete(conversationId)
   }
 }
 
@@ -505,15 +526,21 @@ async function initializeConversation() {
       notification.success('连接成功', '', 1500, true)
       await nextTick()
       setTimeout(() => scrollToBottom(true), 200)
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ChatView] Error connecting to conversation:', error)
-      notification.error('连接失败', '无法连接到对话，请稍后再试。')
+      // 如果对话不存在或无权限，跳转到聊天首页（不自动创建）
+      if (error.response?.status === 403 || error.response?.status === 404) {
+        notification.warning('对话不存在', '该对话已被删除或无权访问')
+        await router.push('/chat')
+      } else {
+        notification.error('连接失败', '无法连接到对话，请稍后再试。')
+      }
     } finally {
       isLoading.value = false
     }
-  } else {
-    await handleNewConversation()
   }
+  // 移除自动创建：当没有 conversationId 时不自动创建对话
+  // 用户需要手动点击"新建会话"按钮
 }
 
 function setupViewportWatcher() {

@@ -89,8 +89,8 @@ class DatabaseExecuteQueryInput(BaseModel):
         description="Maximum number of rows to fetch (for SELECT queries). Keep small to avoid context overflow."
     )
     timeout: int = Field(
-        default=15,
-        description="Query timeout in seconds. If query times out, simplify it (add WHERE, LIMIT, or use aggregation)."
+        default=300,
+        description="Query timeout in seconds (default 5 minutes). If query times out, simplify it (add WHERE, LIMIT, or use aggregation)."
     )
 
 
@@ -1672,7 +1672,7 @@ SELECT * FROM orders
         sql: str,
         params: Optional[Dict[str, Any]] = None,
         fetch_limit: int = 50,
-        timeout: int = 15,
+        timeout: int = 300,
     ) -> str:
         """
         Execute SQL query with timeout and result size limits.

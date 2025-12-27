@@ -6,12 +6,13 @@ REST endpoints for conversation and message management.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, delete, update
 from typing import List
 from datetime import datetime
 
 from kode.database.session import get_db
 from kode.models import Conversation, Message, Project, User, APICallTrace
+from kode.models.ontology_version import OntologyVersion
 from kode.schemas.chat import (
     ConversationCreate,
     ConversationResponse,
@@ -64,7 +65,7 @@ async def verify_project_ownership(
 
 
 async def verify_conversation_ownership(
-    conversation_id: str, user_id: str, db: AsyncSession
+    conversation_id: str, user_id: str, db: AsyncSession, *, check_exists: bool = False
 ) -> Conversation:
     """
     验证对话所有权（通过 Conversation -> Project -> User 链）
@@ -73,12 +74,13 @@ async def verify_conversation_ownership(
         conversation_id: 对话 ID
         user_id: 用户 ID
         db: 数据库会话
+        check_exists: 如果为 True，先检查对话是否存在以区分 404 和 403
 
     Returns:
         Conversation: 对话对象
 
     Raises:
-        HTTPException: 如果对话不存在或不属于用户
+        HTTPException: 404 如果对话不存在，403 如果不属于用户
     """
     result = await db.execute(
         select(Conversation)
@@ -93,6 +95,16 @@ async def verify_conversation_ownership(
     conversation = result.scalar_one_or_none()
 
     if not conversation:
+        if check_exists:
+            # 检查对话是否存在（用于区分 404 和 403）
+            exists_result = await db.execute(
+                select(Conversation.id).where(Conversation.id == conversation_id)
+            )
+            if not exists_result.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Conversation not found",
+                )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to access this conversation",
@@ -221,59 +233,64 @@ async def delete_conversation(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a conversation"""
+    """Delete a conversation (soft delete for billing audit)"""
     # Verify conversation exists and belongs to current user
+    # check_exists=True 用于区分 404（不存在）和 403（无权限）
     conversation = await verify_conversation_ownership(
-        conversation_id, current_user.id, db
+        conversation_id, current_user.id, db, check_exists=True
     )
 
-    await db.delete(conversation)
+    # 软删除：设置 deleted_at 时间戳，保留数据用于 token 对账
+    conversation.deleted_at = datetime.utcnow()
     await db.commit()
 
-    # 更新会话计数（删除后重新统计）
-    try:
-        usage = await BillingService.get_current_usage(db, current_user.id)
-        if usage:
-            # 统计当前计费周期内的会话数
-            conversation_count_result = await db.execute(
-                select(func.count(Conversation.id)).where(
-                    and_(
-                        Conversation.project_id.in_(
-                            select(Project.id).where(Project.user_id == current_user.id)
-                        ),
-                        Conversation.created_at >= usage.period_start,
-                        Conversation.created_at < usage.period_end,
-                    )
-                )
-            )
-            total_conversations = conversation_count_result.scalar() or 0
-
-            # ❌ 移除错误的 usage 更新调用
-            # increment_usage 不支持 conversation_count 参数
-            logger.info(f"Deleted conversation for user {current_user.id} (remaining: {total_conversations})")
-    except Exception as e:
-        # 会话计数统计失败不应该影响主流程
-        logger.warning(f"Failed to count conversations after deletion: {e}")
+    logger.info(f"Soft deleted conversation {conversation_id} for user {current_user.id}")
 
 
 @router.get("/projects/{project_id}/conversations", response_model=List[ConversationResponse])
 async def list_project_conversations(
     project_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    search: str = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all conversations for a project"""
+    """
+    List conversations for a project with pagination and search
+
+    Args:
+        project_id: Project ID
+        limit: Maximum number of conversations to return (default 50, max 100)
+        offset: Number of conversations to skip (for pagination)
+        search: Optional search keyword to filter by title
+    """
     # Verify project exists and belongs to current user
     project = await verify_project_ownership(
         project_id, current_user.id, db
     )
 
-    # Get conversations
-    result = await db.execute(
-        select(Conversation)
-        .where(Conversation.project_id == project_id)
-        .order_by(Conversation.updated_at.desc())
+    # Limit max results
+    limit = min(limit, 100)
+
+    # Build query - 排除已软删除的对话
+    query = select(Conversation).where(
+        and_(
+            Conversation.project_id == project_id,
+            Conversation.deleted_at.is_(None)  # 只显示未删除的
+        )
     )
+
+    # Add search filter if provided
+    if search and search.strip():
+        search_term = f"%{search.strip()}%"
+        query = query.where(Conversation.title.ilike(search_term))
+
+    # Add ordering and pagination
+    query = query.order_by(Conversation.updated_at.desc()).limit(limit).offset(offset)
+
+    # Execute query
+    result = await db.execute(query)
     conversations = result.scalars().all()
 
     return conversations

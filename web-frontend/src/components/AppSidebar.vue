@@ -80,10 +80,33 @@
       <div class="sidebar-content">
         <!-- Chats Tab -->
         <div v-if="activeTab === 'chats'" class="content-section">
-          <h3 class="section-title">最近对话</h3>
-          <div v-if="conversations.length" class="conversations-list">
+          <!-- 搜索框 -->
+          <div class="search-box">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              v-model="searchKeyword"
+              type="text"
+              class="search-input"
+              placeholder="搜索对话..."
+              @input="handleSearch"
+            />
+            <button
+              v-if="searchKeyword"
+              class="clear-search-btn"
+              @click="clearSearch"
+            >
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <h3 class="section-title">{{ searchKeyword ? '搜索结果' : '最近对话' }}</h3>
+          <div v-if="filteredConversations.length" class="conversations-list">
             <div
-              v-for="conv in conversations"
+              v-for="conv in filteredConversations"
               :key="conv.id"
               class="conversation-item"
               :class="{ 'is-active': conv.id === activeConversationId }"
@@ -96,9 +119,16 @@
                 <div class="conv-title">{{ conv.title }}</div>
                 <div class="conv-time">{{ formatTime(conv.created_at) }}</div>
               </div>
-              <button class="delete-btn" @click.stop="$emit('delete-conversation', conv.id)">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <button
+                class="delete-btn"
+                :disabled="deletingIds?.has(conv.id)"
+                @click.stop="$emit('delete-conversation', conv.id)"
+              >
+                <svg v-if="!deletingIds?.has(conv.id)" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-1 12a2 2 0 01-2 2H8a2 2 0 01-2-2L5 7m4 4v6m4-6v6M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-9 0h12" />
+                </svg>
+                <svg v-else class="icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
               </button>
             </div>
@@ -107,7 +137,7 @@
             <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
               <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.26-.95L3 20l1.4-3.72A6.96 6.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <p>暂无对话</p>
+            <p>{{ searchKeyword ? '未找到匹配的对话' : '暂无对话' }}</p>
           </div>
         </div>
 
@@ -205,6 +235,7 @@ const props = defineProps<{
   activeTab: TabId
   conversations: Conversation[]
   activeConversationId?: string
+  deletingIds?: Set<string>
 }>()
 
 defineEmits<{
@@ -223,6 +254,8 @@ const billingStore = useBillingStore()
 
 const isUserMenuOpen = ref(false)
 const databaseConnections = ref<DatabaseConnection[]>([])
+const searchKeyword = ref('')
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const tabs = [
   {
@@ -254,8 +287,31 @@ const userInitial = computed(() => {
 
 const currentPlan = computed(() => billingStore.currentPlan)
 
+// 本地过滤对话列表（支持搜索）
+const filteredConversations = computed(() => {
+  if (!searchKeyword.value.trim()) {
+    return props.conversations
+  }
+  const keyword = searchKeyword.value.toLowerCase().trim()
+  return props.conversations.filter(conv =>
+    conv.title.toLowerCase().includes(keyword)
+  )
+})
+
 function toggleUserMenu() {
   isUserMenuOpen.value = !isUserMenuOpen.value
+}
+
+function handleSearch() {
+  // 搜索时防抖处理（可选：未来支持后端搜索时使用）
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  // 目前使用本地过滤，无需防抖
+}
+
+function clearSearch() {
+  searchKeyword.value = ''
 }
 
 async function handleLogout() {
@@ -596,6 +652,69 @@ if (typeof document !== 'undefined') {
   gap: 1rem;
 }
 
+/* Search Box */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  width: 1rem;
+  height: 1rem;
+  color: #8c7763;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.625rem 2rem 0.625rem 2.25rem;
+  border: 1px solid #eadfd3;
+  border-radius: 0.5rem;
+  background: white;
+  font-size: 0.875rem;
+  color: #322d29;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input::placeholder {
+  color: #b49f8d;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #c58d63;
+  box-shadow: 0 0 0 3px rgba(197, 141, 99, 0.1);
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 0.5rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: #8c7763;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: color 0.2s;
+}
+
+.clear-search-btn:hover {
+  color: #322d29;
+}
+
+.clear-search-btn .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
 .section-title {
   font-size: 0.75rem;
   font-weight: 600;
@@ -688,6 +807,20 @@ if (typeof document !== 'undefined') {
 .delete-btn .icon {
   width: 1rem;
   height: 1rem;
+}
+
+.delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.delete-btn .icon.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Database List */

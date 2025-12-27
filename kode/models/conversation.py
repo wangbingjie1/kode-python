@@ -22,11 +22,15 @@ class Conversation(Base):
     project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True, index=True)  # 软删除标记，NULL 表示未删除
 
     # Relationships
     project = relationship("Project", back_populates="conversations")
     messages = relationship(
         "Message", back_populates="conversation", cascade="all, delete-orphan"
+    )
+    api_traces = relationship(
+        "APICallTrace", back_populates="conversation", cascade="all, delete-orphan"
     )
     # Note: Access user through conversation.project.user
     # 不要使用 secondary="projects" 的错误定义，因为 projects 不是多对多中间表

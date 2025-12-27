@@ -327,6 +327,34 @@ export async function searchOntology(
   return response.data
 }
 
+// Ontology Export Types
+export interface OntologyExportRequest {
+  format: 'json' | 'csv' | 'markdown'
+  include_concepts: boolean
+  include_relationships: boolean
+  include_business_rules: boolean
+  include_uncertainties: boolean
+  selected_domains?: string[]
+}
+
+/**
+ * Export ontology in specified format
+ * Returns a Blob for file download
+ */
+export async function exportOntology(
+  name: string,
+  options: OntologyExportRequest
+): Promise<Blob> {
+  const response = await apiClient.post(
+    `/database/ontologies/${name}/export`,
+    options,
+    {
+      responseType: 'blob'
+    }
+  )
+  return response.data
+}
+
 /**
  * Execute SQL query on a database connection
  */
