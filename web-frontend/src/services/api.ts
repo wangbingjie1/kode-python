@@ -89,6 +89,22 @@ export interface Conversation {
   project_id: string
   created_at: string
   updated_at: string
+  matched_message?: string  // 搜索时匹配到的消息片段
+}
+
+export interface ConversationListResponse {
+  items: Conversation[]
+  total: number
+  limit: number
+  offset: number
+  has_more: boolean
+}
+
+export interface ListConversationsParams {
+  limit?: number
+  offset?: number
+  search?: string
+  search_content?: boolean
 }
 
 export interface Message {
@@ -147,11 +163,15 @@ export async function deleteConversation(conversationId: string): Promise<void> 
 }
 
 /**
- * List conversations for a project
+ * List conversations for a project with pagination and search
  */
-export async function listProjectConversations(projectId: string): Promise<Conversation[]> {
-  const response = await apiClient.get<Conversation[]>(
-    `/chat/projects/${projectId}/conversations`
+export async function listProjectConversations(
+  projectId: string,
+  params: ListConversationsParams = {}
+): Promise<ConversationListResponse> {
+  const response = await apiClient.get<ConversationListResponse>(
+    `/chat/projects/${projectId}/conversations`,
+    { params }
   )
   return response.data
 }

@@ -88,28 +88,31 @@ export class SSEHeartbeatService {
         }
       }
 
-      this.eventSource.onerror = (error) => {
+      this.eventSource.onerror = async (error) => {
         console.error('[Heartbeat] Connection error:', error)
-
-        // 检查是否是认证错误（EventSource 会立即关闭）
-        // readyState: 2 = CLOSED
-        const isClosed = this.eventSource?.readyState === EventSource.CLOSED
 
         this._isConnected = false
         this.notifyConnectionChange(false)
         this.eventSource?.close()
         this.eventSource = null
 
-        // 如果是认证错误（连接立即关闭），清除 token 并停止重连
-        if (isClosed && this.reconnectAttempts === 0) {
-          console.error('[Heartbeat] Authentication failed, token may be invalid or expired')
-          console.warn('[Heartbeat] Stopping reconnection attempts due to auth failure')
-          localStorage.removeItem('access_token')
-          this.reconnectAttempts = this.maxReconnectAttempts // 阻止重连
-          return
+        // 心跳断开可能是网络波动、后端重启等正常情况
+        // 尝试刷新 token 后重连（可能是 token 过期）
+        if (this.reconnectAttempts === 0) {
+          try {
+            const { useAuthStore } = await import('@/stores/auth')
+            const authStore = useAuthStore()
+            const refreshed = await authStore.refreshAccessToken()
+            if (refreshed) {
+              console.log('[Heartbeat] Token refreshed, reconnecting immediately...')
+              this.connect() // 立即重连，不等待
+              return
+            }
+          } catch (refreshError) {
+            console.warn('[Heartbeat] Token refresh failed, will retry connection:', refreshError)
+          }
         }
 
-        // 其他错误：尝试重连
         this.scheduleReconnect()
       }
 
@@ -237,8 +240,10 @@ export class SSEService {
 
   /**
    * Send message and start receiving SSE stream
+   *
+   * 如果遇到 401 错误，会尝试刷新 token 并重试一次
    */
-  sendMessage(content: string, databaseName?: string): void {
+  async sendMessage(content: string, databaseName?: string): Promise<void> {
     if (!this.conversationId) {
       throw new Error('No conversation ID set')
     }
@@ -246,53 +251,103 @@ export class SSEService {
     // Close existing connection if any
     this.disconnect()
 
-    // Encode task parameter
-    const encodedTask = encodeURIComponent(content)
+    // 尝试发送，如果 401 则刷新 token 重试
+    const tryConnect = async (isRetry = false): Promise<void> => {
+      // Get access token for authentication
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        console.error('No access token found, redirecting to login')
+        window.location.href = '/login'
+        return
+      }
 
-    // Get access token for authentication
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      console.error('No access token found, SSE authentication will fail')
-    }
+      // Encode task parameter
+      const encodedTask = encodeURIComponent(content)
 
-    // Build SSE URL with token parameter (EventSource doesn't support custom headers)
-    let sseUrl = `/api/sse/chat/${this.conversationId}/stream?task=${encodedTask}`
-    if (token) {
+      // Build SSE URL with token parameter (EventSource doesn't support custom headers)
+      let sseUrl = `/api/sse/chat/${this.conversationId}/stream?task=${encodedTask}`
       sseUrl += `&token=${encodeURIComponent(token)}`
-    }
-    if (databaseName) {
-      sseUrl += `&database_name=${encodeURIComponent(databaseName)}`
-    }
+      if (databaseName) {
+        sseUrl += `&database_name=${encodeURIComponent(databaseName)}`
+      }
 
-    // Create SSE connection
-    this.eventSource = new EventSource(sseUrl)
+      return new Promise<void>((resolve, reject) => {
+        // Create SSE connection
+        this.eventSource = new EventSource(sseUrl)
 
-    // Handle incoming messages
-    this.eventSource.onmessage = (event) => {
-      try {
-        const chunk: StreamingChunk = JSON.parse(event.data)
+        // Handle incoming messages
+        this.eventSource.onmessage = (event) => {
+          try {
+            const chunk: StreamingChunk = JSON.parse(event.data)
 
-        // Check for done signal
-        if (chunk.type === 'done') {
-          this.disconnect()
-          this.closeCallbacks.forEach(callback => callback())
-          return
+            // Check for done signal
+            if (chunk.type === 'done') {
+              this.disconnect()
+              this.closeCallbacks.forEach(callback => callback())
+              resolve()
+              return
+            }
+
+            // Notify callbacks
+            this.messageCallbacks.forEach(callback => callback(chunk))
+          } catch (error) {
+            console.error('Error parsing SSE message:', error)
+          }
         }
 
-        // Notify callbacks
-        this.messageCallbacks.forEach(callback => callback(chunk))
-      } catch (error) {
-        console.error('Error parsing SSE message:', error)
-      }
+        // Handle errors - 关键：检测 401 并尝试刷新 token
+        this.eventSource.onerror = async (error) => {
+          console.error('SSE error:', error)
+
+          // EventSource 不直接暴露 HTTP 状态码，但连接立即失败通常是 401
+          // 检查 readyState: 0=CONNECTING, 1=OPEN, 2=CLOSED
+          const readyState = this.eventSource?.readyState
+
+          // 如果连接从未打开过（立即失败），可能是认证问题
+          if (readyState === EventSource.CLOSED && !isRetry) {
+            console.log('[SSE] Connection failed immediately, trying to refresh token...')
+            this.disconnect()
+
+            try {
+              // 动态导入避免循环依赖
+              const { useAuthStore } = await import('@/stores/auth')
+              const authStore = useAuthStore()
+              const refreshed = await authStore.refreshAccessToken()
+
+              if (refreshed) {
+                console.log('[SSE] Token refreshed, retrying connection...')
+                // 重试连接
+                await tryConnect(true)
+                resolve()
+                return
+              }
+            } catch (refreshError) {
+              console.error('[SSE] Token refresh failed:', refreshError)
+            }
+
+            // 刷新失败，跳转登录
+            const { useAuthStore } = await import('@/stores/auth')
+            const authStore = useAuthStore()
+            authStore.logout()
+            window.location.href = '/login'
+            reject(new Error('Authentication failed'))
+            return
+          }
+
+          const errorObj = new Error('SSE connection error')
+          this.errorCallbacks.forEach(callback => callback(errorObj))
+          this.disconnect()
+          reject(errorObj)
+        }
+
+        // 连接成功打开时 resolve（可选，因为 SSE 是持续连接）
+        this.eventSource.onopen = () => {
+          console.log('[SSE] Connection opened successfully')
+        }
+      })
     }
 
-    // Handle errors
-    this.eventSource.onerror = (error) => {
-      console.error('SSE error:', error)
-      const errorObj = new Error('SSE connection error')
-      this.errorCallbacks.forEach(callback => callback(errorObj))
-      this.disconnect()
-    }
+    await tryConnect()
   }
 
   /**

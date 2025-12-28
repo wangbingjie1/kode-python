@@ -7,11 +7,18 @@
       :conversations="conversations"
       :active-conversation-id="currentConversationId"
       :deleting-ids="deletingConversationIds"
+      :has-more="hasMoreConversations"
+      :is-loading-more="isLoadingMore"
+      :is-searching="isSearching"
+      :total-conversations="totalConversations"
       @toggle-collapse="handleSidebarToggle"
       @change-tab="handleTabChange"
       @new-conversation="handleNewConversation"
       @select-conversation="handleSelectConversation"
       @delete-conversation="handleDeleteConversation"
+      @load-more="handleLoadMoreConversations"
+      @search="handleSearchConversations"
+      @clear-search="handleClearSearch"
     />
 
     <!-- Main Chat Area -->
@@ -123,10 +130,11 @@
       </section>
 
       <!-- Chat Input -->
+      <!-- 不再根据心跳状态禁用输入框，心跳只用于 UI 显示 -->
       <footer class="chat-footer" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
         <div class="input-wrapper">
           <ChatInput
-            :disabled="!isConnected"
+            :disabled="false"
             :is-sending="chatStore.isTyping"
             @send="handleSendMessage"
             @stop="handleStopGeneration"
@@ -180,7 +188,7 @@ import UserInputDialog from '@/components/UserInputDialog.vue'
 import { notification } from '@/composables/useNotification'
 import { useChatStore } from '@/stores/chat'
 import type { ChatMessage } from '@/stores/chat'
-import api, { getOrCreateDefaultProject } from '@/services/api'
+import api, { getOrCreateDefaultProject, listProjectConversations, type Conversation } from '@/services/api'
 
 type TabId = 'chats' | 'database' | 'billing' | 'settings'
 
@@ -194,7 +202,7 @@ const router = useRouter()
 const chatStore = useChatStore()
 
 const isLoading = ref(false)
-const conversations = ref<any[]>([])
+const conversations = ref<Conversation[]>([])
 const isSidebarCollapsed = ref(false)
 const activeSidebarTab = ref<TabId>('chats')
 const contextPanelOpen = ref(false)
@@ -204,6 +212,16 @@ const showScrollToLatest = ref(false)
 const messageContainer = ref<HTMLElement | null>(null)
 const currentProjectId = ref<string | null>(null)
 const currentDatabaseName = ref<string>('')
+
+// 分页和搜索状态
+const conversationOffset = ref(0)
+const conversationLimit = ref(20)
+const hasMoreConversations = ref(true)
+const isLoadingMore = ref(false)
+const isSearching = ref(false)
+const totalConversations = ref(0)
+const currentSearchKeyword = ref('')
+const currentSearchContent = ref(false)
 
 const isConnected = computed(() => chatStore.isConnected)
 const isTyping = computed(() => chatStore.isTyping)
@@ -288,6 +306,20 @@ watch(
   },
 )
 
+// 监听 currentConversation.title 变化，同步更新侧边栏列表
+watch(
+  () => chatStore.currentConversation?.title,
+  (newTitle) => {
+    if (newTitle && currentConversationId.value) {
+      const conv = conversations.value.find(c => c.id === currentConversationId.value)
+      if (conv && conv.title !== newTitle) {
+        conv.title = newTitle
+        console.log('[ChatView] Synced sidebar title:', newTitle)
+      }
+    }
+  },
+)
+
 watch(messageContainer, (element, previous) => {
   if (previous) {
     previous.removeEventListener('scroll', handleScroll)
@@ -365,8 +397,6 @@ function handleDatabaseChange(databaseName: string) {
 }
 
 async function handleSendMessage(message: string, databaseName?: string) {
-  if (!isConnected.value) return
-
   // 保存当前选择的数据库名，用于问卷侧边栏
   if (databaseName) {
     currentDatabaseName.value = databaseName
@@ -376,9 +406,18 @@ async function handleSendMessage(message: string, databaseName?: string) {
     await chatStore.sendMessage(message, databaseName)
     await nextTick()
     scrollToBottom(true)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending message:', error)
-    notification.error('发送失败', '暂时无法发送消息，请检查网络后重试。')
+
+    // 根据错误类型显示不同提示
+    if (error.message?.includes('No active conversation')) {
+      notification.error('未选择对话', '请先选择或创建一个对话。')
+    } else if (error.message?.includes('Authentication failed')) {
+      // 认证失败会自动跳转登录页，这里不需要额外处理
+      notification.error('登录已过期', '正在跳转到登录页...')
+    } else {
+      notification.error('发送失败', '无法发送消息，请稍后重试。')
+    }
   }
 }
 
@@ -394,10 +433,19 @@ async function handleNewConversation() {
       await ensureProjectId()
     }
 
+    // 🚀 优化：创建会话后立即跳转，列表刷新异步进行
     const conversation = await chatStore.createNewConversation(currentProjectId.value!, 'New chat')
-    await loadConversations()
+
+    // 乐观更新：立即添加到列表顶部
+    conversations.value.unshift(conversation)
+    totalConversations.value += 1
+
+    // 立即跳转，不等待列表刷新
     await router.push(`/chat/${conversation.id}`)
     notification.success('已创建新会话', '', 2000, true)
+
+    // 后台刷新列表（不阻塞）
+    loadConversations().catch(console.error)
   } catch (error) {
     console.error('Error creating conversation:', error)
     notification.error('创建失败', '暂时无法创建新对话，请稍后再试。')
@@ -422,7 +470,9 @@ async function handleDeleteConversation(conversationId: string) {
 
   // 乐观更新：立即从列表移除
   const originalConversations = [...conversations.value]
+  const originalTotal = totalConversations.value
   conversations.value = conversations.value.filter(c => c.id !== conversationId)
+  totalConversations.value = Math.max(0, totalConversations.value - 1)
 
   // 如果删除的是当前对话，立即跳转
   if (conversationId === currentConversationId.value) {
@@ -432,33 +482,78 @@ async function handleDeleteConversation(conversationId: string) {
 
   try {
     await api.delete(`/chat/conversations/${conversationId}`)
-    // 删除成功，无需操作（已乐观更新）
+    // 删除成功，更新 offset 以保持分页正确
+    conversationOffset.value = Math.max(0, conversationOffset.value - 1)
   } catch (error: any) {
     // 404 说明已被删除，无需回滚
     if (error?.response?.status === 404) {
+      conversationOffset.value = Math.max(0, conversationOffset.value - 1)
       return
     }
     // 其他错误：回滚列表
     console.error('Error deleting conversation:', error)
     conversations.value = originalConversations
+    totalConversations.value = originalTotal
     notification.error('删除失败', '暂时无法删除该对话。')
   } finally {
     deletingConversationIds.value.delete(conversationId)
   }
 }
 
-async function loadConversations() {
+async function loadConversations(reset = true) {
   try {
     // 确保有项目 ID
     if (!currentProjectId.value) {
       await ensureProjectId()
     }
 
-    const response = await api.get(`/chat/projects/${currentProjectId.value}/conversations`)
-    conversations.value = response.data
+    if (reset) {
+      conversationOffset.value = 0
+      conversations.value = []
+      isSearching.value = !!currentSearchKeyword.value
+    }
+
+    const response = await listProjectConversations(currentProjectId.value!, {
+      limit: conversationLimit.value,
+      offset: conversationOffset.value,
+      search: currentSearchKeyword.value || undefined,
+      search_content: currentSearchContent.value || undefined
+    })
+
+    if (reset) {
+      conversations.value = response.items
+    } else {
+      conversations.value = [...conversations.value, ...response.items]
+    }
+
+    totalConversations.value = response.total
+    hasMoreConversations.value = response.has_more
+    conversationOffset.value += response.items.length
   } catch (error) {
     console.error('Error loading conversations:', error)
+  } finally {
+    isSearching.value = false
+    isLoadingMore.value = false
   }
+}
+
+async function handleLoadMoreConversations() {
+  if (isLoadingMore.value || !hasMoreConversations.value) return
+  isLoadingMore.value = true
+  await loadConversations(false)
+}
+
+async function handleSearchConversations(keyword: string, searchContent: boolean) {
+  currentSearchKeyword.value = keyword
+  currentSearchContent.value = searchContent
+  isSearching.value = true
+  await loadConversations(true)
+}
+
+function handleClearSearch() {
+  currentSearchKeyword.value = ''
+  currentSearchContent.value = false
+  loadConversations(true)
 }
 
 async function ensureProjectId() {

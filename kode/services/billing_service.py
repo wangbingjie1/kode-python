@@ -371,7 +371,9 @@ class BillingService:
     @staticmethod
     async def check_quota(db: AsyncSession, user_id: str) -> bool:
         """
-        检查用户是否还有可用配额。
+        检查用户是否还有可用配额（快速版本）。
+
+        优化：使用单次查询获取订阅+套餐+使用量，避免多次数据库往返。
 
         Args:
             db: 数据库会话
@@ -380,12 +382,41 @@ class BillingService:
         Returns:
             True 如果有可用配额，False 如果已超额
         """
-        try:
-            summary = await BillingService.get_usage_summary(db, user_id)
-            return not summary.is_quota_exceeded
-        except ValueError:
+        now = datetime.utcnow()
+
+        # 🚀 优化：单次联合查询获取订阅、套餐、使用量
+        result = await db.execute(
+            select(Subscription.id, Plan.token_quota, Usage.token_count)
+            .join(Plan, Subscription.plan_id == Plan.id)
+            .outerjoin(
+                Usage,
+                and_(
+                    Usage.subscription_id == Subscription.id,
+                    Usage.period_start <= now,
+                    Usage.period_end > now,
+                ),
+            )
+            .where(
+                and_(
+                    Subscription.user_id == user_id,
+                    Subscription.status == SubscriptionStatus.ACTIVE,
+                    Subscription.end_date > now,
+                )
+            )
+            .order_by(Subscription.end_date.desc())
+            .limit(1)
+        )
+        row = result.first()
+
+        if not row:
             # 没有有效订阅
             return False
+
+        _, token_quota, token_count = row
+        token_count = token_count or 0
+
+        # 检查是否超额
+        return token_count < token_quota
 
     @staticmethod
     async def list_plans(

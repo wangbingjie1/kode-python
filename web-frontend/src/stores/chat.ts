@@ -520,15 +520,13 @@ export const useChatStore = defineStore('chat', () => {
 
   /**
    * Send message
+   *
+   * 注意：不再依赖心跳状态来判断能否发送消息
+   * 心跳只用于 UI 显示"在线状态"，不阻止实际操作
+   * 如果 token 过期，SSE 连接会返回 401，前端会自动处理
   */
   async function sendMessage(content: string, databaseName?: string) {
-    // 检查心跳连接状态
-    if (!isConnected.value) {
-      notification.error('连接断开', '与服务器的连接已断开，请刷新页面重试')
-      throw new Error('Not connected to server (heartbeat disconnected)')
-    }
-
-    // 检查是否有活跃的对话
+    // 检查是否有活跃的对话（只检查是否设置了 conversationId）
     if (!sseService.isConnected()) {
       throw new Error('No active conversation')
     }

@@ -16,11 +16,10 @@ from kode.models.ontology_version import OntologyVersion
 from kode.schemas.chat import (
     ConversationCreate,
     ConversationResponse,
+    ConversationListResponse,
     MessageResponse,
 )
 from kode.web.dependencies import get_current_user
-from kode.services.billing_service import BillingService
-from kode.web.middleware.quota_check import check_user_quota
 import logging
 
 logger = logging.getLogger(__name__)
@@ -88,7 +87,8 @@ async def verify_conversation_ownership(
         .where(
             and_(
                 Conversation.id == conversation_id,
-                Project.user_id == user_id
+                Project.user_id == user_id,
+                Conversation.deleted_at.is_(None)  # 排除已软删除的
             )
         )
     )
@@ -97,8 +97,14 @@ async def verify_conversation_ownership(
     if not conversation:
         if check_exists:
             # 检查对话是否存在（用于区分 404 和 403）
+            # 已删除的对话也视为不存在
             exists_result = await db.execute(
-                select(Conversation.id).where(Conversation.id == conversation_id)
+                select(Conversation.id).where(
+                    and_(
+                        Conversation.id == conversation_id,
+                        Conversation.deleted_at.is_(None)
+                    )
+                )
             )
             if not exists_result.scalar_one_or_none():
                 raise HTTPException(
@@ -120,8 +126,8 @@ async def create_conversation(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new conversation"""
-    # Check quota before creating conversation
-    await check_user_quota(current_user.id, db)
+    # ✅ 优化：移除配额检查，创建空会话不消耗 token
+    # 配额检查移到发送消息时进行（SSE 端点）
 
     # Get or create project
     if conversation.project_id:
@@ -149,40 +155,20 @@ async def create_conversation(
             await db.flush()  # Flush to get project.id
 
     # Create conversation
+    # ✅ 优化：在 Python 端生成所有字段，避免 refresh 查询
+    now = datetime.utcnow()
     db_conversation = Conversation(
         title=conversation.title or "New Conversation",
         project_id=project.id,
+        created_at=now,
+        updated_at=now,
     )
 
     db.add(db_conversation)
     await db.commit()
-    await db.refresh(db_conversation)
+    # 不需要 refresh，id/created_at/updated_at 都在 Python 端生成
 
-    # 更新会话计数（统计用户当前计费周期的总会话数）
-    try:
-        usage = await BillingService.get_current_usage(db, current_user.id)
-        if usage:
-            # 统计当前计费周期内的会话数
-            conversation_count_result = await db.execute(
-                select(func.count(Conversation.id)).where(
-                    and_(
-                        Conversation.project_id.in_(
-                            select(Project.id).where(Project.user_id == current_user.id)
-                        ),
-                        Conversation.created_at >= usage.period_start,
-                        Conversation.created_at < usage.period_end,
-                    )
-                )
-            )
-            total_conversations = conversation_count_result.scalar() or 0
-
-            # ❌ 移除错误的 usage 更新调用
-            # increment_usage 不支持 conversation_count 参数
-            # 会话计数不计入配额，只用于统计展示
-            logger.info(f"Created conversation {db_conversation.id} for user {current_user.id} (total: {total_conversations})")
-    except Exception as e:
-        # 会话计数统计失败不应该影响主流程
-        logger.warning(f"Failed to count conversations: {e}")
+    logger.info(f"Created conversation {db_conversation.id} for user {current_user.id}")
 
     return db_conversation
 
@@ -247,12 +233,13 @@ async def delete_conversation(
     logger.info(f"Soft deleted conversation {conversation_id} for user {current_user.id}")
 
 
-@router.get("/projects/{project_id}/conversations", response_model=List[ConversationResponse])
+@router.get("/projects/{project_id}/conversations", response_model=ConversationListResponse)
 async def list_project_conversations(
     project_id: str,
-    limit: int = 50,
+    limit: int = 20,
     offset: int = 0,
     search: str = None,
+    search_content: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -261,9 +248,10 @@ async def list_project_conversations(
 
     Args:
         project_id: Project ID
-        limit: Maximum number of conversations to return (default 50, max 100)
+        limit: Maximum number of conversations to return (default 20, max 100)
         offset: Number of conversations to skip (for pagination)
-        search: Optional search keyword to filter by title
+        search: Optional search keyword to filter by title (and content if search_content=True)
+        search_content: If True, also search in message content (slower)
     """
     # Verify project exists and belongs to current user
     project = await verify_project_ownership(
@@ -273,27 +261,103 @@ async def list_project_conversations(
     # Limit max results
     limit = min(limit, 100)
 
-    # Build query - 排除已软删除的对话
-    query = select(Conversation).where(
-        and_(
-            Conversation.project_id == project_id,
-            Conversation.deleted_at.is_(None)  # 只显示未删除的
-        )
+    # 基础条件：项目内未删除的对话
+    base_condition = and_(
+        Conversation.project_id == project_id,
+        Conversation.deleted_at.is_(None)
     )
 
-    # Add search filter if provided
+    # 搜索消息内容时，需要关联 Message 表
+    matched_messages = {}  # conversation_id -> matched_message
+    content_matched_ids = set()
+
+    if search and search.strip() and search_content:
+        search_term = f"%{search.strip()}%"
+        # 搜索消息内容，获取匹配的对话ID和消息片段
+        content_query = (
+            select(Message.conversation_id, Message.content)
+            .join(Conversation, Message.conversation_id == Conversation.id)
+            .join(Project, Conversation.project_id == Project.id)
+            .where(
+                and_(
+                    Conversation.project_id == project_id,
+                    Conversation.deleted_at.is_(None),
+                    Project.user_id == current_user.id,
+                    Message.role == "user",  # 只搜索用户消息
+                    Message.content.ilike(search_term)
+                )
+            )
+            .distinct()
+        )
+        content_result = await db.execute(content_query)
+        for conv_id, content in content_result:
+            content_matched_ids.add(conv_id)
+            # 提取匹配片段（最多100字符）
+            if conv_id not in matched_messages:
+                search_lower = search.strip().lower()
+                content_lower = content.lower()
+                idx = content_lower.find(search_lower)
+                if idx >= 0:
+                    start = max(0, idx - 30)
+                    end = min(len(content), idx + len(search.strip()) + 70)
+                    snippet = content[start:end]
+                    if start > 0:
+                        snippet = "..." + snippet
+                    if end < len(content):
+                        snippet = snippet + "..."
+                    matched_messages[conv_id] = snippet
+
+    # 构建主查询
     if search and search.strip():
         search_term = f"%{search.strip()}%"
-        query = query.where(Conversation.title.ilike(search_term))
+        if search_content and content_matched_ids:
+            # 标题匹配 OR 内容匹配
+            query = select(Conversation).where(
+                and_(
+                    base_condition,
+                    (Conversation.title.ilike(search_term) | Conversation.id.in_(content_matched_ids))
+                )
+            )
+        else:
+            # 仅标题匹配
+            query = select(Conversation).where(
+                and_(base_condition, Conversation.title.ilike(search_term))
+            )
+    else:
+        query = select(Conversation).where(base_condition)
 
-    # Add ordering and pagination
+    # 计算总数
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # 添加排序和分页
     query = query.order_by(Conversation.updated_at.desc()).limit(limit).offset(offset)
 
-    # Execute query
+    # 执行查询
     result = await db.execute(query)
     conversations = result.scalars().all()
 
-    return conversations
+    # 构建响应，附加匹配的消息片段
+    items = []
+    for conv in conversations:
+        item = ConversationResponse(
+            id=conv.id,
+            title=conv.title,
+            project_id=conv.project_id,
+            created_at=conv.created_at,
+            updated_at=conv.updated_at,
+            matched_message=matched_messages.get(conv.id)
+        )
+        items.append(item)
+
+    return ConversationListResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=(offset + len(items)) < total
+    )
 
 
 @router.get("/conversations/{conversation_id}/api_traces")

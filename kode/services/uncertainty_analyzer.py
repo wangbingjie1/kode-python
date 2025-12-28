@@ -41,7 +41,7 @@ class UncertaintyAnalyzer:
 
     def __init__(self, model_manager: ModelManager):
         self.model_manager = model_manager
-        self.query_timeout = 30  # 单个查询超时秒数
+        self.query_timeout = 300  # 单个查询超时秒数（5分钟）
         self.max_rows = 100      # 最大返回行数
 
     def is_analyzable(self, uncertainty: Dict) -> bool:
