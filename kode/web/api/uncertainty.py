@@ -88,15 +88,16 @@ def _get_domains_dir(connection_name: str, user_id: str = None) -> Path:
         领域目录的 Path 对象
     """
     config = ConfigManager()
-    ontology_path = config.get("storage.ontology_path", "./ontology_store")
+    # 🔧 修复：领域文件存储在 schema_store 而不是 ontology_store
+    schema_path = config.get("storage.schema_path", "./schema_store")
 
     # 获取用户 ID
     if user_id is None:
         user_id = get_current_user_id()
 
-    # 构建路径：ontology_store/{user_id}/{connection_name}/domains/
+    # 构建路径：schema_store/{user_id}/{connection_name}/domains/
     safe_conn_name = get_safe_connection_path(connection_name)
-    return Path(ontology_path) / user_id / safe_conn_name / "domains"
+    return Path(schema_path) / user_id / safe_conn_name / "domains"
 
 
 def _load_ontology(ontology_file: Path) -> Dict[str, Any]:
@@ -354,10 +355,44 @@ async def sidebar_load_uncertainties(request: SidebarLoadRequest):
         SidebarLoadResponse: 分组后的问题列表和统计信息
     """
     try:
+        all_uncertainties = []
+        data_source = None  # 记录数据来源：'ontology' 或 'domains'
+
+        # 🔧 优先从本体文件加载，如果不存在则回退到领域文件
         ontology_file = _get_ontology_file(request.connection_name)
+        domains_dir = _get_domains_dir(request.connection_name)
 
-        if not ontology_file.exists():
-            # 返回空结果而非 404，让前端显示"尚未分析"状态
+        if ontology_file.exists():
+            # 加载本体文件
+            ontology_data = _load_ontology(ontology_file)
+            if ontology_data:
+                all_uncertainties = ontology_data.get("uncertainties", [])
+                data_source = 'ontology'
+
+                # 检查是否是 business_context.json（业务理解问卷结果，没有 uncertainties）
+                is_business_context_only = (
+                    ("answers" in ontology_data or "qa_pairs" in ontology_data) and
+                    "entities" not in ontology_data and
+                    len(all_uncertainties) == 0
+                )
+
+                if is_business_context_only:
+                    # 回退到领域文件
+                    data_source = None
+
+        # 如果本体文件没有不确定性数据，尝试从领域文件加载
+        if not all_uncertainties and domains_dir.exists():
+            domain_data_list = _load_all_domain_files(domains_dir)
+            for domain_data in domain_data_list:
+                domain_name = domain_data.get("domain_name", Path(domain_data.get("_file_path", "unknown")).stem)
+                for u in domain_data.get("uncertainties", []):
+                    u["domain"] = domain_name
+                    all_uncertainties.append(u)
+            if all_uncertainties:
+                data_source = 'domains'
+
+        # 如果仍然没有数据
+        if not all_uncertainties:
             return SidebarLoadResponse(
                 status="no_analysis",
                 connection_name=request.connection_name,
@@ -368,48 +403,7 @@ async def sidebar_load_uncertainties(request: SidebarLoadRequest):
                          "medium": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
                          "low": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0}},
                 can_build_ontology=False,
-                message="尚未构建本体，请先让 AI 构建数据库本体。"
-            )
-
-        # 加载本体文件
-        ontology_data = _load_ontology(ontology_file)
-        if not ontology_data:
-            return SidebarLoadResponse(
-                status="no_analysis",
-                connection_name=request.connection_name,
-                total_count=0,
-                filtered_count=0,
-                groups=[],
-                summary={"high": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
-                         "medium": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
-                         "low": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0}},
-                can_build_ontology=False,
-                message="本体文件加载失败。"
-            )
-
-        # 从本体文件中提取 uncertainties
-        all_uncertainties = ontology_data.get("uncertainties", [])
-
-        # 检查是否是 business_context.json（业务理解问卷结果，没有 uncertainties）
-        # 判断依据：有 "answers" 或 "qa_pairs" 字段，但没有 "uncertainties" 或 "entities"
-        is_business_context_only = (
-            ("answers" in ontology_data or "qa_pairs" in ontology_data) and
-            "entities" not in ontology_data and
-            len(all_uncertainties) == 0
-        )
-
-        if is_business_context_only:
-            return SidebarLoadResponse(
-                status="business_context_only",
-                connection_name=request.connection_name,
-                total_count=0,
-                filtered_count=0,
-                groups=[],
-                summary={"high": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
-                         "medium": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0},
-                         "low": {"total": 0, "resolved": 0, "skipped": 0, "remaining": 0}},
-                can_build_ontology=False,
-                message="业务理解问卷已完成，但本体尚未构建。请让 AI 继续构建数据库本体。"
+                message="尚未进行不确定性分析，请先让 AI 分析数据库结构。"
             )
 
         # 计算总统计
@@ -530,7 +524,7 @@ async def sidebar_answer_single(request: SingleAnswerRequest):
     回答单个不确定性问题
 
     前端侧边栏中用户回答单个问题后调用。
-    答案会立即保存到 ontology_v2.json 文件。
+    答案会保存到本体文件或领域文件。
 
     Args:
         request: 单个回答请求
@@ -539,20 +533,41 @@ async def sidebar_answer_single(request: SingleAnswerRequest):
         SingleAnswerResponse: 回答结果和剩余问题统计
     """
     try:
+        # 🔧 优先从本体文件查找，如果不存在则查找领域文件
         ontology_file = _get_ontology_file(request.connection_name)
+        domains_dir = _get_domains_dir(request.connection_name)
 
-        if not ontology_file.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="未找到本体文件"
-            )
+        ontology_data = None
+        domain_file_path = None  # 记录找到问题的领域文件路径
+        data_source = None
 
-        # 加载本体文件
-        ontology_data = _load_ontology(ontology_file)
+        # 先尝试本体文件
+        if ontology_file.exists():
+            ontology_data = _load_ontology(ontology_file)
+            if ontology_data and ontology_data.get("uncertainties"):
+                data_source = 'ontology'
+
+        # 如果本体文件没有不确定性，尝试领域文件
+        if not data_source and domains_dir.exists():
+            for domain_file in domains_dir.glob("*.json"):
+                try:
+                    with open(domain_file, "r", encoding="utf-8") as f:
+                        domain_data = json.load(f)
+                    for u in domain_data.get("uncertainties", []):
+                        if u.get("id") == request.uncertainty_id:
+                            ontology_data = domain_data
+                            domain_file_path = domain_file
+                            data_source = 'domains'
+                            break
+                    if data_source:
+                        break
+                except Exception:
+                    continue
+
         if not ontology_data:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="本体文件加载失败"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="未找到本体文件或领域文件"
             )
 
         # 查找并更新问题
@@ -574,8 +589,13 @@ async def sidebar_answer_single(request: SingleAnswerRequest):
                 detail=f"未找到问题 ID: {request.uncertainty_id}"
             )
 
-        # 保存本体文件
-        _save_ontology(ontology_file, ontology_data)
+        # 🔧 根据数据来源保存到正确的文件
+        if data_source == 'domains' and domain_file_path:
+            with open(domain_file_path, "w", encoding="utf-8") as f:
+                json.dump(ontology_data, f, indent=2, ensure_ascii=False)
+            logger.info(f"[sidebar/answer] Saved to domain file: {domain_file_path}")
+        else:
+            _save_ontology(ontology_file, ontology_data)
 
         # ========== 新增：自动更新本体实体描述 ==========
         try:
@@ -622,13 +642,25 @@ async def sidebar_answer_single(request: SingleAnswerRequest):
         # ================================================
 
         # 计算剩余高优先级问题
-        summary = _compute_summary(uncertainties)
+        # 🔧 如果是从领域文件加载，需要从所有领域文件汇总统计
+        if data_source == 'domains':
+            all_uncertainties = []
+            for domain_file in domains_dir.glob("*.json"):
+                try:
+                    with open(domain_file, "r", encoding="utf-8") as f:
+                        domain_data = json.load(f)
+                    all_uncertainties.extend(domain_data.get("uncertainties", []))
+                except Exception:
+                    continue
+            summary = _compute_summary(all_uncertainties)
+        else:
+            summary = _compute_summary(uncertainties)
         can_build = summary["high"]["remaining"] == 0
 
         return SingleAnswerResponse(
             status="success",
             uncertainty_id=request.uncertainty_id,
-            message="回答已保存到本体文件",
+            message="回答已保存",
             remaining_high_priority=summary["high"]["remaining"],
             can_build_ontology=can_build
         )
@@ -658,48 +690,81 @@ async def sidebar_batch_answer(request: SidebarBatchAnswerRequest):
         SidebarBatchAnswerResponse: 批量回答结果
     """
     try:
+        # 🔧 优先从本体文件查找，如果不存在则查找领域文件
         ontology_file = _get_ontology_file(request.connection_name)
+        domains_dir = _get_domains_dir(request.connection_name)
 
-        if not ontology_file.exists():
+        data_source = None
+        domain_files_data = {}  # {file_path: data} 用于批量更新领域文件
+
+        # 先尝试本体文件
+        if ontology_file.exists():
+            ontology_data = _load_ontology(ontology_file)
+            if ontology_data and ontology_data.get("uncertainties"):
+                data_source = 'ontology'
+
+        # 如果本体文件没有不确定性，尝试领域文件
+        if not data_source and domains_dir.exists():
+            for domain_file in domains_dir.glob("*.json"):
+                try:
+                    with open(domain_file, "r", encoding="utf-8") as f:
+                        domain_data = json.load(f)
+                    if domain_data.get("uncertainties"):
+                        domain_files_data[domain_file] = domain_data
+                except Exception:
+                    continue
+            if domain_files_data:
+                data_source = 'domains'
+
+        if not data_source:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="未找到本体文件"
-            )
-
-        # 加载本体文件
-        ontology_data = _load_ontology(ontology_file)
-        if not ontology_data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="本体文件加载失败"
+                detail="未找到本体文件或领域文件"
             )
 
         resolved_count = 0
-        not_found = []
-        uncertainties = ontology_data.get("uncertainties", [])
+        not_found = list(request.answers.keys())
 
-        # 更新所有匹配的问题
-        for u in uncertainties:
-            uncertainty_id = u.get("id")
-            if uncertainty_id in request.answers:
-                answer = request.answers[uncertainty_id]
-                u["status"] = "resolved"
-                u["answer"] = answer
-                u["answered_at"] = datetime.now().isoformat()
-                resolved_count += 1
-                logger.info(f"[sidebar/batch-answer] Updated {uncertainty_id}: {answer}")
+        if data_source == 'ontology':
+            uncertainties = ontology_data.get("uncertainties", [])
+            # 更新所有匹配的问题
+            for u in uncertainties:
+                uncertainty_id = u.get("id")
+                if uncertainty_id in request.answers:
+                    answer = request.answers[uncertainty_id]
+                    u["status"] = "resolved"
+                    u["answer"] = answer
+                    u["answered_at"] = datetime.now().isoformat()
+                    resolved_count += 1
+                    not_found.remove(uncertainty_id)
+                    logger.info(f"[sidebar/batch-answer] Updated {uncertainty_id}: {answer}")
+            # 保存本体文件
+            _save_ontology(ontology_file, ontology_data)
+            summary = _compute_summary(uncertainties)
+        else:
+            # 从领域文件批量更新
+            all_uncertainties = []
+            for domain_file, domain_data in domain_files_data.items():
+                updated = False
+                for u in domain_data.get("uncertainties", []):
+                    uncertainty_id = u.get("id")
+                    if uncertainty_id in request.answers:
+                        answer = request.answers[uncertainty_id]
+                        u["status"] = "resolved"
+                        u["answer"] = answer
+                        u["answered_at"] = datetime.now().isoformat()
+                        resolved_count += 1
+                        if uncertainty_id in not_found:
+                            not_found.remove(uncertainty_id)
+                        updated = True
+                        logger.info(f"[sidebar/batch-answer] Updated {uncertainty_id}: {answer}")
+                    all_uncertainties.append(u)
+                # 保存更新后的领域文件
+                if updated:
+                    with open(domain_file, "w", encoding="utf-8") as f:
+                        json.dump(domain_data, f, indent=2, ensure_ascii=False)
+            summary = _compute_summary(all_uncertainties)
 
-        # 检查未找到的问题
-        found_ids = {u.get("id") for u in uncertainties if u.get("id")}
-        for uid in request.answers.keys():
-            if uid not in found_ids:
-                not_found.append(uid)
-
-        # 保存本体文件
-        _save_ontology(ontology_file, ontology_data)
-
-        # 计算统计
-        summary = _compute_summary(uncertainties)
         can_build = summary["high"]["remaining"] == 0
 
         return SidebarBatchAnswerResponse(
@@ -709,7 +774,7 @@ async def sidebar_batch_answer(request: SidebarBatchAnswerRequest):
             remaining_high_priority=summary["high"]["remaining"],
             can_build_ontology=can_build,
             summary=summary,
-            message=f"已保存 {resolved_count} 个回答到本体文件" +
+            message=f"已保存 {resolved_count} 个回答" +
                     (f"，{len(not_found)} 个问题未找到" if not_found else "") +
                     ("，可以构建本体！" if can_build else f"，还需回答 {summary['high']['remaining']} 个高优先级问题")
         )

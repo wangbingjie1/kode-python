@@ -531,6 +531,30 @@ export const useChatStore = defineStore('chat', () => {
       throw new Error('No active conversation')
     }
 
+    // 🔥 发送消息前检查配额状态
+    try {
+      const { useBillingStore } = await import('@/stores/billing')
+      const billingStore = useBillingStore()
+      await billingStore.fetchUsageSummary()
+
+      if (billingStore.isQuotaExceeded) {
+        // 配额已用尽，显示友好提示而不是发送消息
+        notification.error(
+          'Token 配额不足',
+          '您的 Token 配额已用尽，请升级套餐或等待下个计费周期',
+          10000  // 显示 10 秒
+        )
+        throw new Error('TOKEN_QUOTA_EXCEEDED')
+      }
+    } catch (quotaCheckError: any) {
+      // 如果是配额不足错误，直接抛出
+      if (quotaCheckError.message === 'TOKEN_QUOTA_EXCEEDED') {
+        throw quotaCheckError
+      }
+      // 其他错误（如网络问题），记录但继续尝试发送（让后端来拒绝）
+      console.warn('[ChatStore] Failed to check quota, proceeding anyway:', quotaCheckError)
+    }
+
     // 标记 Token 统计生成中，避免 UI 闪跳
     tokenStatsStatus.value = 'pending'
 
@@ -546,10 +570,22 @@ export const useChatStore = defineStore('chat', () => {
 
     // Send via SSE
     try {
-      sseService.sendMessage(content, databaseName)
+      await sseService.sendMessage(content, databaseName)
       isTyping.value = true
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error)
+      // 🔥 处理 SSE 连接失败，可能是配额不足
+      if (error.mayBeQuotaExceeded) {
+        notification.error(
+          '发送失败',
+          '消息发送失败，可能是 Token 配额已用尽或网络问题，请检查后重试',
+          8000
+        )
+        // 移除刚添加的用户消息（因为没发送成功）
+        messages.value.pop()
+      }
+      isTyping.value = false
+      tokenStatsStatus.value = 'idle'
       throw error
     }
   }

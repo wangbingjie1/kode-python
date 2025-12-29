@@ -39,6 +39,18 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
+    // 🔥 处理 429 配额不足错误 - 不要登出，显示友好提示
+    if (error.response?.status === 429) {
+      console.warn('[API] Token quota exceeded (429)')
+      const errorData = error.response?.data || {}
+      // 标记错误类型，前端可以据此显示特定 UI
+      error.isQuotaExceeded = true
+      error.quotaMessage = errorData.detail || 'Token 配额已用尽，请升级套餐或等待下个计费周期'
+      error.errorCode = errorData.error_code || 'TOKEN_QUOTA_EXCEEDED'
+      // 不要 logout，直接返回错误让调用方处理
+      return Promise.reject(error)
+    }
+
     // 如果是401错误且不是刷新token的请求,尝试刷新token
     if (
       error.response?.status === 401 &&

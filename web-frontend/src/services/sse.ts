@@ -295,18 +295,20 @@ export class SSEService {
           }
         }
 
-        // Handle errors - 关键：检测 401 并尝试刷新 token
+        // Handle errors - 🔥 修复：不要因为 SSE 连接失败就 logout
+        // SSE 失败可能是：401 认证失败、429 配额不足、网络问题等
+        // EventSource API 不暴露 HTTP 状态码，所以我们不能确定具体原因
         this.eventSource.onerror = async (error) => {
           console.error('SSE error:', error)
 
-          // EventSource 不直接暴露 HTTP 状态码，但连接立即失败通常是 401
+          // EventSource 不直接暴露 HTTP 状态码
           // 检查 readyState: 0=CONNECTING, 1=OPEN, 2=CLOSED
           const readyState = this.eventSource?.readyState
+          this.disconnect()
 
-          // 如果连接从未打开过（立即失败），可能是认证问题
+          // 如果连接从未打开过（立即失败），尝试刷新 token 重试一次
           if (readyState === EventSource.CLOSED && !isRetry) {
             console.log('[SSE] Connection failed immediately, trying to refresh token...')
-            this.disconnect()
 
             try {
               // 动态导入避免循环依赖
@@ -325,18 +327,19 @@ export class SSEService {
               console.error('[SSE] Token refresh failed:', refreshError)
             }
 
-            // 刷新失败，跳转登录
-            const { useAuthStore } = await import('@/stores/auth')
-            const authStore = useAuthStore()
-            authStore.logout()
-            window.location.href = '/login'
-            reject(new Error('Authentication failed'))
+            // 🔥 关键修复：即使 token 刷新失败，也不要自动 logout
+            // 可能是 429 配额不足或其他非认证错误
+            // 让调用方（chat store）处理错误，显示友好提示
+            console.warn('[SSE] Connection failed after retry, NOT logging out automatically')
+            const errorObj = new Error('SSE connection failed - please check your quota or try again')
+            ;(errorObj as any).mayBeQuotaExceeded = true  // 标记可能是配额问题
+            this.errorCallbacks.forEach(callback => callback(errorObj))
+            reject(errorObj)
             return
           }
 
           const errorObj = new Error('SSE connection error')
           this.errorCallbacks.forEach(callback => callback(errorObj))
-          this.disconnect()
           reject(errorObj)
         }
 
