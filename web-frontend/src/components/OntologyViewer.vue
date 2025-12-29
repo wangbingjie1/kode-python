@@ -20,6 +20,14 @@
         >
           {{ isExporting ? '导出中...' : '导出' }}
         </button>
+        <button
+          v-if="selectedOntology"
+          @click="handleDelete"
+          class="btn-delete"
+          :disabled="isDeleting"
+        >
+          {{ isDeleting ? '删除中...' : '删除' }}
+        </button>
       </div>
     </div>
 
@@ -199,7 +207,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import { listOntologies, getOntology, searchOntology } from '@/services/api'
+import { listOntologies, getOntology, searchOntology, deleteOntology } from '@/services/api'
 import { notification } from '@/composables/useNotification'
 import { use } from 'echarts/core'
 import { GraphChart } from 'echarts/charts'
@@ -225,6 +233,9 @@ const graphOption = ref<any>({})
 
 // 导出状态
 const isExporting = ref(false)
+
+// 删除状态
+const isDeleting = ref(false)
 
 // 直接导出本体 JSON 文件
 function handleExportJson() {
@@ -254,6 +265,34 @@ function handleExportJson() {
     notification.error('导出失败', error.message || '请稍后重试')
   } finally {
     isExporting.value = false
+  }
+}
+
+// 删除本体
+async function handleDelete() {
+  if (!selectedOntology.value) {
+    return
+  }
+
+  const connectionName = selectedOntology.value.connection_name
+  const confirmed = window.confirm(`确定要删除本体 "${connectionName}" 吗？此操作不可恢复。`)
+  if (!confirmed) {
+    return
+  }
+
+  isDeleting.value = true
+  try {
+    await deleteOntology(connectionName)
+    notification.success('删除成功', `本体 "${connectionName}" 已删除`)
+
+    // 清空选中状态并刷新列表
+    selectedOntology.value = null
+    searchResults.value = []
+    await loadOntologies()
+  } catch (error: any) {
+    notification.error('删除失败', error.message || '请稍后重试')
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -512,6 +551,26 @@ function formatDate(dateStr: string): string {
 }
 
 .btn-export:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.btn-delete {
+  padding: 0.5rem 1rem;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background 0.2s;
+}
+
+.btn-delete:hover:not(:disabled) {
+  background: #d32f2f;
+}
+
+.btn-delete:disabled {
   background: #ccc;
   cursor: not-allowed;
 }

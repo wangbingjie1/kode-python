@@ -739,6 +739,51 @@ async def search_ontology(name: str, search_query: OntologySearchQuery):
         )
 
 
+@router.delete("/ontologies/{name}")
+async def delete_ontology(name: str):
+    """
+    Delete an ontology and all its associated files.
+
+    Args:
+        name: Database connection name
+
+    Returns:
+        Success message
+    """
+    import shutil
+
+    try:
+        # Validate connection name
+        if not name or name in ["undefined", "null", ""]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid connection name",
+            )
+
+        # Find ontology directory
+        ontology_dir = _find_ontology_path(name)
+        if not ontology_dir:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Ontology '{name}' not found",
+            )
+
+        # Delete the directory and all contents
+        shutil.rmtree(ontology_dir)
+        logger.info(f"Deleted ontology: {name} at {ontology_dir}")
+
+        return {"success": True, "message": f"Ontology '{name}' deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting ontology: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete ontology: {str(e)}",
+        )
+
+
 @router.post("/ontologies/{name}/export")
 async def export_ontology(name: str, export_request: OntologyExportRequest):
     """

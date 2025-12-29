@@ -358,6 +358,16 @@ export interface OntologyExportRequest {
 }
 
 /**
+ * Delete an ontology
+ */
+export async function deleteOntology(name: string): Promise<{ success: boolean; message: string }> {
+  const response = await apiClient.delete<{ success: boolean; message: string }>(
+    `/database/ontologies/${name}`
+  )
+  return response.data
+}
+
+/**
  * Export ontology in specified format
  * Returns a Blob for file download
  */
