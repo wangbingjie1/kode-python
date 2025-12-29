@@ -693,7 +693,7 @@ class OntologyBuilderTool(KodeTool):
         self, ontology: Dict[str, Any], connection_name: str, version: str
     ) -> Dict[str, Any]:
         """
-        Save ontology to file (V3 format - 产品经理版本).
+        Save ontology to file (V3 format) + 创建版本快照.
 
         Args:
             ontology: Ontology data (V3 format with schema/business_logic/mappings/uncertainties)
@@ -719,18 +719,87 @@ class OntologyBuilderTool(KodeTool):
             ontology["version"] = ontology.get("version", "3.0")
             ontology["updated_at"] = datetime.now().isoformat()
 
-            # 保存到 ontology_v3.json（V3 主文件）
+            # 1. 保存到 ontology_v3.json（V3 主文件）
             v3_file = conn_dir / "ontology_v3.json"
             with open(v3_file, "w", encoding="utf-8") as f:
                 json.dump(ontology, f, indent=2, ensure_ascii=False)
 
-            return {"saved": True, "version": ontology["version"], "latest_path": str(v3_file)}
+            logger.info(f"✅ 本体已保存到: {v3_file}")
+
+            # 2. 创建版本快照（异步）
+            version_number = self._create_version_snapshot_async(
+                user_id=user_id,
+                connection_name=connection_name,
+                ontology_data=ontology,
+                change_summary=f"本体构建完成（版本: {version}）"
+            )
+
+            return {
+                "saved": True,
+                "version": ontology["version"],
+                "latest_path": str(v3_file),
+                "version_number": version_number
+            }
 
         except Exception as e:
+            logger.error(f"❌ 保存本体失败: {e}")
             return {
                 "saved": False,
                 "error": str(e),
             }
+
+    def _create_version_snapshot_async(
+        self,
+        user_id: str,
+        connection_name: str,
+        ontology_data: Dict[str, Any],
+        change_summary: str
+    ) -> Optional[int]:
+        """异步创建版本快照"""
+        try:
+            from kode.services.ontology_version_manager import OntologyVersionManager
+            from kode.database.session import async_session_maker
+            import asyncio
+            import threading
+
+            def _create_version_in_thread():
+                try:
+                    async def _async_create():
+                        async with async_session_maker() as session:
+                            version_manager = OntologyVersionManager()
+                            version = await version_manager.create_version(
+                                session=session,
+                                user_id=user_id,
+                                connection_name=connection_name,
+                                ontology_data=ontology_data,
+                                change_summary=change_summary,
+                                conversation_id=None,
+                                is_snapshot=True
+                            )
+                            logger.info(f"📦 创建本体版本快照: v{version.version_number}")
+                            return version.version_number
+
+                    # 在新事件循环中运行
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    result = loop.run_until_complete(_async_create())
+                    loop.close()
+                    return result
+                except Exception as e:
+                    logger.error(f"❌ 创建版本快照失败: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    return None
+
+            # 异步执行
+            thread = threading.Thread(target=_create_version_in_thread, daemon=True)
+            thread.start()
+            # 不等待线程完成，立即返回
+            return None  # 返回 None 表示版本号未知（异步创建中）
+
+        except Exception as e:
+            logger.error(f"❌ 启动版本快照创建失败: {e}")
+            return None
 
     def _build_qa_text(self, business_context: Dict[str, Any]) -> str:
         """从业务上下文构建问答文本

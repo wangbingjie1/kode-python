@@ -44,18 +44,19 @@ class Change:
 
 class OntologyUpdateManager:
     """
-    本体更新管理器：立即生效 + 异步优化
+    本体更新管理器：立即生效 + 立即持久化
 
     核心特性：
     1. 变更立即应用到内存中的本体
     2. 后续操作立即看到变更效果
-    3. 磁盘写入异步执行（不阻塞用户）
-    4. 数据库记录异步执行
+    3. 每次变更立即触发磁盘写入（异步，不阻塞用户）
+    4. 自动创建版本快照（异步）
+    5. 数据库记录异步执行
 
-    触发条件：
-    - 累积5次变更
-    - 距离上次写入超过10秒
-    - Layer 2 变更（添加类/属性/关系）
+    持久化策略：
+    - 每次变更都立即写盘（确保数据安全）
+    - 磁盘写入在后台线程执行（不影响响应速度）
+    - 同时创建版本快照到 versions/ 目录
     """
 
     # 类级别的锁（用于多线程安全）
@@ -78,18 +79,14 @@ class OntologyUpdateManager:
         # 构建影响图
         self.impact_graph = ChangeImpactGraph(self.ontology)
 
-        # 待写入磁盘的变更队列
+        # 待写入磁盘的变更队列（用于生成变更摘要）
         self.pending_writes: List[Change] = []
 
-        # 上次磁盘写入时间
+        # 上次磁盘写入时间（用于统计）
         self.last_disk_write = time.time()
 
-        # 变更计数
+        # 变更计数（用于统计）
         self.change_count = 0
-
-        # 配置参数
-        self.batch_size = 5  # 累积多少次变更触发写入
-        self.write_interval = 10  # 写入间隔（秒）
 
         # 版本管理相关
         self.last_version_created = None  # 上次创建的版本号
@@ -97,18 +94,37 @@ class OntologyUpdateManager:
     def _load_ontology(self) -> Dict[str, Any]:
         """从磁盘加载本体到内存"""
         if not self.ontology_path.exists():
-            logger.warning(f"本体文件不存在: {self.ontology_path}，创建空本体")
+            logger.warning(f"⚠️ 本体文件不存在: {self.ontology_path}")
+
+            # 安全检查：确保这是一个 v3 文件
+            if not str(self.ontology_path).endswith("ontology_v3.json"):
+                raise ValueError(
+                    f"❌ 错误的本体文件路径: {self.ontology_path}。"
+                    f"只支持 ontology_v3.json 文件。"
+                )
+
+            # 创建符合 v3 格式的空本体
+            logger.info("创建新的 v3 格式空本体")
             return {
-                "classes": {},
-                "relationships": [],
+                "version": "3.0",
+                "meta": {
+                    "ontology_name": f"{self.connection_name}_Ontology",
+                    "created_at": datetime.now().isoformat(),
+                    "source_connection": self.connection_name,
+                    "domains": []
+                },
+                "schema": {
+                    "classes": {},
+                    "relationships": []
+                },
                 "business_rules": [],
-                "metrics": [],
+                "metrics": []
             }
 
         try:
             with open(self.ontology_path, "r", encoding="utf-8") as f:
                 ontology = json.load(f)
-            logger.info(f"✅ 已加载本体: {self.ontology_path}")
+            logger.info(f"✅ 已加载本体: {self.ontology_path}（{len(json.dumps(ontology))} bytes）")
             return ontology
         except Exception as e:
             logger.error(f"❌ 加载本体失败: {e}")
@@ -297,10 +313,14 @@ class OntologyUpdateManager:
         is_v3 = version.startswith("3")
 
         if change.change_type == "add_enum_value":
-            # V3 路径: schema.classes.{domain}.{table}.attributes.{field}.enum_values
-            # V1/V2 路径: classes.{class}.properties.{field}.enum_values
+            # V3 路径: schema.classes.{domain}.{table}.attributes.{field}.enum_mapping
+            # V1/V2 路径: classes.{class}.properties.{field}.enum_mapping
+
+            # 判断目标字段是 enum_values 还是 enum_mapping
+            target_field = parts[-1] if parts[-1] in ["enum_values", "enum_mapping"] else "enum_values"
+
             if is_v3 and parts[0] == "schema" and parts[1] == "classes":
-                # V3 格式
+                # V3 格式: schema.classes.{domain}.{table}.attributes.{field}.{target_field}
                 domain = parts[2]
                 table_name = parts[3]
                 field_name = parts[5]
@@ -314,27 +334,63 @@ class OntologyUpdateManager:
                     .get(field_name, {})
                 )
             elif len(parts) >= 5 and parts[0] == "classes" and parts[2] == "properties":
+                # V1/V2 格式: classes.{class}.properties.{field}.{target_field}
+                # 但如果当前是 V3 格式，需要自动查找 domain
                 class_name = parts[1]
                 prop_name = parts[3]
-                prop_def = (
-                    self.ontology.get("classes", {})
-                    .get(class_name, {})
-                    .get("properties", {})
-                    .get(prop_name, {})
-                )
+
+                if is_v3:
+                    # 自动查找 class_name 所在的 domain
+                    schema_classes = self.ontology.get("schema", {}).get("classes", {})
+                    prop_def = None
+
+                    for domain_name, domain_tables in schema_classes.items():
+                        if class_name in domain_tables:
+                            prop_def = (
+                                domain_tables.get(class_name, {})
+                                .get("attributes", {})
+                                .get(prop_name, {})
+                            )
+                            if prop_def:
+                                logger.info(f"🔍 自动查找到表: {class_name} 位于域 {domain_name}")
+                                break
+
+                    if not prop_def:
+                        prop_def = {}
+                        logger.warning(f"⚠️ 未找到表: {class_name}")
+                else:
+                    # V1/V2 格式
+                    prop_def = (
+                        self.ontology.get("classes", {})
+                        .get(class_name, {})
+                        .get("properties", {})
+                        .get(prop_name, {})
+                    )
             else:
                 prop_def = {}
 
             if prop_def:
-                if "enum_values" not in prop_def:
-                    prop_def["enum_values"] = []
+                # 处理 enum_mapping（字典格式）或 enum_values（数组格式）
+                if target_field == "enum_mapping":
+                    # enum_mapping 是字典格式：{"1": "正常消耗", "2": "已使用"}
+                    if "enum_mapping" not in prop_def:
+                        prop_def["enum_mapping"] = {}
 
-                existing_values = [ev.get("value") for ev in prop_def["enum_values"]]
-                new_val = change.new_value if isinstance(change.new_value, dict) else {"value": change.new_value}
+                    # new_value 应该是字典
+                    if isinstance(change.new_value, dict):
+                        prop_def["enum_mapping"].update(change.new_value)
+                        logger.info(f"✅ 已更新枚举映射: {change.target_path} = {change.new_value}")
+                else:
+                    # enum_values 是数组格式（旧逻辑）
+                    if "enum_values" not in prop_def:
+                        prop_def["enum_values"] = []
 
-                if new_val.get("value") not in existing_values:
-                    prop_def["enum_values"].append(new_val)
-                    logger.info(f"✅ 已添加枚举值: {change.target_path} += {new_val}")
+                    existing_values = [ev.get("value") for ev in prop_def["enum_values"]]
+                    new_val = change.new_value if isinstance(change.new_value, dict) else {"value": change.new_value}
+
+                    if new_val.get("value") not in existing_values:
+                        prop_def["enum_values"].append(new_val)
+                        logger.info(f"✅ 已添加枚举值: {change.target_path} += {new_val}")
 
         elif change.change_type == "update_property_desc":
             # V3 路径: schema.classes.{domain}.{table}.attributes.{field}.constraint
@@ -506,8 +562,15 @@ class OntologyUpdateManager:
         logger.warning(f"⚠️ 复杂变更暂未实现: {change.change_type}")
 
     def _trigger_disk_write_if_needed(self, change_type: str):
-        """所有变更立即写盘"""
-        logger.info(f"🔄 触发磁盘写入（变更类型: {change_type}）")
+        """
+        每次变更立即触发磁盘写入
+
+        策略：立即持久化（不等待累积）
+        - 确保数据安全：每次变更都立即保存到磁盘
+        - 异步执行：在后台线程中写入，不阻塞用户操作
+        - 自动版本快照：同时创建版本历史记录
+        """
+        logger.info(f"🔄 立即触发磁盘写入（变更类型: {change_type}）")
 
         # 异步写入（不阻塞当前线程）
         threading.Thread(target=self._write_to_disk, daemon=True).start()
@@ -539,7 +602,7 @@ class OntologyUpdateManager:
         """创建版本快照（异步）"""
         try:
             from kode.services.ontology_version_manager import OntologyVersionManager
-            from kode.database.session import SessionLocal
+            from kode.database.session import async_session_maker
             import asyncio
 
             user_id = get_current_user_id()
@@ -549,7 +612,7 @@ class OntologyUpdateManager:
 
             # 创建异步任务
             async def _async_create_version():
-                async with SessionLocal() as session:
+                async with async_session_maker() as session:
                     version_manager = OntologyVersionManager()
                     version = await version_manager.create_version(
                         session=session,
@@ -562,15 +625,19 @@ class OntologyUpdateManager:
                     )
                     self.last_version_created = version.version_number
                     logger.info(f"📦 自动创建版本快照: v{version.version_number}")
+                    return version.version_number
 
             # 在新事件循环中运行（避免阻塞）
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(_async_create_version())
+            version_number = loop.run_until_complete(_async_create_version())
             loop.close()
+            logger.info(f"✅ 版本快照创建成功: v{version_number}")
 
         except Exception as e:
-            logger.warning(f"⚠️ 创建版本快照失败（不影响主流程）: {e}")
+            logger.error(f"❌ 创建版本快照失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
     def _generate_change_summary(self) -> str:
         """根据待处理变更生成摘要"""
