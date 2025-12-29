@@ -127,16 +127,16 @@ class OntologyUpdateTool(KodeTool):
                 config = ConfigManager()
                 ontology_store_path = config.get("storage.ontology_path", "./ontology_store")
 
-                # 确定本体文件路径（优先 v3，回退到 v2）
+                # 确定本体文件路径（只使用 v3，v2 已废弃）
                 # 使用用户隔离路径：ontology_store/{user_id}/{connection_name}/
                 safe_conn_name = get_safe_connection_path(connection_name)
                 ontology_base = Path(ontology_store_path) / user_id / safe_conn_name
                 ontology_path = ontology_base / "ontology_v3.json"
-                if not ontology_path.exists():
-                    ontology_path = ontology_base / "ontology_v2.json"
 
+                # 确保父目录存在
                 if not ontology_path.exists():
                     logger.warning(f"⚠️ 本体文件不存在: {ontology_path}，将创建新本体")
+                    ontology_base.mkdir(parents=True, exist_ok=True)
 
                 # 创建管理器
                 manager = OntologyUpdateManager(connection_name, str(ontology_path))

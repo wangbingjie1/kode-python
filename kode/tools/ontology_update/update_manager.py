@@ -15,6 +15,7 @@ import copy
 from kode.tools.ontology_update.impact_graph import ChangeImpactGraph
 from kode.models.ontology_change import ChangeType, ChangeStatus
 from kode.utils.logger import get_logger
+from kode.utils.context import get_current_user_id
 
 logger = get_logger(__name__)
 
@@ -89,6 +90,9 @@ class OntologyUpdateManager:
         # 配置参数
         self.batch_size = 5  # 累积多少次变更触发写入
         self.write_interval = 10  # 写入间隔（秒）
+
+        # 版本管理相关
+        self.last_version_created = None  # 上次创建的版本号
 
     def _load_ontology(self) -> Dict[str, Any]:
         """从磁盘加载本体到内存"""
@@ -509,17 +513,19 @@ class OntologyUpdateManager:
         threading.Thread(target=self._write_to_disk, daemon=True).start()
 
     def _write_to_disk(self):
-        """异步写入本体到磁盘"""
+        """异步写入本体到磁盘 + 创建版本"""
         try:
             # 使用 JSON 序列化来创建副本（避免 deepcopy 的线程锁问题）
             ontology_json = json.dumps(self.ontology, ensure_ascii=False)
             ontology_copy = json.loads(ontology_json)
 
-            # 写入磁盘
+            # 1. 写入主文件（ontology_v3.json）
             with open(self.ontology_path, "w", encoding="utf-8") as f:
                 json.dump(ontology_copy, f, ensure_ascii=False, indent=2)
-
             logger.info(f"💾 本体已写入磁盘: {self.ontology_path}")
+
+            # 2. 创建版本快照（异步）
+            self._create_version_snapshot(ontology_copy)
 
             # 更新状态
             self.last_disk_write = time.time()
@@ -528,6 +534,59 @@ class OntologyUpdateManager:
 
         except Exception as e:
             logger.error(f"❌ 写入磁盘失败: {e}")
+
+    def _create_version_snapshot(self, ontology_data: Dict[str, Any]):
+        """创建版本快照（异步）"""
+        try:
+            from kode.services.ontology_version_manager import OntologyVersionManager
+            from kode.database.session import SessionLocal
+            import asyncio
+
+            user_id = get_current_user_id()
+
+            # 生成变更摘要
+            change_summary = self._generate_change_summary()
+
+            # 创建异步任务
+            async def _async_create_version():
+                async with SessionLocal() as session:
+                    version_manager = OntologyVersionManager()
+                    version = await version_manager.create_version(
+                        session=session,
+                        user_id=user_id,
+                        connection_name=self.connection_name,
+                        ontology_data=ontology_data,
+                        change_summary=change_summary,
+                        conversation_id=None,  # TODO: 从 context 获取
+                        is_snapshot=True
+                    )
+                    self.last_version_created = version.version_number
+                    logger.info(f"📦 自动创建版本快照: v{version.version_number}")
+
+            # 在新事件循环中运行（避免阻塞）
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(_async_create_version())
+            loop.close()
+
+        except Exception as e:
+            logger.warning(f"⚠️ 创建版本快照失败（不影响主流程）: {e}")
+
+    def _generate_change_summary(self) -> str:
+        """根据待处理变更生成摘要"""
+        if not self.pending_writes:
+            return "自动保存"
+
+        change_types = [c.change_type for c in self.pending_writes]
+        type_counts = {}
+        for ct in change_types:
+            type_counts[ct] = type_counts.get(ct, 0) + 1
+
+        summary_parts = []
+        for ct, count in type_counts.items():
+            summary_parts.append(f"{ct}({count})")
+
+        return f"批量变更: {', '.join(summary_parts)}"
 
     def get_ontology(self) -> Dict[str, Any]:
         """获取当前内存中的本体（最新版本）"""
