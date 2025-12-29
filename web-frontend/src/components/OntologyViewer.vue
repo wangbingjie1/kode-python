@@ -14,98 +14,12 @@
         </div>
         <button
           v-if="selectedOntology"
-          @click="showExportModal = true"
+          @click="handleExportJson"
           class="btn-export"
+          :disabled="isExporting"
         >
-          导出
+          {{ isExporting ? '导出中...' : '导出' }}
         </button>
-      </div>
-    </div>
-
-    <!-- Export Modal -->
-    <div v-if="showExportModal" class="modal-overlay" @click.self="showExportModal = false">
-      <div class="export-modal">
-        <div class="modal-header">
-          <h3>导出本体</h3>
-          <button class="close-btn" @click="showExportModal = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="export-section">
-            <label class="section-label">导出格式</label>
-            <div class="format-options">
-              <label class="radio-option">
-                <input type="radio" v-model="exportFormat" value="json" />
-                <span class="radio-label">JSON</span>
-                <span class="format-desc">完整结构化数据</span>
-              </label>
-              <label class="radio-option">
-                <input type="radio" v-model="exportFormat" value="csv" />
-                <span class="radio-label">CSV</span>
-                <span class="format-desc">表格格式，可用 Excel 打开</span>
-              </label>
-              <label class="radio-option">
-                <input type="radio" v-model="exportFormat" value="markdown" />
-                <span class="radio-label">Markdown</span>
-                <span class="format-desc">可读性文档格式</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="export-section">
-            <label class="section-label">导出内容</label>
-            <div class="content-options">
-              <label class="checkbox-option">
-                <input type="checkbox" v-model="exportOptions.includeConcepts" />
-                <span>概念/实体</span>
-              </label>
-              <label class="checkbox-option">
-                <input type="checkbox" v-model="exportOptions.includeRelationships" />
-                <span>关系</span>
-              </label>
-              <label class="checkbox-option">
-                <input type="checkbox" v-model="exportOptions.includeBusinessRules" />
-                <span>业务规则</span>
-              </label>
-              <label class="checkbox-option">
-                <input type="checkbox" v-model="exportOptions.includeUncertainties" />
-                <span>待确认问题</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="export-section" v-if="availableDomains.length > 0">
-            <label class="section-label">
-              选择领域
-              <span class="select-all" @click="toggleAllDomains">
-                {{ allDomainsSelected ? '取消全选' : '全选' }}
-              </span>
-            </label>
-            <div class="domain-options">
-              <label
-                v-for="domain in availableDomains"
-                :key="domain"
-                class="checkbox-option domain-option"
-              >
-                <input
-                  type="checkbox"
-                  :value="domain"
-                  v-model="exportOptions.selectedDomains"
-                />
-                <span>{{ domain }}</span>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showExportModal = false">取消</button>
-          <button
-            class="btn-confirm"
-            @click="handleExport"
-            :disabled="isExporting || !hasExportContent"
-          >
-            {{ isExporting ? '导出中...' : '导出' }}
-          </button>
-        </div>
       </div>
     </div>
 
@@ -284,9 +198,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, reactive } from 'vue'
-import { listOntologies, getOntology, searchOntology, exportOntology } from '@/services/api'
-import type { OntologyExportRequest } from '@/services/api'
+import { ref, onMounted, computed, watch } from 'vue'
+import { listOntologies, getOntology, searchOntology } from '@/services/api'
 import { notification } from '@/composables/useNotification'
 import { use } from 'echarts/core'
 import { GraphChart } from 'echarts/charts'
@@ -310,108 +223,39 @@ const nodeSize = ref(40)
 const showLabels = ref(true)
 const graphOption = ref<any>({})
 
-// 导出相关状态
-const showExportModal = ref(false)
+// 导出状态
 const isExporting = ref(false)
-const exportFormat = ref<'json' | 'csv' | 'markdown'>('json')
-const exportOptions = reactive({
-  includeConcepts: true,
-  includeRelationships: true,
-  includeBusinessRules: true,
-  includeUncertainties: false,
-  selectedDomains: [] as string[]
-})
 
-// 获取可用的领域列表
-const availableDomains = computed(() => {
-  if (!selectedOntology.value?.ontology) return []
-  const ontology = selectedOntology.value.ontology
-  const version = ontology.version || '2.0'
-
-  if (version.startsWith('3')) {
-    // V3 格式：schema.classes 的 keys 就是领域
-    const classes = ontology.schema?.classes || ontology.concepts || {}
-    return Object.keys(classes)
-  } else {
-    // V2 格式：从 classes 列表中提取 domain
-    const classes = ontology.classes || []
-    const domains = new Set(classes.map((c: any) => c.domain).filter(Boolean))
-    return Array.from(domains)
+// 直接导出本体 JSON 文件
+function handleExportJson() {
+  if (!selectedOntology.value?.ontology) {
+    notification.error('导出失败', '本体数据不存在')
+    return
   }
-})
-
-// 是否全选了所有领域
-const allDomainsSelected = computed(() => {
-  return availableDomains.value.length > 0 &&
-    exportOptions.selectedDomains.length === availableDomains.value.length
-})
-
-// 是否有导出内容
-const hasExportContent = computed(() => {
-  return exportOptions.includeConcepts ||
-    exportOptions.includeRelationships ||
-    exportOptions.includeBusinessRules ||
-    exportOptions.includeUncertainties
-})
-
-// 切换全选/取消全选领域
-function toggleAllDomains() {
-  if (allDomainsSelected.value) {
-    exportOptions.selectedDomains = []
-  } else {
-    exportOptions.selectedDomains = [...availableDomains.value]
-  }
-}
-
-// 处理导出
-async function handleExport() {
-  if (!selectedOntology.value) return
 
   isExporting.value = true
   try {
-    const request: OntologyExportRequest = {
-      format: exportFormat.value,
-      include_concepts: exportOptions.includeConcepts,
-      include_relationships: exportOptions.includeRelationships,
-      include_business_rules: exportOptions.includeBusinessRules,
-      include_uncertainties: exportOptions.includeUncertainties,
-      selected_domains: exportOptions.selectedDomains.length > 0
-        ? exportOptions.selectedDomains
-        : undefined
-    }
+    const ontologyData = selectedOntology.value.ontology
+    const jsonStr = JSON.stringify(ontologyData, null, 2)
+    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' })
 
-    const blob = await exportOntology(selectedOntology.value.connection_name, request)
-
-    // 触发下载
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-
-    const extensions: Record<string, string> = {
-      json: 'json',
-      csv: 'csv',
-      markdown: 'md'
-    }
-    link.download = `${selectedOntology.value.connection_name}_ontology.${extensions[exportFormat.value]}`
+    link.download = `${selectedOntology.value.connection_name}_ontology.json`
 
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
 
-    notification.success('导出成功', `已导出为 ${exportFormat.value.toUpperCase()} 格式`)
-    showExportModal.value = false
+    notification.success('导出成功', '本体 JSON 文件已下载')
   } catch (error: any) {
     notification.error('导出失败', error.message || '请稍后重试')
   } finally {
     isExporting.value = false
   }
 }
-
-// 选择本体时重置导出选项
-watch(selectedOntology, () => {
-  exportOptions.selectedDomains = []
-})
 
 onMounted(async () => {
   await loadOntologies()
@@ -427,7 +271,14 @@ async function loadOntologies() {
 
 async function selectOntology(name: string) {
   try {
-    selectedOntology.value = await getOntology(name)
+    const ontologyData = await getOntology(name)
+    // 包装数据：API 直接返回本体内容，需要组装成期望的结构
+    selectedOntology.value = {
+      connection_name: name,
+      version: ontologyData.version || '2.0',
+      created_at: ontologyData.meta?.created_at || ontologyData.created_at,
+      ontology: ontologyData  // 原始的本体数据
+    }
     searchResults.value = []
     searchQuery.value = ''
     currentTab.value = 'entities'
@@ -656,8 +507,13 @@ function formatDate(dateStr: string): string {
   transition: background 0.2s;
 }
 
-.btn-export:hover {
+.btn-export:hover:not(:disabled) {
   background: #43a047;
+}
+
+.btn-export:disabled {
+  background: #ccc;
+  cursor: not-allowed;
 }
 
 .search-box {
@@ -1019,202 +875,4 @@ function formatDate(dateStr: string): string {
   width: 100%;
 }
 
-/* Export Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.export-modal {
-  background: white;
-  border-radius: 8px;
-  width: 500px;
-  max-width: 90vw;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.25rem;
-  color: #333;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: #999;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: #333;
-}
-
-.modal-body {
-  padding: 1.5rem;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.export-section {
-  margin-bottom: 1.5rem;
-}
-
-.export-section:last-child {
-  margin-bottom: 0;
-}
-
-.section-label {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 0.75rem;
-  font-size: 0.9rem;
-}
-
-.select-all {
-  font-weight: normal;
-  font-size: 0.8rem;
-  color: #2196f3;
-  cursor: pointer;
-}
-
-.select-all:hover {
-  text-decoration: underline;
-}
-
-.format-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.radio-option {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.radio-option:hover {
-  background: #f8f8f8;
-  border-color: #2196f3;
-}
-
-.radio-option input[type='radio'] {
-  margin: 0;
-}
-
-.radio-label {
-  font-weight: 500;
-  color: #333;
-}
-
-.format-desc {
-  font-size: 0.8rem;
-  color: #999;
-  margin-left: auto;
-}
-
-.content-options,
-.domain-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.checkbox-option {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 0.875rem;
-}
-
-.checkbox-option:hover {
-  background: #f8f8f8;
-  border-color: #2196f3;
-}
-
-.checkbox-option input[type='checkbox'] {
-  margin: 0;
-}
-
-.domain-option {
-  min-width: 120px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid #e0e0e0;
-}
-
-.btn-cancel {
-  padding: 0.5rem 1rem;
-  background: white;
-  color: #666;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.btn-cancel:hover {
-  background: #f5f5f5;
-}
-
-.btn-confirm {
-  padding: 0.5rem 1.5rem;
-  background: #2196f3;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: background 0.2s;
-}
-
-.btn-confirm:hover:not(:disabled) {
-  background: #1976d2;
-}
-
-.btn-confirm:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
 </style>
