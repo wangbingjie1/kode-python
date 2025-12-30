@@ -576,8 +576,41 @@ class OntologyUpdateManager:
         threading.Thread(target=self._write_to_disk, daemon=True).start()
 
     def _write_to_disk(self):
-        """异步写入本体到磁盘 + 创建版本"""
+        """
+        异步写入本体到磁盘 + 创建版本
+
+        🔧 关键修复：在写入前重新加载磁盘文件，避免覆盖其他进程的写入
+        （如 uncertainty API 可能在同一时间写入答案）
+        """
         try:
+            # 🔧 修复：先从磁盘加载最新版本，避免覆盖其他写入
+            if self.ontology_path.exists():
+                try:
+                    with open(self.ontology_path, "r", encoding="utf-8") as f:
+                        disk_ontology = json.load(f)
+
+                    # 合并关键字段（uncertainties, business_rules 等）
+                    # 这些字段可能被其他 API 修改，需要保留
+                    preserve_fields = ["uncertainties", "business_rules", "metrics"]
+                    for field in preserve_fields:
+                        if field in disk_ontology and field not in self.ontology:
+                            self.ontology[field] = disk_ontology[field]
+                        elif field in disk_ontology and field in self.ontology:
+                            # 智能合并：如果是数组，合并 ID 去重
+                            if isinstance(disk_ontology[field], list) and isinstance(self.ontology[field], list):
+                                # 对于 uncertainties，按 ID 合并（优先使用磁盘版本）
+                                if field == "uncertainties":
+                                    disk_map = {u.get("id"): u for u in disk_ontology[field] if u.get("id")}
+                                    mem_map = {u.get("id"): u for u in self.ontology[field] if u.get("id")}
+                                    # 合并：磁盘版本优先（可能包含最新的答案）
+                                    merged_map = {**mem_map, **disk_map}
+                                    self.ontology[field] = list(merged_map.values())
+                                    logger.info(f"🔄 合并 uncertainties: 磁盘 {len(disk_map)}, 内存 {len(mem_map)}, 合并后 {len(merged_map)}")
+
+                    logger.debug(f"✅ 已从磁盘加载最新本体并合并 uncertainties 等字段")
+                except Exception as e:
+                    logger.warning(f"⚠️ 加载磁盘本体失败，使用内存版本: {e}")
+
             # 使用 JSON 序列化来创建副本（避免 deepcopy 的线程锁问题）
             ontology_json = json.dumps(self.ontology, ensure_ascii=False)
             ontology_copy = json.loads(ontology_json)
@@ -605,7 +638,12 @@ class OntologyUpdateManager:
             from kode.database.session import async_session_maker
             import asyncio
 
-            user_id = get_current_user_id()
+            # 尝试获取用户上下文，如果失败则跳过版本快照
+            try:
+                user_id = get_current_user_id()
+            except RuntimeError:
+                logger.debug("⏭️ 跳过版本快照创建（用户上下文未设置）")
+                return None
 
             # 生成变更摘要
             change_summary = self._generate_change_summary()
@@ -627,12 +665,21 @@ class OntologyUpdateManager:
                     logger.info(f"📦 自动创建版本快照: v{version.version_number}")
                     return version.version_number
 
-            # 在新事件循环中运行（避免阻塞）
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            version_number = loop.run_until_complete(_async_create_version())
-            loop.close()
-            logger.info(f"✅ 版本快照创建成功: v{version_number}")
+            # 检测当前是否在事件循环中
+            try:
+                loop = asyncio.get_running_loop()
+                # 在现有循环中创建任务（不阻塞）
+                asyncio.create_task(_async_create_version())
+                logger.debug("🔄 版本快照创建任务已提交到现有事件循环")
+            except RuntimeError:
+                # 没有运行中的循环，创建新循环执行
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    version_number = loop.run_until_complete(_async_create_version())
+                    logger.info(f"✅ 版本快照创建成功: v{version_number}")
+                finally:
+                    loop.close()
 
         except Exception as e:
             logger.error(f"❌ 创建版本快照失败: {e}")

@@ -735,7 +735,7 @@ class OntologyBuilderTool(KodeTool):
             return {
                 "saved": True,
                 "version": ontology["version"],
-                "latest_path": str(v3_file),
+                "latest_path": str(ontology_file),
                 "version_number": version_number
             }
 
