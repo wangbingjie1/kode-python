@@ -96,15 +96,15 @@ class OntologyUpdateManager:
         if not self.ontology_path.exists():
             logger.warning(f"⚠️ 本体文件不存在: {self.ontology_path}")
 
-            # 安全检查：确保这是一个 v3 文件
-            if not str(self.ontology_path).endswith("ontology_v3.json"):
+            # 安全检查：确保这是一个本体文件
+            if not str(self.ontology_path).endswith("ontology.json"):
                 raise ValueError(
                     f"❌ 错误的本体文件路径: {self.ontology_path}。"
-                    f"只支持 ontology_v3.json 文件。"
+                    f"只支持 ontology.json 文件。"
                 )
 
-            # 创建符合 v3 格式的空本体
-            logger.info("创建新的 v3 格式空本体")
+            # 创建符合格式的空本体
+            logger.info("创建新的空本体")
             return {
                 "version": "3.0",
                 "meta": {
@@ -582,7 +582,7 @@ class OntologyUpdateManager:
             ontology_json = json.dumps(self.ontology, ensure_ascii=False)
             ontology_copy = json.loads(ontology_json)
 
-            # 1. 写入主文件（ontology_v3.json）
+            # 写入主文件（ontology.json）
             with open(self.ontology_path, "w", encoding="utf-8") as f:
                 json.dump(ontology_copy, f, ensure_ascii=False, indent=2)
             logger.info(f"💾 本体已写入磁盘: {self.ontology_path}")

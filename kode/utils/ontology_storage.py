@@ -47,29 +47,17 @@ class OntologyStorageV2:
         return get_current_user_id()
 
     def _get_ontology_file_path(self, connection_name: str, for_write: bool = False) -> Path:
-        """获取本体文件路径（内部方法，兼容旧版逻辑）
-
-        注意：新版本应使用 OntologyVersionManager，此方法仅用于向后兼容
+        """获取本体文件路径（简化版，统一使用 ontology.json）
 
         Args:
             connection_name: 数据库连接名
-            for_write: 是否用于写入（写入时总是使用最新版本 v3）
+            for_write: 是否用于写入
 
         Returns:
             本体文件路径
         """
         conn_dir = self.base_path / self._get_user_id() / connection_name
-
-        if for_write:
-            # 写入时总是使用 v3
-            return conn_dir / "ontology_v3.json"
-
-        # 读取时优先使用 v3，回退到 v2
-        v3_path = conn_dir / "ontology_v3.json"
-        if v3_path.exists():
-            return v3_path
-
-        return conn_dir / "ontology_v2.json"
+        return conn_dir / "ontology.json"
 
     def _ensure_connection_dir(self, connection_name: str) -> Path:
         """确保连接目录存在"""
@@ -190,7 +178,7 @@ class OntologyStorageV2:
         connection_name: str,
         ontology_data: Dict[str, Any]
     ) -> Path:
-        """保存本体（自动使用最新版本格式）
+        """保存本体到 ontology.json
 
         Args:
             connection_name: 数据库连接名
@@ -202,7 +190,7 @@ class OntologyStorageV2:
         self._ensure_connection_dir(connection_name)
         path = self._get_ontology_file_path(connection_name, for_write=True)
 
-        # 自动注入元数据（保留原始 version 如果已存在）
+        # 自动注入元数据
         if "version" not in ontology_data:
             ontology_data["version"] = "3.0"
         ontology_data["updated_at"] = datetime.now().isoformat()
@@ -216,7 +204,7 @@ class OntologyStorageV2:
         self,
         connection_name: str
     ) -> Optional[Dict[str, Any]]:
-        """加载本体（优先 v3，回退到 v2）
+        """加载本体从 ontology.json
 
         Args:
             connection_name: 数据库连接名
@@ -232,7 +220,7 @@ class OntologyStorageV2:
             return json.load(f)
 
     def ontology_v2_exists(self, connection_name: str) -> bool:
-        """检查本体是否存在（v3 或 v2）
+        """检查本体是否存在
 
         Args:
             connection_name: 数据库连接名
@@ -240,10 +228,8 @@ class OntologyStorageV2:
         Returns:
             是否存在
         """
-        conn_dir = self.base_path / self._get_user_id() / connection_name
-        v3_path = conn_dir / "ontology_v3.json"
-        v2_path = conn_dir / "ontology_v2.json"
-        return v3_path.exists() or v2_path.exists()
+        path = self._get_ontology_file_path(connection_name, for_write=False)
+        return path.exists()
 
     # ============ 工具方法 ============
 
@@ -285,7 +271,7 @@ class OntologyStorageV2:
             "user_id": user_id,
             "connection_name": connection_name,
             "has_business_context": (conn_dir / "business_context.json").exists(),
-            "has_ontology_v2": self.ontology_v2_exists(connection_name),  # 检查 v3 或 v2
+            "has_ontology_v2": self.ontology_v2_exists(connection_name),
             "has_schema": (conn_dir / "schema.json").exists(),
             "business_context_completed": self.is_business_context_completed(connection_name)
         }

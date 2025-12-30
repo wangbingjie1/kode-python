@@ -63,17 +63,12 @@ def _get_ontology_file(connection_name: str, user_id: str = None) -> Path:
     safe_conn_name = get_safe_connection_path(connection_name)
     base_path = Path(ontology_path) / user_id / safe_conn_name
 
-    # 优先使用 v3 版本
-    v3_file = base_path / "ontology_v3.json"
-    if v3_file.exists():
-        return v3_file
+    # 使用统一的本体文件
+    ontology_file = base_path / "ontology.json"
+    if ontology_file.exists():
+        return ontology_file
 
-    # 回退到 v2 版本
-    v2_file = base_path / "ontology_v2.json"
-    if v2_file.exists():
-        return v2_file
-
-    # 再回退到 business_context.json（业务理解问卷结果）
+    # 回退到 business_context.json（业务理解问卷结果）
     return base_path / "business_context.json"
 
 

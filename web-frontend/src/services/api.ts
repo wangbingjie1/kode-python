@@ -756,4 +756,148 @@ export async function acceptAIAnswer(
   return response.data
 }
 
+// ============== 本体版本管理 API ==============
+
+export interface OntologyVersion {
+  id: string
+  user_id: string
+  connection_name: string
+  version_number: number
+  version_tag: string | null
+  is_snapshot: boolean
+  parent_version_id: string | null
+  storage_type: string
+  file_path: string | null
+  ontology_hash: string
+  vector_index_status: string
+  vector_index_path: string | null
+  vector_index_built_at: string | null
+  vector_index_error: string | null
+  size_bytes: number | null
+  change_summary: string | null
+  created_by_conversation_id: string | null
+  status: string
+  is_current: boolean
+  created_at: string
+  archived_at: string | null
+}
+
+export interface OntologyVersionListResponse {
+  total: number
+  versions: OntologyVersion[]
+}
+
+export interface OntologyRollbackRequest {
+  target_version_number: number
+  conversation_id?: string
+}
+
+export interface OntologyRebuildIndexRequest {
+  force_rebuild?: boolean
+}
+
+/**
+ * 列出指定连接的所有本体版本
+ */
+export async function listOntologyVersions(
+  connectionName: string,
+  limit = 50,
+  offset = 0
+): Promise<OntologyVersionListResponse> {
+  const response = await apiClient.get<OntologyVersionListResponse>(
+    `/ontology/versions/${connectionName}`,
+    { params: { limit, offset } }
+  )
+  return response.data
+}
+
+/**
+ * 获取当前活跃版本
+ */
+export async function getCurrentOntologyVersion(
+  connectionName: string
+): Promise<OntologyVersion> {
+  const response = await apiClient.get<OntologyVersion>(
+    `/ontology/versions/${connectionName}/current`
+  )
+  return response.data
+}
+
+/**
+ * 根据版本号获取版本
+ */
+export async function getOntologyVersionByNumber(
+  connectionName: string,
+  versionNumber: number
+): Promise<OntologyVersion> {
+  const response = await apiClient.get<OntologyVersion>(
+    `/ontology/versions/${connectionName}/${versionNumber}`
+  )
+  return response.data
+}
+
+/**
+ * 回滚到指定版本
+ */
+export async function rollbackOntologyVersion(
+  connectionName: string,
+  request: OntologyRollbackRequest
+): Promise<OntologyVersion> {
+  const response = await apiClient.post<OntologyVersion>(
+    `/ontology/versions/${connectionName}/rollback`,
+    request
+  )
+  return response.data
+}
+
+/**
+ * 删除指定版本（软删除）
+ */
+export async function deleteOntologyVersion(
+  connectionName: string,
+  versionNumber: number
+): Promise<{ success: boolean; message: string }> {
+  const response = await apiClient.delete<{ success: boolean; message: string }>(
+    `/ontology/versions/${connectionName}/${versionNumber}`
+  )
+  return response.data
+}
+
+/**
+ * 手动触发向量索引重建
+ */
+export async function rebuildOntologyVectorIndex(
+  connectionName: string,
+  versionNumber: number,
+  request: OntologyRebuildIndexRequest = {}
+): Promise<{ success: boolean; message: string; task_id: string; version_id: string }> {
+  const response = await apiClient.post<{
+    success: boolean
+    message: string
+    task_id: string
+    version_id: string
+  }>(`/ontology/versions/${connectionName}/${versionNumber}/rebuild-index`, request)
+  return response.data
+}
+
+/**
+ * 查询向量索引状态
+ */
+export async function getOntologyVectorIndexStatus(
+  connectionName: string,
+  versionNumber: number
+): Promise<{
+  version_id: string
+  version_number: number
+  vector_index_status: string
+  vector_index_path: string | null
+  vector_index_built_at: string | null
+  vector_index_error: string | null
+}> {
+  const response = await apiClient.get(
+    `/ontology/versions/${connectionName}/${versionNumber}/index-status`
+  )
+  return response.data
+}
+
 export default apiClient

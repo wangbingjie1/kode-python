@@ -396,9 +396,7 @@ class OntologyDescriptionUpdater:
             safe_conn_name = get_safe_connection_path(connection_name)
             ontology_base = Path(ontology_path) / user_id / safe_conn_name
 
-            ontology_file = ontology_base / "ontology_v3.json"
-            if not ontology_file.exists():
-                ontology_file = ontology_base / "ontology_v2.json"
+            ontology_file = ontology_base / "ontology.json"
             logger.info(f"[OntologyUpdater] 加载本体文件: {ontology_file}")
 
             if not ontology_file.exists():

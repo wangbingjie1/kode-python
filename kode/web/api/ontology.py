@@ -7,7 +7,8 @@ Ontology API Routes
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
+from datetime import datetime
 
 from kode.database.session import get_db
 from kode.models.user import User
@@ -39,18 +40,25 @@ class OntologyVersionResponse(BaseModel):
     ontology_hash: str
     vector_index_status: str
     vector_index_path: Optional[str]
-    vector_index_built_at: Optional[str]
+    vector_index_built_at: Optional[datetime]
     vector_index_error: Optional[str]
     size_bytes: Optional[int]
     change_summary: Optional[str]
     created_by_conversation_id: Optional[str]
     status: str
     is_current: bool
-    created_at: str
-    archived_at: Optional[str]
+    created_at: datetime
+    archived_at: Optional[datetime]
 
     class Config:
         from_attributes = True
+
+    @field_serializer('created_at', 'archived_at', 'vector_index_built_at')
+    def serialize_datetime(self, dt: Optional[datetime], _info) -> Optional[str]:
+        """将 datetime 序列化为 ISO 格式字符串"""
+        if dt is None:
+            return None
+        return dt.isoformat()
 
 
 class VersionListResponse(BaseModel):
@@ -114,7 +122,7 @@ async def list_ontology_versions(
 
         return VersionListResponse(
             total=total,
-            versions=[OntologyVersionResponse.from_orm(v) for v in versions]
+            versions=[OntologyVersionResponse.model_validate(v) for v in versions]
         )
 
     except Exception as e:
@@ -157,7 +165,7 @@ async def get_current_version(
                 detail=f"未找到连接 '{connection_name}' 的本体版本"
             )
 
-        return OntologyVersionResponse.from_orm(version)
+        return OntologyVersionResponse.model_validate(version)
 
     except HTTPException:
         raise
@@ -204,7 +212,7 @@ async def get_version_by_number(
                 detail=f"未找到版本 v{version_number}"
             )
 
-        return OntologyVersionResponse.from_orm(version)
+        return OntologyVersionResponse.model_validate(version)
 
     except HTTPException:
         raise

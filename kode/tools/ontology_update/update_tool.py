@@ -127,11 +127,11 @@ class OntologyUpdateTool(KodeTool):
                 config = ConfigManager()
                 ontology_store_path = config.get("storage.ontology_path", "./ontology_store")
 
-                # 确定本体文件路径（只使用 v3，v2 已废弃）
+                # 确定本体文件路径
                 # 使用用户隔离路径：ontology_store/{user_id}/{connection_name}/
                 safe_conn_name = get_safe_connection_path(connection_name)
                 ontology_base = Path(ontology_store_path) / user_id / safe_conn_name
-                ontology_path = ontology_base / "ontology_v3.json"
+                ontology_path = ontology_base / "ontology.json"
 
                 # 确保父目录存在
                 if not ontology_path.exists():

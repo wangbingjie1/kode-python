@@ -633,18 +633,10 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
         ontology_dir = Path(ontology_path)
         if ontology_dir.exists():
             # 支持两种路径结构：
-            # 1. {ontology_path}/{user_id}/{conn_name}/ontology_v*.json (多租户)
-            # 2. {ontology_path}/{conn_name}/ontology_v*.json (旧版/单用户)
-            cached_ontologies_v3 = list(ontology_dir.glob("*/ontology_v3.json")) + \
-                                  list(ontology_dir.glob("*/*/ontology_v3.json"))
-            cached_ontologies_v2 = list(ontology_dir.glob("*/ontology_v2.json")) + \
-                                  list(ontology_dir.glob("*/*/ontology_v2.json"))
-
-            # 合并，v3 优先（同一个连接只保留 v3）
-            v3_conns = {f.parent.name for f in cached_ontologies_v3}
-            cached_ontologies = cached_ontologies_v3 + [
-                f for f in cached_ontologies_v2 if f.parent.name not in v3_conns
-            ]
+            # 1. {ontology_path}/{user_id}/{conn_name}/ontology.json (多租户)
+            # 2. {ontology_path}/{conn_name}/ontology.json (旧版/单用户)
+            cached_ontologies = list(ontology_dir.glob("*/ontology.json")) + \
+                              list(ontology_dir.glob("*/*/ontology.json"))
 
             context_parts.append(f"业务本体文件所在路径: {ontology_path}")
             if cached_ontologies:

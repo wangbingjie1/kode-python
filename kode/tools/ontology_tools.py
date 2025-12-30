@@ -207,10 +207,8 @@ class OntologyBuilderTool(KodeTool):
                     Path(ontology_path) / user_id / get_safe_connection_path(connection_name)
                 )
 
-                # 优先查找 v3
-                existing_ontology_file = conn_path / "ontology_v3.json"
-                if not existing_ontology_file.exists():
-                    existing_ontology_file = conn_path / "ontology_v2.json"
+                # 使用统一的本体文件名
+                existing_ontology_file = conn_path / "ontology.json"
 
                 if existing_ontology_file.exists():
                     # 读取现有本体的元数据
@@ -719,12 +717,12 @@ class OntologyBuilderTool(KodeTool):
             ontology["version"] = ontology.get("version", "3.0")
             ontology["updated_at"] = datetime.now().isoformat()
 
-            # 1. 保存到 ontology_v3.json（V3 主文件）
-            v3_file = conn_dir / "ontology_v3.json"
-            with open(v3_file, "w", encoding="utf-8") as f:
+            # 保存到 ontology.json
+            ontology_file = conn_dir / "ontology.json"
+            with open(ontology_file, "w", encoding="utf-8") as f:
                 json.dump(ontology, f, indent=2, ensure_ascii=False)
 
-            logger.info(f"✅ 本体已保存到: {v3_file}")
+            logger.info(f"✅ 本体已保存到: {ontology_file}")
 
             # 2. 创建版本快照（异步）
             version_number = self._create_version_snapshot_async(
@@ -2653,10 +2651,10 @@ class OntologySearchTool(KodeTool):
     description: str = """Search stored ontology for concepts, properties, and relationships.
 
     **USAGE**: Pass the connection_name directly (e.g., 'yanfa').
-    The tool will automatically find the ontology file (ontology_v3.json or ontology_v2.json).
+    The tool will automatically find the ontology file (ontology.json).
 
     Examples:
-    - ontology_path='yanfa' → searches ontology_store/yanfa/ontology_v3.json
+    - ontology_path='yanfa' → searches ontology_store/yanfa/ontology.json
     - ontology_path='ontology_store/yanfa' → also works
 
     Supports semantic search (with embeddings), exact matching, and fuzzy search."""
@@ -2740,19 +2738,10 @@ class OntologySearchTool(KodeTool):
                     ontology_path_obj = ontology_path_obj.parent
                     logger.info(f"✅ 自动纠正: 文件路径 → 目录路径 {ontology_path_obj}")
 
-            # 优先使用 V3 格式，回退到 V2
-            ontology_v3_path = ontology_path_obj / "ontology_v3.json"
-            ontology_v2_path = ontology_path_obj / "ontology_v2.json"
+            # 使用统一的本体文件
+            ontology_file = ontology_path_obj / "ontology.json"
 
-            ontology_file = None
-            if ontology_v3_path.exists():
-                ontology_file = ontology_v3_path
-                logger.info(f"✅ 使用V3格式本体: {ontology_v3_path}")
-            elif ontology_v2_path.exists():
-                ontology_file = ontology_v2_path
-                logger.info(f"✅ 回退到V2格式本体: {ontology_v2_path}")
-
-            if not ontology_file:
+            if not ontology_file.exists():
                 # 生成友好的错误消息
                 error_msg = f"本体文件未找到"
 
@@ -2767,7 +2756,7 @@ class OntologySearchTool(KodeTool):
                 else:
                     error_msg += f"\n\n💡 提示: 请确保已运行 OntologyBuilder 工具生成本体。"
                     error_msg += f"\n  期望目录: {ontology_path_obj}"
-                    error_msg += f"\n  期望文件: {ontology_v3_path} 或 {ontology_v2_path}"
+                    error_msg += f"\n  期望文件: {ontology_file}"
 
                 return json.dumps(
                     {
@@ -2775,11 +2764,13 @@ class OntologySearchTool(KodeTool):
                         "message": error_msg,
                         "provided_path": str(ontology_path),
                         "expected_directory": str(ontology_path_obj),
-                        "expected_files": [str(ontology_v3_path), str(ontology_v2_path)],
+                        "expected_file": str(ontology_file),
                     },
                     indent=2,
                     ensure_ascii=False,
                 )
+
+            logger.info(f"✅ 使用本体文件: {ontology_file}")
 
             with open(ontology_file, "r", encoding="utf-8") as f:
                 ontology_data = json.load(f)

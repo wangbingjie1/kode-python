@@ -116,6 +116,12 @@
               >
                 关系图
               </button>
+              <button
+                :class="['tab', { active: currentTab === 'versions' }]"
+                @click="currentTab = 'versions'"
+              >
+                版本管理 ({{ versions.length }})
+              </button>
             </div>
 
             <div class="tab-content">
@@ -197,6 +203,96 @@
                   class="graph-chart"
                 />
               </div>
+
+              <!-- Versions tab -->
+              <div v-if="currentTab === 'versions'" class="versions-view">
+                <div v-if="loadingVersions" class="loading-state">
+                  加载版本列表中...
+                </div>
+
+                <div v-else-if="versions.length === 0" class="empty-versions">
+                  <p>暂无版本记录</p>
+                </div>
+
+                <div v-else class="versions-list">
+                  <div
+                    v-for="version in versions"
+                    :key="version.id"
+                    :class="['version-card', {
+                      current: version.is_current,
+                      selected: selectedVersion?.version_number === version.version_number
+                    }]"
+                    @click="switchToVersion(version)"
+                  >
+                    <div class="version-header">
+                      <div class="version-title">
+                        <span class="version-number">v{{ version.version_number }}</span>
+                        <span v-if="version.is_current" class="current-badge">当前</span>
+                        <span v-if="version.version_tag" class="tag-badge">{{ version.version_tag }}</span>
+                      </div>
+                      <div class="version-actions">
+                        <button
+                          v-if="!version.is_current"
+                          @click.stop="rollbackToVersion(version)"
+                          class="btn-version-action"
+                          title="回滚到此版本"
+                        >
+                          回滚
+                        </button>
+                        <button
+                          v-if="version.vector_index_status === 'failed' || version.vector_index_status === 'pending'"
+                          @click.stop="rebuildVectorIndex(version)"
+                          class="btn-version-action"
+                          title="重建向量索引"
+                        >
+                          重建索引
+                        </button>
+                        <button
+                          v-if="!version.is_current"
+                          @click.stop="deleteVersion(version)"
+                          class="btn-version-delete"
+                          title="删除版本"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="version-info">
+                      <div class="info-row">
+                        <span class="info-label">创建时间:</span>
+                        <span class="info-value">{{ formatDate(version.created_at) }}</span>
+                      </div>
+                      <div class="info-row" v-if="version.change_summary">
+                        <span class="info-label">变更说明:</span>
+                        <span class="info-value">{{ version.change_summary }}</span>
+                      </div>
+                      <div class="info-row">
+                        <span class="info-label">存储类型:</span>
+                        <span class="info-value">{{ version.storage_type === 'db' ? '数据库' : '文件' }}</span>
+                      </div>
+                      <div class="info-row" v-if="version.size_bytes">
+                        <span class="info-label">大小:</span>
+                        <span class="info-value">{{ formatBytes(version.size_bytes) }}</span>
+                      </div>
+                      <div class="info-row">
+                        <span class="info-label">向量索引:</span>
+                        <span :class="['status-badge', `status-${version.vector_index_status}`]">
+                          {{ getIndexStatusText(version.vector_index_status) }}
+                        </span>
+                      </div>
+                      <div class="info-row" v-if="version.vector_index_error">
+                        <span class="info-label">索引错误:</span>
+                        <span class="error-text">{{ version.vector_index_error }}</span>
+                      </div>
+                      <div class="info-row" v-if="version.ontology_hash">
+                        <span class="info-label">哈希值:</span>
+                        <span class="info-value hash-value">{{ version.ontology_hash.substring(0, 16) }}...</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -207,7 +303,20 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import { listOntologies, getOntology, searchOntology, deleteOntology } from '@/services/api'
+import {
+  listOntologies,
+  getOntology,
+  searchOntology,
+  deleteOntology,
+  listOntologyVersions,
+  getCurrentOntologyVersion,
+  getOntologyVersionByNumber,
+  rollbackOntologyVersion,
+  deleteOntologyVersion,
+  rebuildOntologyVectorIndex,
+  getOntologyVectorIndexStatus,
+  type OntologyVersion
+} from '@/services/api'
 import { notification } from '@/composables/useNotification'
 import { use } from 'echarts/core'
 import { GraphChart } from 'echarts/charts'
@@ -222,7 +331,14 @@ const ontologies = ref<any[]>([])
 const selectedOntology = ref<any | null>(null)
 const searchQuery = ref('')
 const searchResults = ref<any[]>([])
-const currentTab = ref<'entities' | 'relationships' | 'graph'>('entities')
+const currentTab = ref<'entities' | 'relationships' | 'graph' | 'versions'>('entities')
+
+// 版本管理状态
+const versions = ref<OntologyVersion[]>([])
+const currentVersion = ref<OntologyVersion | null>(null)
+const selectedVersion = ref<OntologyVersion | null>(null)
+const loadingVersions = ref(false)
+const showVersionPanel = ref(false)
 
 // 图表配置
 const graphChart = ref<InstanceType<typeof VChart> | null>(null)
@@ -310,6 +426,7 @@ async function loadOntologies() {
 
 async function selectOntology(name: string) {
   try {
+    console.log('[OntologyViewer] 选择本体:', name)
     const ontologyData = await getOntology(name)
     // 包装数据：API 直接返回本体内容，需要组装成期望的结构
     selectedOntology.value = {
@@ -322,8 +439,134 @@ async function selectOntology(name: string) {
     searchQuery.value = ''
     currentTab.value = 'entities'
     updateGraph()
+
+    // 加载版本列表
+    console.log('[OntologyViewer] 准备加载版本列表...')
+    await loadVersions(name)
   } catch (error: any) {
+    console.error('[OntologyViewer] 选择本体失败:', error)
     notification.error('加载失败', error.message)
+  }
+}
+
+// 加载版本列表
+async function loadVersions(connectionName: string) {
+  loadingVersions.value = true
+  try {
+    console.log('[OntologyViewer] 开始加载版本列表:', connectionName)
+    const response = await listOntologyVersions(connectionName)
+    console.log('[OntologyViewer] 版本列表响应:', response)
+
+    // 确保 versions 是数组
+    versions.value = response.versions || []
+    currentVersion.value = versions.value.find(v => v.is_current) || null
+    selectedVersion.value = currentVersion.value
+
+    console.log('[OntologyViewer] 加载成功，版本数:', versions.value.length)
+
+    if (versions.value.length === 0) {
+      console.warn('[OntologyViewer] 该连接暂无版本记录')
+    }
+  } catch (error: any) {
+    console.error('[OntologyViewer] 加载版本列表失败:', error)
+
+    // 重置状态
+    versions.value = []
+    currentVersion.value = null
+    selectedVersion.value = null
+
+    // 提取错误信息
+    let errorMsg = '未知错误'
+    if (error.response) {
+      // HTTP 错误
+      errorMsg = error.response.data?.detail || error.response.statusText || `HTTP ${error.response.status}`
+    } else if (error.message) {
+      errorMsg = error.message
+    }
+
+    notification.error('加载版本列表失败', errorMsg)
+  } finally {
+    loadingVersions.value = false
+  }
+}
+
+// 切换到指定版本
+async function switchToVersion(version: OntologyVersion) {
+  if (selectedVersion.value?.version_number === version.version_number) return
+
+  try {
+    selectedVersion.value = version
+    // 重新加载本体数据（使用指定版本）
+    const ontologyData = await getOntology(version.connection_name)
+    selectedOntology.value = {
+      connection_name: version.connection_name,
+      version: `v${version.version_number}`,
+      created_at: version.created_at,
+      ontology: ontologyData
+    }
+    updateGraph()
+    notification.success('版本切换成功', `已切换到 v${version.version_number}`)
+  } catch (error: any) {
+    notification.error('切换版本失败', error.message)
+  }
+}
+
+// 回滚到指定版本
+async function rollbackToVersion(version: OntologyVersion) {
+  const confirmed = window.confirm(
+    `确定要回滚到版本 v${version.version_number} 吗？\n这将创建一个新版本，内容与 v${version.version_number} 相同。`
+  )
+  if (!confirmed) return
+
+  try {
+    const newVersion = await rollbackOntologyVersion(version.connection_name, {
+      target_version_number: version.version_number
+    })
+    notification.success('回滚成功', `已回滚到 v${version.version_number}，新版本号: v${newVersion.version_number}`)
+
+    // 刷新版本列表
+    await loadVersions(version.connection_name)
+    await selectOntology(version.connection_name)
+  } catch (error: any) {
+    notification.error('回滚失败', error.message)
+  }
+}
+
+// 删除版本
+async function deleteVersion(version: OntologyVersion) {
+  if (version.is_current) {
+    notification.error('删除失败', '不能删除当前活跃版本')
+    return
+  }
+
+  const confirmed = window.confirm(
+    `确定要删除版本 v${version.version_number} 吗？\n此操作不可恢复。`
+  )
+  if (!confirmed) return
+
+  try {
+    await deleteOntologyVersion(version.connection_name, version.version_number)
+    notification.success('删除成功', `版本 v${version.version_number} 已删除`)
+
+    // 刷新版本列表
+    await loadVersions(version.connection_name)
+  } catch (error: any) {
+    notification.error('删除失败', error.message)
+  }
+}
+
+// 重建向量索引
+async function rebuildVectorIndex(version: OntologyVersion) {
+  try {
+    await rebuildOntologyVectorIndex(version.connection_name, version.version_number, {
+      force_rebuild: true
+    })
+    notification.success('索引重建任务已提交', '向量索引将在后台重建')
+
+    // 刷新版本列表以更新索引状态
+    setTimeout(() => loadVersions(version.connection_name), 2000)
+  } catch (error: any) {
+    notification.error('提交失败', error.message)
   }
 }
 
@@ -503,6 +746,25 @@ function formatDate(dateStr: string): string {
   if (!dateStr) return ''
   const date = new Date(dateStr)
   return date.toLocaleString('zh-CN')
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
+}
+
+function getIndexStatusText(status: string): string {
+  const statusMap: Record<string, string> = {
+    pending: '待构建',
+    building: '构建中',
+    completed: '已完成',
+    failed: '失败',
+    none: '无'
+  }
+  return statusMap[status] || status
 }
 </script>
 
@@ -932,6 +1194,194 @@ function formatDate(dateStr: string): string {
   flex: 1;
   min-height: 500px;
   width: 100%;
+}
+
+/* 版本管理样式 */
+.versions-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.loading-state,
+.empty-versions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  color: #999;
+  font-size: 0.875rem;
+}
+
+.versions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.version-card {
+  padding: 1.5rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.version-card:hover {
+  border-color: #2196f3;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+}
+
+.version-card.current {
+  border-color: #4caf50;
+  background: #f1f8e9;
+}
+
+.version-card.selected {
+  border-color: #2196f3;
+  background: #e3f2fd;
+}
+
+.version-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.version-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.version-number {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.current-badge {
+  padding: 0.25rem 0.5rem;
+  background: #4caf50;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.tag-badge {
+  padding: 0.25rem 0.5rem;
+  background: #ff9800;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.version-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-version-action {
+  padding: 0.375rem 0.75rem;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background 0.2s;
+}
+
+.btn-version-action:hover {
+  background: #1976d2;
+}
+
+.btn-version-delete {
+  padding: 0.375rem 0.75rem;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background 0.2s;
+}
+
+.btn-version-delete:hover {
+  background: #d32f2f;
+}
+
+.version-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 0.75rem;
+}
+
+.info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.info-label {
+  font-size: 0.75rem;
+  color: #999;
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 0.875rem;
+  color: #333;
+}
+
+.hash-value {
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.status-pending {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.status-building {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-completed {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+.status-failed {
+  background: #ffebee;
+  color: #d32f2f;
+}
+
+.status-none {
+  background: #f5f5f5;
+  color: #999;
+}
+
+.error-text {
+  font-size: 0.875rem;
+  color: #d32f2f;
 }
 
 </style>

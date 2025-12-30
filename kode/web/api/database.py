@@ -509,10 +509,8 @@ async def list_ontologies():
 
         def process_ontology_dir(conn_dir: Path):
             """Process a connection directory and extract ontology metadata."""
-            # Look for ontology file (v3 first, then v2)
-            v3_file = conn_dir / "ontology_v3.json"
-            v2_file = conn_dir / "ontology_v2.json"
-            ontology_file = v3_file if v3_file.exists() else v2_file
+            # Look for ontology file
+            ontology_file = conn_dir / "ontology.json"
             if not ontology_file.exists():
                 return None
 
@@ -566,7 +564,7 @@ async def list_ontologies():
                 continue
 
             # 检查是否是连接目录（包含 ontology 文件）
-            if (item / "ontology_v3.json").exists() or (item / "ontology_v2.json").exists():
+            if (item / "ontology.json").exists():
                 # 旧结构: ontology_store/{connection_name}/
                 result = process_ontology_dir(item)
                 if result:
@@ -602,7 +600,7 @@ def _find_ontology_path(name: str) -> Path | None:
     # 先检查旧结构: ontology_store/{name}/
     direct_path = ontology_store / name
     if direct_path.exists() and direct_path.is_dir():
-        if (direct_path / "ontology_v3.json").exists() or (direct_path / "ontology_v2.json").exists():
+        if (direct_path / "ontology.json").exists():
             return direct_path
 
     # 检查多租户结构: ontology_store/{user_id}/{name}/
@@ -611,7 +609,7 @@ def _find_ontology_path(name: str) -> Path | None:
             continue
         conn_path = user_dir / name
         if conn_path.exists() and conn_path.is_dir():
-            if (conn_path / "ontology_v3.json").exists() or (conn_path / "ontology_v2.json").exists():
+            if (conn_path / "ontology.json").exists():
                 return conn_path
 
     return None
@@ -644,17 +642,8 @@ async def get_ontology(name: str, version: str = "latest"):
                 detail=f"Ontology for connection '{name}' not found. Please build ontology first.",
             )
 
-        # 优先使用 v3，回退到 v2
-        if version == "latest":
-            v3_path = ontology_path / "ontology_v3.json"
-            v2_path = ontology_path / "ontology_v2.json"
-            file_path = v3_path if v3_path.exists() else v2_path
-        elif version == "v3":
-            file_path = ontology_path / "ontology_v3.json"
-        elif version == "v2":
-            file_path = ontology_path / "ontology_v2.json"
-        else:
-            file_path = ontology_path / f"ontology_{version}.json"
+        # 使用统一的本体文件
+        file_path = ontology_path / "ontology.json"
 
         if not file_path.exists():
             raise HTTPException(
@@ -817,9 +806,7 @@ async def export_ontology(name: str, export_request: OntologyExportRequest):
                 detail=f"Ontology for connection '{name}' not found",
             )
 
-        v3_path = ontology_path / "ontology_v3.json"
-        v2_path = ontology_path / "ontology_v2.json"
-        file_path = v3_path if v3_path.exists() else v2_path
+        file_path = ontology_path / "ontology.json"
 
         with open(file_path, "r", encoding="utf-8") as f:
             ontology_data = json.load(f)
