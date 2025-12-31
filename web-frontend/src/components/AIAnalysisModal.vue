@@ -7,13 +7,13 @@
           <h2 class="text-lg font-semibold text-[#2f2720]">AI 自动分析</h2>
           <p class="mt-1 text-sm text-[#9a8b7c]">
             <template v-if="isAnalyzing">
-              正在分析 {{ progress.current }}/{{ progress.total }}...
+              正在分析 {{ progress.current }}/{{ progress.total }}（可通过数据验证的问题）
             </template>
             <template v-else-if="results.length > 0">
               分析完成，已解决 {{ resolvedCount }} 个问题
             </template>
             <template v-else>
-              共 {{ pendingCount }} 个待分析问题
+              共 {{ pendingCount }} 个待解决问题
             </template>
           </p>
         </div>
@@ -36,8 +36,8 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a2.25 2.25 0 01-1.591.659H9.061a2.25 2.25 0 01-1.591-.659L5 14.5m14 0l.94 2.06a2.25 2.25 0 01-2.093 3.19H6.153a2.25 2.25 0 01-2.093-3.19L5 14.5" />
             </svg>
           </div>
-          <p class="text-[#6d5f52] mb-2">AI 将自动分析待回答的问题</p>
-          <p class="text-sm text-[#9a8b7c] mb-6">通过查询数据库数据来验证和解决不确定性问题</p>
+          <p class="text-[#6d5f52] mb-2">AI 将自动分析可验证的问题</p>
+          <p class="text-sm text-[#9a8b7c] mb-6">仅分析可通过查询数据库数据验证的问题，其他问题需人工回答</p>
           <button
             class="rounded-xl bg-gradient-to-r from-[#5c4f43] to-[#7c6551] px-8 py-3 text-white font-medium transition hover:opacity-90"
             @click="startAnalysis"
@@ -191,6 +191,7 @@ const progress = ref({ current: 0, total: 0 })
 const currentQuestion = ref('')
 const results = ref<AnalysisResult[]>([])
 const acceptingIds = ref<string[]>([])
+const actualPendingCount = ref(0) // 实际待分析数量（从后端返回）
 let eventSource: EventSource | null = null
 
 // 计算属性
@@ -240,6 +241,8 @@ const startAnalysis = () => {
 const handleSSEEvent = (data: any) => {
   switch (data.type) {
     case 'start':
+      // 使用 analyzable_count（已过滤 resolved/skipped 的数量）
+      actualPendingCount.value = data.metadata?.analyzable_count || 0
       progress.value.total = data.metadata?.analyzable_count || data.metadata?.total_questions || 0
       break
 

@@ -693,6 +693,11 @@ class OntologyBuilderTool(KodeTool):
         """
         Save ontology to file (V3 format) + 创建版本快照.
 
+        ✨ 自动备份机制：
+        - 写入前自动创建时间戳备份
+        - 使用临时文件 + 原子替换，防止写入失败损坏数据
+        - 自动清理旧备份（保留最近10个）
+
         Args:
             ontology: Ontology data (V3 format with schema/business_logic/mappings/uncertainties)
             connection_name: Database connection name
@@ -701,6 +706,9 @@ class OntologyBuilderTool(KodeTool):
         Returns:
             Storage metadata
         """
+        import shutil
+        import tempfile
+
         try:
             # Get storage path from config
             config = ConfigManager()
@@ -717,26 +725,62 @@ class OntologyBuilderTool(KodeTool):
             ontology["version"] = ontology.get("version", "3.0")
             ontology["updated_at"] = datetime.now().isoformat()
 
-            # 保存到 ontology.json
+            # 保存到 ontology.json（带自动备份）
             ontology_file = conn_dir / "ontology.json"
-            with open(ontology_file, "w", encoding="utf-8") as f:
-                json.dump(ontology, f, indent=2, ensure_ascii=False)
 
-            logger.info(f"✅ 本体已保存到: {ontology_file}")
+            # ✨ 步骤1：如果主文件存在，先创建备份
+            backup_path = None
+            if ontology_file.exists():
+                backup_dir = conn_dir / "backups"
+                backup_dir.mkdir(exist_ok=True)
 
-            # 2. 创建版本快照（异步）
-            version_number = self._create_version_snapshot_async(
-                user_id=user_id,
-                connection_name=connection_name,
-                ontology_data=ontology,
-                change_summary=f"本体构建完成（版本: {version}）"
+                # 时间戳格式：ontology.json.backup.20251230_143052_123456（含微秒）
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                backup_filename = f"ontology.json.backup.{timestamp}"
+                backup_path = backup_dir / backup_filename
+
+                # 复制主文件到备份
+                shutil.copy2(ontology_file, backup_path)
+                logger.info(f"📦 已备份现有本体到: {backup_path}")
+
+            # ✨ 步骤2：写入临时文件（防止写入失败损坏主文件）
+            temp_fd, temp_path = tempfile.mkstemp(
+                suffix=".json",
+                dir=conn_dir,
+                text=True
             )
+            try:
+                with open(temp_fd, "w", encoding="utf-8") as f:
+                    json.dump(ontology, f, indent=2, ensure_ascii=False)
+
+                # ✨ 步骤3：验证临时文件完整性
+                with open(temp_path, "r", encoding="utf-8") as f:
+                    json.load(f)  # 确保可以解析
+
+                # ✨ 步骤4：原子替换（os.replace 在所有平台都是原子操作）
+                import os
+                os.replace(temp_path, ontology_file)
+
+                logger.info(f"✅ 本体已保存到: {ontology_file}")
+
+            except Exception as e:
+                # 清理临时文件
+                if Path(temp_path).exists():
+                    Path(temp_path).unlink()
+                raise e
+
+            # ✨ 步骤5：清理旧备份（保留最近10个）
+            if backup_path:
+                self._cleanup_old_backups(conn_dir / "backups", keep=10)
+
+            # ✅ 版本快照已由 OntologyStorageV2.save_ontology_v2() 自动创建
+            # 无需再次调用 OntologyVersionManager（避免重复创建 vN/ 目录）
 
             return {
                 "saved": True,
                 "version": ontology["version"],
                 "latest_path": str(ontology_file),
-                "version_number": version_number
+                "backup_path": str(backup_path) if backup_path else None,
             }
 
         except Exception as e:
@@ -746,6 +790,34 @@ class OntologyBuilderTool(KodeTool):
                 "error": str(e),
             }
 
+    def _cleanup_old_backups(self, backup_dir: Path, keep: int = 10) -> None:
+        """清理旧备份文件，只保留最近N个
+
+        Args:
+            backup_dir: 备份目录
+            keep: 保留的备份数量（默认10个）
+        """
+        if not backup_dir.exists():
+            return
+
+        # 获取所有备份文件（按修改时间排序）
+        backup_files = sorted(
+            backup_dir.glob("ontology.json.backup.*"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True  # 最新的在前
+        )
+
+        # 删除超出保留数量的旧备份
+        for old_backup in backup_files[keep:]:
+            try:
+                old_backup.unlink()
+                logger.info(f"🗑️  已删除旧备份: {old_backup.name}")
+            except Exception as e:
+                logger.warning(f"删除旧备份失败: {old_backup.name}, 错误: {e}")
+
+    # 🗑️ 已废弃：此方法会重复创建版本目录（与 OntologyStorageV2 冲突）
+    # 版本快照已由 OntologyStorageV2.save_ontology_v2() 自动管理
+    # 保留方法定义以防其他地方引用，但内部逻辑已移除
     def _create_version_snapshot_async(
         self,
         user_id: str,
@@ -753,51 +825,13 @@ class OntologyBuilderTool(KodeTool):
         ontology_data: Dict[str, Any],
         change_summary: str
     ) -> Optional[int]:
-        """异步创建版本快照"""
-        try:
-            from kode.services.ontology_version_manager import OntologyVersionManager
-            from kode.database.session import async_session_maker
-            import asyncio
-            import threading
+        """
+        [已废弃] 此方法不再使用
 
-            def _create_version_in_thread():
-                try:
-                    async def _async_create():
-                        async with async_session_maker() as session:
-                            version_manager = OntologyVersionManager()
-                            version = await version_manager.create_version(
-                                session=session,
-                                user_id=user_id,
-                                connection_name=connection_name,
-                                ontology_data=ontology_data,
-                                change_summary=change_summary,
-                                conversation_id=None,
-                                is_snapshot=True
-                            )
-                            logger.info(f"📦 创建本体版本快照: v{version.version_number}")
-                            return version.version_number
-
-                    # 在新事件循环中运行
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    result = loop.run_until_complete(_async_create())
-                    loop.close()
-                    return result
-                except Exception as e:
-                    logger.error(f"❌ 创建版本快照失败: {e}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-                    return None
-
-            # 异步执行
-            thread = threading.Thread(target=_create_version_in_thread, daemon=True)
-            thread.start()
-            # 不等待线程完成，立即返回
-            return None  # 返回 None 表示版本号未知（异步创建中）
-
-        except Exception as e:
-            logger.error(f"❌ 启动版本快照创建失败: {e}")
-            return None
+        版本快照由 OntologyStorageV2 统一管理，无需额外调用
+        """
+        logger.debug("⚠️ _create_version_snapshot_async 已废弃，跳过执行")
+        return None
 
     def _build_qa_text(self, business_context: Dict[str, Any]) -> str:
         """从业务上下文构建问答文本

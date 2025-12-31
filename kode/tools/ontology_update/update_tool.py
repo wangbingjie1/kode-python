@@ -200,11 +200,14 @@ class OntologyUpdateTool(KodeTool):
                 )
 
             # 4. 异步记录到数据库
-            threading.Thread(
-                target=self._record_change_to_db,
-                args=(change, connection_name, result, user_id),
-                daemon=True,
-            ).start()
+            # ✨ 修复：暂时禁用数据库记录，避免线程阻塞
+            # 版本快照已通过文件系统保存，数据库记录是可选的审计功能
+            # threading.Thread(
+            #     target=self._record_change_to_db_safe,
+            #     args=(change, connection_name, result, user_id),
+            #     daemon=True,
+            # ).start()
+            logger.debug(f"📝 跳过数据库记录（已禁用）: {change.id}")
 
             # 5. 返回成功结果
             return json.dumps(
@@ -226,49 +229,80 @@ class OntologyUpdateTool(KodeTool):
                 ensure_ascii=False,
             )
 
-    def _record_change_to_db(
+    def _record_change_to_db_safe(
         self, change: Change, connection_name: str, result: Dict[str, Any], user_id: str
     ):
         """
-        异步记录变更到数据库
+        异步记录变更到数据库（带超时保护）
 
         Args:
             change: 变更对象
             connection_name: 连接名称
             result: 应用结果
             user_id: 用户 ID
+
+        Note:
+            ✨ 修复：添加超时机制，避免数据库操作卡死阻塞主流程
+            - 如果数据库操作超时或失败，不影响本体更新功能
+            - 版本快照已通过文件系统保存，数据库记录是可选的
         """
+        import signal
+
+        def timeout_handler(signum, frame):
+            raise TimeoutError("数据库操作超时")
+
         try:
+            # ✨ 设置 5 秒超时（仅 Unix 系统）
+            if hasattr(signal, 'SIGALRM'):
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(5)
+
             # 使用同步 Session
             db = SessionLocal()
+            try:
+                # 创建变更记录
+                db_change = OntologyChange(
+                    user_id=user_id,
+                    connection_name=connection_name,
+                    conversation_id=change.conversation_id,
+                    change_type=ChangeType[change.change_type.upper()],
+                    target_path=change.target_path,
+                    old_value=change.old_value,
+                    new_value=change.new_value,
+                    user_intent=change.user_intent,
+                    context={
+                        "affected_entities": result.get("affected_entities", []),
+                    },
+                    impact_score=result.get("impact_score", 0),
+                    affected_entities=result.get("affected_entities", []),
+                    status=ChangeStatus.APPLIED,
+                    applied_at=change.created_at,
+                )
 
-            # 创建变更记录
-            db_change = OntologyChange(
-                user_id=user_id,
-                connection_name=connection_name,
-                conversation_id=change.conversation_id,
-                change_type=ChangeType[change.change_type.upper()],
-                target_path=change.target_path,
-                old_value=change.old_value,
-                new_value=change.new_value,
-                user_intent=change.user_intent,
-                context={
-                    "affected_entities": result.get("affected_entities", []),
-                },
-                impact_score=result.get("impact_score", 0),
-                affected_entities=result.get("affected_entities", []),
-                status=ChangeStatus.APPLIED,
-                applied_at=change.created_at,
-            )
+                db.add(db_change)
+                db.commit()
+                logger.info(f"📝 变更已记录到数据库: {change.id}")
+            finally:
+                db.close()
 
-            db.add(db_change)
-            db.commit()
-            logger.info(f"📝 变更已记录到数据库: {change.id}")
+                # 取消超时
+                if hasattr(signal, 'SIGALRM'):
+                    signal.alarm(0)
 
+        except TimeoutError:
+            logger.warning(f"⚠️ 数据库记录超时，跳过（不影响功能）: {change.id}")
         except Exception as e:
-            logger.error(f"❌ 记录变更到数据库失败: {e}")
-        finally:
-            db.close()
+            logger.warning(f"⚠️ 数据库记录失败，跳过（不影响功能）: {e}")
+
+    def _record_change_to_db(
+        self, change: Change, connection_name: str, result: Dict[str, Any], user_id: str
+    ):
+        """
+        异步记录变更到数据库（已废弃，使用 _record_change_to_db_safe）
+
+        保留此方法仅为向后兼容
+        """
+        self._record_change_to_db_safe(change, connection_name, result, user_id)
 
     def get_recent_changes(self, connection_name: str, limit: int = 10) -> str:
         """

@@ -41,12 +41,58 @@ class UncertaintyAnalyzer:
 
     def __init__(self, model_manager: ModelManager):
         self.model_manager = model_manager
-        self.query_timeout = 300  # 单个查询超时秒数（5分钟）
-        self.max_rows = 100      # 最大返回行数
+        self.query_timeout = 30   # 单个查询超时秒数（30秒，防止假死）
+        self.max_rows = 100       # 最大返回行数
+
+        # SQL 风险关键词（不区分大小写）
+        self.dangerous_sql_patterns = [
+            r"\bJOIN\b",           # 禁止 JOIN 操作
+            r"\bINNER\s+JOIN\b",   # 禁止 INNER JOIN
+            r"\bLEFT\s+JOIN\b",    # 禁止 LEFT JOIN
+            r"\bRIGHT\s+JOIN\b",   # 禁止 RIGHT JOIN
+            r"\bFULL\s+JOIN\b",    # 禁止 FULL JOIN
+            r"\bCROSS\s+JOIN\b",   # 禁止 CROSS JOIN
+            r"\(\s*SELECT\b",      # 禁止子查询（包括相关子查询）
+            r"\bUNION\b",          # 禁止 UNION（可能导致大结果集）
+            r"\bEXISTS\b",         # 禁止 EXISTS
+            r"\bIN\s*\(\s*SELECT", # 禁止 IN (SELECT ...)
+        ]
 
     def is_analyzable(self, uncertainty: Dict) -> bool:
         """判断问题是否可通过数据分析"""
         return uncertainty.get("type") in self.ANALYZABLE_TYPES
+
+    def _is_sql_safe(self, sql: str) -> Tuple[bool, Optional[str]]:
+        """
+        检查 SQL 是否安全（防止危险查询导致假死）
+
+        Returns:
+            (is_safe, error_message)
+        """
+        sql_upper = sql.upper()
+
+        # 1. 检查是否为 SELECT 语句
+        if not sql_upper.strip().startswith("SELECT"):
+            return False, "只允许 SELECT 查询"
+
+        # 2. 检查危险模式
+        for pattern in self.dangerous_sql_patterns:
+            if re.search(pattern, sql, re.IGNORECASE):
+                # 提取操作名（去掉正则元字符）
+                operation = pattern.replace(r'\b', '').replace(r'\s+', ' ').strip()
+                return False, f"禁止使用 {operation} 操作（可能导致查询假死）"
+
+        # 3. 检查是否有 LIMIT/TOP 限制
+        has_limit = (
+            re.search(r"\bLIMIT\s+\d+", sql, re.IGNORECASE) or
+            re.search(r"\bTOP\s+\d+", sql, re.IGNORECASE) or
+            re.search(r"\bFETCH\s+FIRST\s+\d+", sql, re.IGNORECASE) or
+            re.search(r"\bROWNUM\s*<=\s*\d+", sql, re.IGNORECASE)
+        )
+        if not has_limit:
+            return False, "必须添加 LIMIT/TOP 限制返回行数"
+
+        return True, None
 
     async def analyze_uncertainties_stream(
         self,
@@ -146,6 +192,7 @@ class UncertaintyAnalyzer:
                     connection_name=connection_name,
                     uncertainty=uncertainty,
                     schema_context=schema_context,
+                    cancel_event=cancel_event,
                 )
 
                 # 统计
@@ -197,6 +244,7 @@ class UncertaintyAnalyzer:
         connection_name: str,
         uncertainty: Dict,
         schema_context: Dict,
+        cancel_event: Optional[asyncio.Event] = None,
     ) -> Dict:
         """
         分析单个不确定性问题
@@ -283,11 +331,24 @@ class UncertaintyAnalyzer:
             sql = sql_info.get("sql", "")
             purpose = sql_info.get("purpose", "")
 
+            # 安全检查
+            is_safe, error_msg = self._is_sql_safe(sql)
+            if not is_safe:
+                logger.warning(f"[AI分析] SQL 不安全，已拦截: {error_msg}")
+                query_results.append({
+                    "sql": sql,
+                    "purpose": purpose,
+                    "status": "blocked",
+                    "error": f"SQL 安全检查失败: {error_msg}",
+                })
+                continue
+
             try:
                 result = await self._execute_query_with_timeout(
                     connection_name=connection_name,
                     sql=sql,
                     timeout=self.query_timeout,
+                    cancel_event=cancel_event,
                 )
                 query_results.append({
                     "sql": sql,
@@ -297,12 +358,12 @@ class UncertaintyAnalyzer:
                 })
                 executed_sqls.append(sql)
             except asyncio.TimeoutError:
-                logger.warning(f"[AI分析] SQL 超时: {sql[:100]}...")
+                logger.warning(f"[AI分析] SQL 超时（{self.query_timeout}秒）: {sql[:100]}...")
                 query_results.append({
                     "sql": sql,
                     "purpose": purpose,
                     "status": "timeout",
-                    "error": "查询超时",
+                    "error": f"查询超时（超过 {self.query_timeout} 秒）",
                 })
             except Exception as e:
                 logger.error(f"[AI分析] SQL 执行失败: {sql[:200]}...")
@@ -513,12 +574,18 @@ class UncertaintyAnalyzer:
 表结构信息:
 {schema_str}
 
-要求:
+**严格要求**:
 1. 生成 1-3 个 SQL 查询来验证/回答这个问题
 2. 每个查询必须有明确目的
-3. 所有 SELECT 查询必须限制返回行数（使用 {limit_hint}）
+3. **所有 SELECT 查询必须限制返回行数**（使用 {limit_hint}）
 4. SQL 语法必须兼容 {db_type}
-5. 返回 JSON 格式，格式如下:
+5. **禁止使用以下危险操作**（会导致查询假死）:
+   - 禁止 JOIN（包括 INNER/LEFT/RIGHT/FULL/CROSS JOIN）
+   - 禁止子查询（包括 SELECT 中的子查询、WHERE 中的子查询）
+   - 禁止 UNION/UNION ALL
+   - 禁止 EXISTS/IN (SELECT ...)
+   - 只允许单表简单查询：SELECT ... FROM 单个表 WHERE 简单条件 {limit_hint}
+6. 返回 JSON 格式，格式如下:
 
 ```json
 [
@@ -601,8 +668,24 @@ class UncertaintyAnalyzer:
         connection_name: str,
         sql: str,
         timeout: int,
+        cancel_event: Optional[asyncio.Event] = None,
     ) -> Dict:
-        """执行 SQL 查询（带超时）"""
+        """
+        执行 SQL 查询（带超时和取消支持）
+
+        Args:
+            connection_name: 数据库连接名
+            sql: SQL 语句
+            timeout: 超时秒数
+            cancel_event: 取消事件（可选）
+
+        Returns:
+            查询结果字典
+
+        Raises:
+            asyncio.TimeoutError: 查询超时
+            asyncio.CancelledError: 查询被取消
+        """
         def _execute():
             engine = db_manager.get_engine(connection_name)
             with engine.connect() as conn:
@@ -635,10 +718,40 @@ class UncertaintyAnalyzer:
                         "affected_rows": result.rowcount,
                     }
 
-        return await asyncio.wait_for(
-            asyncio.get_event_loop().run_in_executor(None, _execute),
-            timeout=timeout,
-        )
+        # 创建执行任务
+        execute_task = asyncio.get_event_loop().run_in_executor(None, _execute)
+
+        # 如果有取消事件，监听取消信号
+        if cancel_event:
+            async def _check_cancel():
+                while not cancel_event.is_set():
+                    await asyncio.sleep(0.1)
+                raise asyncio.CancelledError("查询已被用户取消")
+
+            cancel_task = asyncio.create_task(_check_cancel())
+
+            # 等待执行或取消
+            done, pending = await asyncio.wait(
+                [execute_task, cancel_task],
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=timeout,
+            )
+
+            # 取消未完成的任务
+            for task in pending:
+                task.cancel()
+
+            # 检查结果
+            if execute_task in done:
+                return await execute_task
+            elif cancel_task in done:
+                raise asyncio.CancelledError("查询已被用户取消")
+            else:
+                # 超时
+                raise asyncio.TimeoutError(f"查询超时（{timeout} 秒）")
+        else:
+            # 无取消事件，直接等待超时
+            return await asyncio.wait_for(execute_task, timeout=timeout)
 
     async def _analyze_results_and_generate_answer(
         self,
