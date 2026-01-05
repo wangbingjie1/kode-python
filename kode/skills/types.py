@@ -63,6 +63,8 @@ class SkillExecutionResult:
     allowed_tools: Optional[List[str]] = None
     model: Optional[str] = None
     skill_name: str = ''
+    # 对齐官网实现：skill 内容作为独立的 user 消息传递
+    new_messages: Optional[List[Dict[str, Any]]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -80,4 +82,6 @@ class SkillExecutionResult:
             result['model'] = self.model
         if self.skill_name:
             result['skill_name'] = self.skill_name
+        if self.new_messages:
+            result['new_messages'] = self.new_messages
         return result

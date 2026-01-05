@@ -55,6 +55,81 @@ def serialize_chunk(chunk: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ============================================================
+# Helper function to sanitize tool_use/tool_result pairs
+# ============================================================
+def _sanitize_tool_pairs(chat_history: list) -> list:
+    """
+    清理 chat_history 中孤立的 tool_use（没有对应 tool_result 的）。
+
+    Anthropic API 要求：每个 tool_use 块后面必须紧跟一个包含对应 tool_result 的消息。
+    此函数会遍历消息列表，移除所有没有对应 tool_result 的 tool_use 块。
+
+    Args:
+        chat_history: Anthropic API 格式的消息列表
+
+    Returns:
+        清理后的消息列表
+    """
+    if not chat_history:
+        return chat_history
+
+    logger.info(f"[Sanitize] Starting sanitization of {len(chat_history)} messages")
+
+    # 收集所有 tool_result 的 tool_use_id
+    tool_result_ids = set()
+    for msg in chat_history:
+        if msg.get("role") == "user":
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        tool_use_id = block.get("tool_use_id")
+                        if tool_use_id:
+                            tool_result_ids.add(tool_use_id)
+
+    logger.info(f"[Sanitize] Found {len(tool_result_ids)} tool_result ids: {tool_result_ids}")
+
+    # 过滤 assistant 消息中的孤立 tool_use
+    sanitized = []
+    for msg in chat_history:
+        if msg.get("role") == "assistant":
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                # 过滤掉没有对应 tool_result 的 tool_use
+                filtered_content = []
+                removed_count = 0
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        tool_use_id = block.get("id")
+                        if tool_use_id not in tool_result_ids:
+                            logger.warning(
+                                f"[Sanitize] Removing orphaned tool_use: {tool_use_id}"
+                            )
+                            removed_count += 1
+                            continue  # 跳过孤立的 tool_use
+                    filtered_content.append(block)
+
+                if removed_count > 0:
+                    logger.warning(
+                        f"[Sanitize] Removed {removed_count} orphaned tool_use blocks from assistant message"
+                    )
+
+                # 只有当过滤后还有内容时才添加消息
+                if filtered_content:
+                    sanitized.append({"role": "assistant", "content": filtered_content})
+                else:
+                    logger.warning(
+                        f"[Sanitize] Skipping empty assistant message after removing orphaned tool_uses"
+                    )
+            else:
+                sanitized.append(msg)
+        else:
+            sanitized.append(msg)
+
+    return sanitized
+
+
+# ============================================================
 # Global session manager for pending user inputs
 # ============================================================
 class UserInputSessionManager:
@@ -955,38 +1030,40 @@ async def stream_chat(
 
         # 1. Handle Tool Result (User Role)
         if msg_type == "tool_result":
-            # Flush pending assistant content first
+            tool_use_id = msg.message_metadata.get("tool_use_id")
+
+            # ✅ 先检查这个 tool_result 是否有对应的 tool_use
+            if not tool_use_id or not isinstance(tool_use_id, str):
+                logger.warning(
+                    f"Invalid tool_use_id in tool_result message {msg.id}: {tool_use_id}, skipping"
+                )
+                continue
+
+            if tool_use_id not in pending_tool_use_ids:
+                logger.warning(
+                    f"Orphaned tool_result (no matching tool_use): {tool_use_id}, skipping"
+                )
+                continue
+
+            # ✅ 只有当 tool_result 有效时，才 flush assistant content
             if current_assistant_content:
                 chat_history.append({"role": "assistant", "content": current_assistant_content})
                 current_assistant_content = []
 
-            # Add tool result message
-            tool_use_id = msg.message_metadata.get("tool_use_id")
-            if tool_use_id and isinstance(tool_use_id, str):
-                # ✅ 验证：这个 tool_result 必须对应之前的 tool_use
-                if tool_use_id not in pending_tool_use_ids:
-                    logger.warning(
-                        f"Orphaned tool_result (no matching tool_use): {tool_use_id}, skipping"
-                    )
-                    continue  # 跳过孤立的 tool_result
-
-                chat_history.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": tool_use_id,
-                                "content": msg.content or "",
-                            }
-                        ],
-                    }
-                )
-                pending_tool_use_ids.discard(tool_use_id)  # 标记为已匹配
-            else:
-                logger.warning(
-                    f"Invalid tool_use_id in tool_result message {msg.id}: {tool_use_id}, skipping"
-                )
+            # Add tool result message (已验证 tool_use_id 有效)
+            chat_history.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": msg.content or "",
+                        }
+                    ],
+                }
+            )
+            pending_tool_use_ids.discard(tool_use_id)  # 标记为已匹配
 
         # 2. Handle Assistant Messages (Text or Tool Use)
         elif msg.role == "assistant":
@@ -1042,9 +1119,22 @@ async def stream_chat(
         else:
             chat_history.append({"role": "assistant", "content": current_assistant_content})
 
+    # ✅ 最终验证：清理所有孤立的 tool_use（强制保证 API 格式正确）
+    chat_history = _sanitize_tool_pairs(chat_history)
+
+    # 🔍 调试日志：打印完整的消息历史结构
     logger.info(
         f"Loaded {len(messages)} raw messages, converted to {len(chat_history)} Anthropic API messages"
     )
+    for i, msg in enumerate(chat_history):
+        role = msg.get("role")
+        content = msg.get("content", [])
+        if isinstance(content, list):
+            types = [b.get("type") if isinstance(b, dict) else "text" for b in content]
+            ids = [b.get("id") or b.get("tool_use_id") for b in content if isinstance(b, dict)]
+            logger.info(f"  [{i}] {role}: types={types}, ids={ids}")
+        else:
+            logger.info(f"  [{i}] {role}: content='{str(content)[:50]}...'")
 
     # Create conversation service
     conversation_service = AsyncConversationService()

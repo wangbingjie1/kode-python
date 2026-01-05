@@ -210,6 +210,63 @@ class AnthropicStreamingAgent:
 
         return messages_copy
 
+    def _compress_tool_result(self, msg: Dict, max_chars: int = 2000) -> Dict:
+        """
+        压缩 tool_result 消息内容，避免因跳过导致死循环。
+
+        Args:
+            msg: 包含 tool_result 的消息
+            max_chars: 最大字符数
+
+        Returns:
+            压缩后的消息
+        """
+        import copy
+        import json
+
+        compressed = copy.deepcopy(msg)
+        content = compressed.get("content", [])
+
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "tool_result":
+                    result_text = item.get("content", "")
+                    if len(result_text) > max_chars:
+                        # 尝试解析 JSON 并提取摘要
+                        try:
+                            result_data = json.loads(result_text)
+                            if isinstance(result_data, dict):
+                                # 创建摘要
+                                summary = {
+                                    "status": "compressed",
+                                    "original_length": len(result_text),
+                                    "message": "工具结果已压缩以节省上下文空间",
+                                }
+                                # 保留部分关键字段
+                                for key in ["success", "error", "count", "total", "message"]:
+                                    if key in result_data:
+                                        summary[key] = result_data[key]
+                                item["content"] = json.dumps(summary, ensure_ascii=False)
+                            else:
+                                # 不是字典，简单截断
+                                item["content"] = (
+                                    result_text[:max_chars // 2]
+                                    + "\n...[内容已压缩]...\n"
+                                    + result_text[-max_chars // 4:]
+                                )
+                        except (json.JSONDecodeError, Exception):
+                            # 非 JSON，简单截断
+                            item["content"] = (
+                                result_text[:max_chars // 2]
+                                + "\n...[内容已压缩]...\n"
+                                + result_text[-max_chars // 4:]
+                            )
+                        logger.info(
+                            f"Compressed tool_result: {len(result_text)} -> {len(item['content'])} chars"
+                        )
+
+        return compressed
+
     def _trim_messages_for_context(
         self, messages: List[Dict], max_context_tokens: int = 150000
     ) -> List[Dict]:
@@ -254,18 +311,29 @@ class AnthropicStreamingAgent:
             """Check if message contains tool_use blocks."""
             content = msg.get("content", "")
             if isinstance(content, list):
-                return any(
-                    isinstance(item, dict) and item.get("type") == "tool_use" for item in content
-                )
+                for item in content:
+                    # 检查字典格式
+                    if isinstance(item, dict) and item.get("type") == "tool_use":
+                        return True
+                    # 检查 Anthropic SDK 的 ToolUseBlock 对象
+                    if isinstance(item, ToolUseBlock):
+                        return True
+                    # 检查有 type 属性的对象
+                    if hasattr(item, "type") and getattr(item, "type", None) == "tool_use":
+                        return True
             return False
 
         def has_tool_result(msg: Dict) -> bool:
             """Check if message contains tool_result blocks."""
             content = msg.get("content", "")
             if isinstance(content, list):
-                return any(
-                    isinstance(item, dict) and item.get("type") == "tool_result" for item in content
-                )
+                for item in content:
+                    # 检查字典格式
+                    if isinstance(item, dict) and item.get("type") == "tool_result":
+                        return True
+                    # 检查有 type 属性的对象
+                    if hasattr(item, "type") and getattr(item, "type", None) == "tool_result":
+                        return True
             return False
 
         # Calculate total tokens
@@ -284,14 +352,32 @@ class AnthropicStreamingAgent:
         skip_next_tool_result = False
 
         # Process messages in reverse (keep most recent)
+        skip_next_tool_use = False  # 用于跳过与被跳过的 tool_result 对应的 tool_use
+        first_message_processed = False  # 单独追踪是否处理过第一条消息
+
         for i, msg in enumerate(reversed(messages)):
             msg_tokens = estimate_message_tokens(msg)
 
-            # Always keep the last user message
-            if not trimmed:
-                # If it's a tool_result without corresponding tool_use, we need to skip it
+            # Check if this is a tool_use that should be skipped (because its tool_result was skipped)
+            # ✅ 这个检查必须在 "first message" 检查之前，因为 tool_use 可能是倒序第二条
+            if skip_next_tool_use and has_tool_use(msg):
+                logger.info(f"Skipping tool_use message (its tool_result was skipped)")
+                skip_next_tool_use = False
+                continue
+
+            # Handle the first (most recent) message
+            if not first_message_processed:
+                first_message_processed = True
+                # 🔥 修复死循环：如果最后一条消息是 tool_result，压缩它而不是跳过
+                # 跳过会导致模型看不到工具结果，从而重复调用工具
                 if has_tool_result(msg):
-                    logger.warning("Last message contains tool_result without tool_use, skipping")
+                    compressed_msg = self._compress_tool_result(msg)
+                    compressed_tokens = estimate_message_tokens(compressed_msg)
+                    logger.warning(
+                        f"Last message is tool_result, compressing: {msg_tokens} -> {compressed_tokens} tokens"
+                    )
+                    trimmed.append(compressed_msg)
+                    current_tokens += compressed_tokens
                     continue
                 trimmed.append(msg)
                 current_tokens += msg_tokens
@@ -977,10 +1063,31 @@ class AnthropicStreamingAgent:
 
             # Execute tools
             tool_results = []
+            all_new_messages = []  # 收集所有工具返回的 new_messages（对齐官网实现）
             for tool_use in tool_uses:
                 # 🛑 在每个工具执行前检查取消状态
                 if self.cancel_event and self.cancel_event.is_set():
                     logger.info(f"[Cancel] Stream cancelled before tool execution")
+
+                    # ✅ 为所有未执行的工具生成 cancelled 状态的 tool_result
+                    # 这样数据库中不会有孤立的 tool_use
+                    for remaining_tool in tool_uses:
+                        yield {
+                            "type": "tool_result",
+                            "content": "工具执行被用户取消",
+                            "metadata": {
+                                "tool_name": remaining_tool.name,
+                                "tool_use_id": remaining_tool.id,
+                                "status": "cancelled",
+                            },
+                        }
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": remaining_tool.id,
+                            "content": "工具执行被用户取消",
+                            "is_error": True,
+                        })
+
                     yield {
                         "type": "cancelled",
                         "content": "用户取消了请求",
@@ -1076,33 +1183,43 @@ class AnthropicStreamingAgent:
                         if self.verbose:
                             logger.info(f"Tool result: {str(result)[:200]}")
 
-                        # Check if tool requires user input
+                        # Check if tool requires user input or has new_messages
                         requires_user_input = False
                         result_data = None
+                        tool_result_content = str(result)  # 默认使用完整结果
                         try:
                             import json
 
                             result_data = json.loads(str(result))
-                            if isinstance(result_data, dict) and result_data.get(
-                                "requires_user_input"
-                            ):
-                                requires_user_input = True
-                                logger.info(
-                                    f"[Tool '{tool_name}'] Requires user input - Agent will pause after this iteration"
-                                )
+                            if isinstance(result_data, dict):
+                                if result_data.get("requires_user_input"):
+                                    requires_user_input = True
+                                    logger.info(
+                                        f"[Tool '{tool_name}'] Requires user input - Agent will pause after this iteration"
+                                    )
+
+                                # 🔥 对齐官网实现：收集 new_messages（Skill 工具特有）
+                                new_messages = result_data.get("new_messages")
+                                if new_messages and isinstance(new_messages, list):
+                                    all_new_messages.extend(new_messages)
+                                    logger.info(
+                                        f"[Tool '{tool_name}'] Collected {len(new_messages)} new_messages"
+                                    )
+                                    # 使用简短的 output 作为 tool_result 内容
+                                    tool_result_content = result_data.get("output", str(result))
                         except (json.JSONDecodeError, ValueError):
                             pass  # Result is not JSON, continue normally
 
                         # Yield tool_result event immediately
                         yield {
                             "type": "tool_result",
-                            "content": str(result),
+                            "content": tool_result_content,
                             "metadata": {
                                 "tool_name": tool_name,
                                 "tool_use_id": tool_use_id,  # ← 必须包含以便前端配对
                                 "status": "completed",
                                 "tool_args": tool_args,
-                                "result": str(result),
+                                "result": tool_result_content,
                                 "requires_user_input": requires_user_input,  # Pass to frontend
                             },
                         }
@@ -1154,12 +1271,12 @@ class AnthropicStreamingAgent:
                             else:
                                 self.on_tool_end(tool_name, tool_args, result)
 
-                        # Add tool result
+                        # Add tool result (使用 tool_result_content，可能是简短版本)
                         tool_results.append(
                             {
                                 "type": "tool_result",
                                 "tool_use_id": tool_use_id,
-                                "content": str(result),
+                                "content": tool_result_content,
                             }
                         )
 
@@ -1168,13 +1285,34 @@ class AnthropicStreamingAgent:
                             {
                                 "name": tool_name,
                                 "args": tool_args,
-                                "result": str(result)[:500],
+                                "result": tool_result_content[:500],
                             }
                         )
 
                         # 🛑 工具执行完成后检查取消状态（不执行后续工具）
                         if self.cancel_event and self.cancel_event.is_set():
                             logger.info(f"[Cancel] Stream cancelled after tool '{tool_name}' execution")
+
+                            # ✅ 为剩余未执行的工具生成 cancelled 状态的 tool_result
+                            current_tool_index = tool_uses.index(tool_use)
+                            remaining_tools = tool_uses[current_tool_index + 1:]
+                            for remaining_tool in remaining_tools:
+                                yield {
+                                    "type": "tool_result",
+                                    "content": "工具执行被用户取消",
+                                    "metadata": {
+                                        "tool_name": remaining_tool.name,
+                                        "tool_use_id": remaining_tool.id,
+                                        "status": "cancelled",
+                                    },
+                                }
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": remaining_tool.id,
+                                    "content": "工具执行被用户取消",
+                                    "is_error": True,
+                                })
+
                             yield {
                                 "type": "cancelled",
                                 "content": "用户取消了请求",
@@ -1357,6 +1495,13 @@ class AnthropicStreamingAgent:
                 messages.append({"role": "user", "content": tool_results})
             else:
                 logger.warning("[Tool Loop] No tool results to append, skipping message append")
+
+            # 🔥 对齐官网实现：在 tool_result 之后添加 new_messages（Skill 工具特有）
+            # 这样 skill 的完整内容会作为独立的 user 消息传递给模型
+            if all_new_messages:
+                for new_msg in all_new_messages:
+                    messages.append(new_msg)
+                    logger.info(f"[Skill] Added new_message to context: {str(new_msg)[:100]}...")
 
             # 🔥 不需要检查 requires_user_input，让工具循环继续
             # Agent 会自动等待用户提交答案（前端会发送新消息）

@@ -68,16 +68,28 @@ class SkillTool(KodeTool):
             args: 可选参数
 
         Returns:
-            执行结果
+            执行结果 (JSON 格式，包含 new_messages)
         """
+        import json
+
         self._ensure_initialized()
 
         result: SkillExecutionResult = get_skill_registry().execute(skill, args)
 
         if not result.success:
-            return f"Error: {result.error}"
+            return json.dumps({
+                "success": False,
+                "error": result.error,
+            }, ensure_ascii=False)
 
-        return result.output
+        # 对齐官网实现：返回 JSON 格式结果，包含 new_messages
+        return json.dumps({
+            "success": True,
+            "output": result.output,
+            "command_name": result.command_name,
+            "skill_name": result.skill_name,
+            "new_messages": result.new_messages,
+        }, ensure_ascii=False)
 
     async def _arun(self, skill: str, args: Optional[str] = None) -> str:
         """异步执行 skill"""

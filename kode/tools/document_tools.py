@@ -1,6 +1,12 @@
 """
 文档处理工具 - 支持读取和解析多种文档格式
 
+整合了 Skills (docx/pdf/xlsx) 中的最佳实践:
+- PDF: 使用 pdfplumber 提取文本和表格
+- DOCX: 优先使用 pandoc（保留 tracked changes），回退到 python-docx
+- Excel: 使用 pandas + openpyxl，包含列类型和数据统计
+- CSV: 使用 pandas，自动检测编码
+
 支持格式:
 - PDF (.pdf)
 - Word (.docx)
@@ -9,6 +15,8 @@
 - 纯文本 (.txt, .md, .log)
 """
 
+import subprocess
+import shutil
 from pathlib import Path
 from typing import Type, Optional, Dict, Any, List
 from pydantic import BaseModel, Field
@@ -31,29 +39,36 @@ class DocumentReadInput(BaseModel):
         1000,
         description="Excel/CSV 最大行数限制"
     )
+    use_pandoc: Optional[bool] = Field(
+        True,
+        description="DOCX 是否优先使用 pandoc（保留 tracked changes）"
+    )
 
 
 class DocumentReadTool(KodeTool):
     """
     文档读取工具
 
-    读取并解析各种格式的文档，返回文本内容。
-    支持格式: PDF, DOCX, XLSX, CSV, TXT, MD
+    整合了 Skills (docx/pdf/xlsx) 中的最佳实践:
+    - PDF: 使用 pdfplumber 提取文本和表格（参考 pdf/SKILL.md）
+    - DOCX: 优先使用 pandoc 保留 tracked changes（参考 docx/SKILL.md）
+    - Excel/CSV: 使用 pandas 提供数据统计（参考 xlsx/SKILL.md）
     """
 
     name: str = "DocumentRead"
     description: str = """读取文档文件并返回文本内容。
 
 支持格式:
-- PDF (.pdf) - 提取文本和表格
-- Word (.docx) - 提取段落和表格
-- Excel (.xlsx, .xls) - 提取所有 sheet 数据
-- CSV (.csv) - 解析表格数据
+- PDF (.pdf) - 使用 pdfplumber 提取文本和表格
+- Word (.docx) - 优先使用 pandoc（保留 tracked changes），回退到 python-docx
+- Excel (.xlsx, .xls) - 使用 pandas 提取所有 sheet 数据和统计信息
+- CSV (.csv) - 使用 pandas 解析，自动检测编码
 - 纯文本 (.txt, .md) - 直接读取
 
 示例:
 - 读取 PDF: DocumentRead(file_path="./report.pdf")
 - 读取 Excel: DocumentRead(file_path="./data.xlsx", max_rows=500)
+- 读取 DOCX (保留修订): DocumentRead(file_path="./doc.docx", use_pandoc=True)
 """
     args_schema: Type[BaseModel] = DocumentReadInput
     requires_permission: bool = False
@@ -62,7 +77,8 @@ class DocumentReadTool(KodeTool):
         self,
         file_path: str,
         max_pages: Optional[int] = None,
-        max_rows: Optional[int] = 1000
+        max_rows: Optional[int] = 1000,
+        use_pandoc: Optional[bool] = True
     ) -> str:
         """执行文档读取"""
         path = Path(file_path)
@@ -76,7 +92,7 @@ class DocumentReadTool(KodeTool):
             if suffix == '.pdf':
                 return self._parse_pdf(path, max_pages)
             elif suffix == '.docx':
-                return self._parse_docx(path)
+                return self._parse_docx(path, use_pandoc)
             elif suffix in ['.xlsx', '.xls']:
                 return self._parse_excel(path, max_rows)
             elif suffix == '.csv':
@@ -89,13 +105,18 @@ class DocumentReadTool(KodeTool):
             return f"错误: 解析文档失败 - {str(e)}"
 
     def _parse_pdf(self, path: Path, max_pages: Optional[int] = None) -> str:
-        """解析 PDF 文档"""
+        """
+        解析 PDF 文档 (参考 skills/builtin/pdf/SKILL.md)
+
+        使用 pdfplumber 提取文本和表格，表格可转换为结构化格式
+        """
         try:
             import pdfplumber
         except ImportError:
             return "错误: 需要安装 pdfplumber (pip install pdfplumber)"
 
         text_parts = []
+        table_count = 0
 
         with pdfplumber.open(path) as pdf:
             total_pages = len(pdf.pages)
@@ -115,18 +136,84 @@ class DocumentReadTool(KodeTool):
                 if text:
                     text_parts.append(text)
 
-                # 提取表格
+                # 提取表格 (参考 pdf/SKILL.md 的 Advanced Table Extraction)
                 tables = page.extract_tables()
                 for j, table in enumerate(tables, 1):
-                    if table:
-                        text_parts.append(f"\n[表格 {j}]")
-                        for row in table:
-                            text_parts.append(" | ".join(str(cell or "") for cell in row))
+                    if table and len(table) > 0:
+                        table_count += 1
+                        text_parts.append(f"\n[表格 {table_count}] (第 {i} 页)")
+
+                        # 尝试转换为更易读的格式
+                        try:
+                            import pandas as pd
+                            if len(table) > 1:
+                                # 第一行作为表头
+                                df = pd.DataFrame(table[1:], columns=table[0])
+                                text_parts.append(df.to_string(index=False))
+                            else:
+                                # 单行表格
+                                for row in table:
+                                    text_parts.append(" | ".join(str(cell or "") for cell in row))
+                        except ImportError:
+                            # 无 pandas，使用简单格式
+                            for row in table:
+                                text_parts.append(" | ".join(str(cell or "") for cell in row))
+
+        # 添加摘要
+        if table_count > 0:
+            text_parts.insert(3, f"表格数量: {table_count}")
 
         return "\n".join(text_parts)
 
-    def _parse_docx(self, path: Path) -> str:
-        """解析 Word 文档"""
+    def _parse_docx(self, path: Path, use_pandoc: bool = True) -> str:
+        """
+        解析 Word 文档 (参考 skills/builtin/docx/SKILL.md)
+
+        优先使用 pandoc 转换为 markdown（保留 tracked changes），
+        如果 pandoc 不可用则回退到 python-docx
+        """
+        # 尝试使用 pandoc（推荐方式，保留 tracked changes）
+        if use_pandoc and shutil.which('pandoc'):
+            return self._parse_docx_with_pandoc(path)
+
+        # 回退到 python-docx
+        return self._parse_docx_with_python(path)
+
+    def _parse_docx_with_pandoc(self, path: Path) -> str:
+        """
+        使用 pandoc 解析 DOCX (参考 docx/SKILL.md)
+
+        pandoc --track-changes=all 可以保留文档中的修订记录
+        """
+        try:
+            # 使用 pandoc 转换，保留 tracked changes
+            result = subprocess.run(
+                ['pandoc', '--track-changes=all', str(path), '-t', 'markdown'],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+
+            if result.returncode != 0:
+                # pandoc 失败，回退到 python-docx
+                return self._parse_docx_with_python(path)
+
+            text_parts = [
+                f"📝 Word 文档: {path.name}",
+                f"解析方式: pandoc (保留 tracked changes)",
+                "-" * 50,
+                "",
+                result.stdout
+            ]
+            return "\n".join(text_parts)
+
+        except subprocess.TimeoutExpired:
+            return self._parse_docx_with_python(path)
+        except Exception:
+            return self._parse_docx_with_python(path)
+
+    def _parse_docx_with_python(self, path: Path) -> str:
+        """使用 python-docx 解析 DOCX（回退方案）"""
         try:
             from docx import Document
         except ImportError:
@@ -136,11 +223,14 @@ class DocumentReadTool(KodeTool):
         text_parts = []
 
         text_parts.append(f"📝 Word 文档: {path.name}")
+        text_parts.append(f"解析方式: python-docx")
         text_parts.append("-" * 50)
 
         # 处理段落
+        para_count = 0
         for para in doc.paragraphs:
             if para.text.strip():
+                para_count += 1
                 if para.style and para.style.name.startswith('Heading'):
                     level = int(para.style.name[-1]) if para.style.name[-1].isdigit() else 1
                     text_parts.append(f"\n{'#' * level} {para.text}\n")
@@ -150,14 +240,33 @@ class DocumentReadTool(KodeTool):
         # 处理表格
         for i, table in enumerate(doc.tables, 1):
             text_parts.append(f"\n[表格 {i}]")
-            for row in table.rows:
-                cells = [cell.text for cell in row.cells]
-                text_parts.append(" | ".join(cells))
+            try:
+                import pandas as pd
+                rows_data = []
+                for row in table.rows:
+                    rows_data.append([cell.text for cell in row.cells])
+                if len(rows_data) > 1:
+                    df = pd.DataFrame(rows_data[1:], columns=rows_data[0])
+                    text_parts.append(df.to_string(index=False))
+                else:
+                    for row_data in rows_data:
+                        text_parts.append(" | ".join(row_data))
+            except ImportError:
+                for row in table.rows:
+                    cells = [cell.text for cell in row.cells]
+                    text_parts.append(" | ".join(cells))
+
+        # 添加统计信息
+        text_parts.insert(3, f"段落数: {para_count}, 表格数: {len(doc.tables)}")
 
         return "\n".join(text_parts)
 
     def _parse_excel(self, path: Path, max_rows: int = 1000) -> str:
-        """解析 Excel 文档"""
+        """
+        解析 Excel 文档 (参考 skills/builtin/xlsx/SKILL.md)
+
+        使用 pandas 读取，提供列类型、数据统计和预览
+        """
         try:
             import pandas as pd
         except ImportError:
@@ -173,24 +282,39 @@ class DocumentReadTool(KodeTool):
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
 
-            text_parts.append(f"\n--- Sheet: {sheet_name} ---")
+            text_parts.append(f"\n{'=' * 40}")
+            text_parts.append(f"Sheet: {sheet_name}")
+            text_parts.append(f"{'=' * 40}")
             text_parts.append(f"行数: {len(df)}, 列数: {len(df.columns)}")
-            text_parts.append(f"列名: {', '.join(df.columns.astype(str))}")
 
-            # 数据类型摘要
-            text_parts.append("\n列类型:")
+            # 列信息（类型 + 非空统计）
+            text_parts.append("\n📋 列信息:")
             for col in df.columns:
-                text_parts.append(f"  - {col}: {df[col].dtype}")
+                non_null = df[col].notna().sum()
+                null_count = df[col].isna().sum()
+                dtype = df[col].dtype
+                text_parts.append(f"  - {col}: {dtype} (非空: {non_null}, 空值: {null_count})")
+
+            # 数值列统计 (参考 xlsx/SKILL.md 的 df.describe())
+            numeric_cols = df.select_dtypes(include=['number']).columns
+            if len(numeric_cols) > 0:
+                text_parts.append("\n📈 数值统计:")
+                stats = df[numeric_cols].describe()
+                text_parts.append(stats.to_string())
 
             # 数据预览
             preview_rows = min(max_rows, len(df))
-            text_parts.append(f"\n数据预览 (前 {preview_rows} 行):\n")
+            text_parts.append(f"\n📄 数据预览 (前 {preview_rows} 行):\n")
             text_parts.append(df.head(preview_rows).to_string())
 
         return "\n".join(text_parts)
 
     def _parse_csv(self, path: Path, max_rows: int = 1000) -> str:
-        """解析 CSV 文件"""
+        """
+        解析 CSV 文件 (参考 skills/builtin/xlsx/SKILL.md)
+
+        使用 pandas 读取，自动检测编码，提供数据统计
+        """
         try:
             import pandas as pd
         except ImportError:
@@ -214,18 +338,40 @@ class DocumentReadTool(KodeTool):
             f"📋 CSV 文件: {path.name}",
             f"编码: {used_encoding}",
             f"行数: {len(df)}, 列数: {len(df.columns)}",
-            f"列名: {', '.join(df.columns.astype(str))}",
             "-" * 50,
         ]
 
-        # 列类型
-        text_parts.append("\n列类型:")
+        # 列信息（类型 + 非空统计）
+        text_parts.append("\n📋 列信息:")
         for col in df.columns:
-            text_parts.append(f"  - {col}: {df[col].dtype}")
+            non_null = df[col].notna().sum()
+            null_count = df[col].isna().sum()
+            dtype = df[col].dtype
+            text_parts.append(f"  - {col}: {dtype} (非空: {non_null}, 空值: {null_count})")
+
+        # 数值列统计
+        numeric_cols = df.select_dtypes(include=['number']).columns
+        if len(numeric_cols) > 0:
+            text_parts.append("\n📈 数值统计:")
+            stats = df[numeric_cols].describe()
+            text_parts.append(stats.to_string())
+
+        # 分类列统计（唯一值数量）
+        cat_cols = df.select_dtypes(include=['object', 'category']).columns
+        if len(cat_cols) > 0:
+            text_parts.append("\n🏷️ 分类列唯一值:")
+            for col in cat_cols:
+                unique_count = df[col].nunique()
+                text_parts.append(f"  - {col}: {unique_count} 种")
+                # 显示前 5 个最常见的值
+                if unique_count <= 10:
+                    top_values = df[col].value_counts().head(5)
+                    for val, count in top_values.items():
+                        text_parts.append(f"      {val}: {count}")
 
         # 数据预览
         preview_rows = min(max_rows, len(df))
-        text_parts.append(f"\n数据预览 (前 {preview_rows} 行):\n")
+        text_parts.append(f"\n📄 数据预览 (前 {preview_rows} 行):\n")
         text_parts.append(df.head(preview_rows).to_string())
 
         return "\n".join(text_parts)
@@ -256,10 +402,11 @@ class DocumentReadTool(KodeTool):
         self,
         file_path: str,
         max_pages: Optional[int] = None,
-        max_rows: Optional[int] = 1000
+        max_rows: Optional[int] = 1000,
+        use_pandoc: Optional[bool] = True
     ) -> str:
         """异步执行"""
-        return self._run(file_path, max_pages, max_rows)
+        return self._run(file_path, max_pages, max_rows, use_pandoc)
 
 
 class DocumentSearchInput(BaseModel):

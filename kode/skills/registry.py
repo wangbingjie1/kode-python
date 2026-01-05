@@ -160,26 +160,41 @@ class SkillRegistry:
         # 记录已调用的 skill
         self._record_invoked(skill, content)
 
-        # 构建 XML 输出 (与官网格式对齐)
-        output = f'<command-message>The "{skill.display_name}" skill is loading</command-message>\n\n'
-        output += f'<skill name="{skill.skill_name}" location="{skill.source}"'
+        # 构建 skill 消息内容（对齐官网格式）
+        skill_message = f'<command-message>The "{skill.display_name}" skill is loading</command-message>\n\n'
+        skill_message += f'<skill name="{skill.skill_name}" location="{skill.source}"'
 
         if skill.version:
-            output += f' version="{skill.version}"'
+            skill_message += f' version="{skill.version}"'
         if skill.model:
-            output += f' model="{skill.model}"'
+            skill_message += f' model="{skill.model}"'
         if skill.allowed_tools:
-            output += f' allowed-tools="{",".join(skill.allowed_tools)}"'
+            skill_message += f' allowed-tools="{",".join(skill.allowed_tools)}"'
 
-        output += f'>\n{content}\n</skill>'
+        skill_message += f'>\n{content}\n</skill>'
 
+        # 对齐官网实现：
+        # - output（tool_result 内容）只是简短的 "Launching skill: xxx"
+        # - skill 的完整内容通过 new_messages 作为独立的 user 消息传递
         return SkillExecutionResult(
             success=True,
-            output=output,
+            output=f'Launching skill: {skill.display_name}',  # 简短的 tool_result
             command_name=skill.display_name,
             allowed_tools=skill.allowed_tools,
             model=skill.model,
             skill_name=skill.skill_name,
+            # skill 内容作为独立的 user 消息（对齐官网实现）
+            new_messages=[
+                {
+                    'role': 'user',
+                    'content': [
+                        {
+                            'type': 'text',
+                            'text': skill_message,
+                        }
+                    ],
+                }
+            ],
         )
 
     def _record_invoked(self, skill: SkillDefinition, content: str) -> None:
