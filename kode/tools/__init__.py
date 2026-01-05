@@ -18,6 +18,7 @@ from .ontology_tools import (
 )
 from .interaction_tools import AskUserTool
 from .visualization_tools import ChartGeneratorTool
+from .skill_tool import SkillTool
 
 __all__ = [
     # Base
@@ -46,4 +47,6 @@ __all__ = [
     "AskUserTool",
     # Visualization
     "ChartGeneratorTool",
+    # Skills
+    "SkillTool",
 ]
