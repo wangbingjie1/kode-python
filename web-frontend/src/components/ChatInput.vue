@@ -4,6 +4,30 @@
       @submit.prevent="handleSubmit"
       class="relative w-full min-w-0 rounded-xl border border-gray-300 bg-white px-4 py-3 shadow-lg transition focus-within:border-gray-400 focus-within:shadow-xl"
     >
+      <!-- 已选择的附件预览 -->
+      <div v-if="attachments.length > 0" class="mb-3 flex flex-wrap gap-2">
+        <div
+          v-for="(file, index) in attachments"
+          :key="index"
+          class="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-sm"
+        >
+          <svg class="h-4 w-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+          <span class="max-w-[150px] truncate">{{ file.name }}</span>
+          <span class="text-xs text-gray-400">({{ formatFileSize(file.size) }})</span>
+          <button
+            type="button"
+            @click="removeAttachment(index)"
+            class="ml-1 rounded-full p-0.5 hover:bg-gray-200"
+          >
+            <svg class="h-3.5 w-3.5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div class="relative flex-1 min-w-0">
           <textarea
@@ -19,6 +43,27 @@
         </div>
 
         <div class="flex items-center justify-end gap-2 flex-shrink-0">
+          <!-- 附件上传按钮 -->
+          <input
+            ref="fileInputRef"
+            type="file"
+            multiple
+            accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.json"
+            class="hidden"
+            @change="handleFileSelect"
+          />
+          <button
+            type="button"
+            @click="triggerFileSelect"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
+            title="上传文档 (PDF, Word, Excel, CSV, TXT)"
+            :disabled="disabled || isSending"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+          </button>
+
           <button
             v-if="databases.length > 0 || loadingDatabases"
             type="button"
@@ -114,18 +159,33 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  send: [message: string, databaseName?: string]
+  send: [message: string, databaseName?: string, attachments?: File[]]
   stop: []
   'database-change': [databaseName: string]
 }>()
 
 const message = ref('')
 const textareaRef = ref<HTMLTextAreaElement>()
+const fileInputRef = ref<HTMLInputElement>()
 const textareaHeight = ref('48px')
 const selectedDatabase = ref('')
 const databases = ref<any[]>([])
 const loadingDatabases = ref(false)
 const showDatabaseDropdown = ref(false)
+const attachments = ref<File[]>([])
+
+// 支持的文件类型
+const SUPPORTED_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'text/csv',
+  'text/plain',
+  'text/markdown',
+  'application/json'
+]
+const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
 // 必须选择数据库才能发送消息
 const canSend = computed(() => {
@@ -171,10 +231,58 @@ function handleSubmit() {
   if (!canSend.value) return
   const msg = message.value.trim()
   if (msg) {
-    emit('send', msg, selectedDatabase.value || undefined)
+    emit('send', msg, selectedDatabase.value || undefined, attachments.value.length > 0 ? [...attachments.value] : undefined)
     message.value = ''
     textareaHeight.value = '48px'
+    attachments.value = []
   }
+}
+
+// 附件处理函数
+function triggerFileSelect() {
+  fileInputRef.value?.click()
+}
+
+function handleFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = input.files
+  if (!files) return
+
+  for (const file of Array.from(files)) {
+    // 检查文件大小
+    if (file.size > MAX_FILE_SIZE) {
+      alert(`文件 "${file.name}" 超过 50MB 限制`)
+      continue
+    }
+
+    // 检查文件类型（通过扩展名）
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const allowedExts = ['pdf', 'docx', 'xlsx', 'xls', 'csv', 'txt', 'md', 'json']
+    if (!ext || !allowedExts.includes(ext)) {
+      alert(`不支持的文件格式: ${file.name}`)
+      continue
+    }
+
+    // 检查是否已添加
+    if (attachments.value.some(f => f.name === file.name && f.size === file.size)) {
+      continue
+    }
+
+    attachments.value.push(file)
+  }
+
+  // 清空 input 以允许重复选择相同文件
+  input.value = ''
+}
+
+function removeAttachment(index: number) {
+  attachments.value.splice(index, 1)
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
 function handleInput() {

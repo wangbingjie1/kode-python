@@ -396,14 +396,25 @@ function handleDatabaseChange(databaseName: string) {
   currentDatabaseName.value = databaseName
 }
 
-async function handleSendMessage(message: string, databaseName?: string) {
+async function handleSendMessage(message: string, databaseName?: string, attachments?: File[]) {
   // 保存当前选择的数据库名，用于问卷侧边栏
   if (databaseName) {
     currentDatabaseName.value = databaseName
   }
 
   try {
-    await chatStore.sendMessage(message, databaseName)
+    // 如果有附件，先上传文件
+    let enhancedMessage = message
+    if (attachments && attachments.length > 0) {
+      const uploadedFiles = await uploadAttachments(attachments)
+      if (uploadedFiles.length > 0) {
+        // 将文件路径添加到消息中
+        const fileInfo = uploadedFiles.map(f => `[文档: ${f.original_name}] 路径: ${f.path}`).join('\n')
+        enhancedMessage = `${message}\n\n附件文件:\n${fileInfo}`
+      }
+    }
+
+    await chatStore.sendMessage(enhancedMessage, databaseName)
     await nextTick()
     scrollToBottom(true)
   } catch (error: any) {
@@ -415,9 +426,30 @@ async function handleSendMessage(message: string, databaseName?: string) {
     } else if (error.message?.includes('Authentication failed')) {
       // 认证失败会自动跳转登录页，这里不需要额外处理
       notification.error('登录已过期', '正在跳转到登录页...')
+    } else if (error.message?.includes('上传')) {
+      notification.error('上传失败', error.message)
     } else {
       notification.error('发送失败', '无法发送消息，请稍后重试。')
     }
+  }
+}
+
+async function uploadAttachments(files: File[]): Promise<any[]> {
+  const formData = new FormData()
+  for (const file of files) {
+    formData.append('files', file)
+  }
+
+  try {
+    const response = await api.post('/upload/files', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    return response.data.files || []
+  } catch (error: any) {
+    console.error('Upload failed:', error)
+    throw new Error(`上传失败: ${error.response?.data?.detail || error.message}`)
   }
 }
 

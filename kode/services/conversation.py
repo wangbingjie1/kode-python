@@ -23,6 +23,20 @@ from kode.tools import (
     # BashTool, FileReadTool, FileWriteTool, FileEditTool, MultiEditTool, GrepTool, GlobTool
 )
 
+# Import skill tool
+try:
+    from kode.tools.skill_tool import SkillTool
+    HAS_SKILL_TOOL = True
+except ImportError:
+    HAS_SKILL_TOOL = False
+
+# Import document tools
+try:
+    from kode.tools.document_tools import DocumentReadTool, DocumentSearchTool
+    HAS_DOCUMENT_TOOLS = True
+except ImportError:
+    HAS_DOCUMENT_TOOLS = False
+
 # Import database tools if available
 try:
     from kode.tools.database_tools import (
@@ -129,6 +143,19 @@ class AsyncConversationService:
         if HAS_VISUALIZATION_TOOLS:
             self.tools.append(ChartGeneratorTool())
             logger.info("Visualization tools loaded (ChartGenerator)")
+
+        # Add skill tool if available (文档处理 skills: PDF, DOCX, XLSX, PPTX, doc-qa)
+        if HAS_SKILL_TOOL:
+            self.tools.append(SkillTool())
+            logger.info("Skill tool loaded (supports /pdf, /docx, /xlsx, /pptx, /doc-qa)")
+
+        # Add document tools if available (文档读取和搜索)
+        if HAS_DOCUMENT_TOOLS:
+            self.tools.extend([
+                DocumentReadTool(),
+                DocumentSearchTool(),
+            ])
+            logger.info("Document tools loaded (DocumentRead, DocumentSearch)")
 
         # 单 agent 系统：在加载完数据库连接后，创建内置的数据分析 agent 配置
         self.agent_config = self._create_data_analyst_agent()

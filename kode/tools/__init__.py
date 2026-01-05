@@ -19,6 +19,7 @@ from .ontology_tools import (
 from .interaction_tools import AskUserTool
 from .visualization_tools import ChartGeneratorTool
 from .skill_tool import SkillTool
+from .document_tools import DocumentReadTool, DocumentSearchTool
 
 __all__ = [
     # Base
@@ -49,4 +50,7 @@ __all__ = [
     "ChartGeneratorTool",
     # Skills
     "SkillTool",
+    # Document
+    "DocumentReadTool",
+    "DocumentSearchTool",
 ]
