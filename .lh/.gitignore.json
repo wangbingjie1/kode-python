@@ -1,0 +1,18 @@
+{
+    "sourceFile": ".gitignore",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1767694773551,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1767694773550,
+            "name": "Commit-0",
+            "content": "# Python\r\n__pycache__/\r\n*.py[cod]\r\n*$py.class\r\n*.so\r\n.claude\r\n.Python\r\nbuild/\r\ndevelop-eggs/\r\ndist/\r\ndownloads/\r\nuploads/\r\n\r\neggs/\r\n.eggs/\r\nlib/\r\nlib64/\r\nparts/\r\nsdist/\r\nvar/\r\nwheels/\r\nshare/python-wheels/\r\n*.egg-info/\r\n.installed.cfg\r\n*.egg\r\nMANIFEST\r\n\r\n# Virtual environments\r\nvenv/\r\nENV/\r\nenv/\r\n.venv\r\n\r\n# Poetry\r\npoetry.lock\r\n\r\n# IDEs\r\n.vscode/\r\n.idea/\r\n*.swp\r\n*.swo\r\n*~\r\n\r\n# OS\r\n.DS_Store\r\nThumbs.db\r\n\r\n# Testing\r\n.pytest_cache/\r\n.coverage\r\nhtmlcov/\r\n.tox/\r\n\r\n# Type checking\r\n.mypy_cache/\r\n.dmypy.json\r\ndmypy.json\r\n\r\n# Logs\r\n*.log\r\nlogs/\r\n\r\n# Config (with sensitive data)\r\n.kode.json\r\n.env\r\n\r\n# Web service PID files\r\n.backend.pid\r\n.frontend.pid\r\n\r\n# Ontology storage\r\nontology_store/\r\nschema_store/\r\n\r\n# Distribution\r\n*.whl\r\n\r\n# Windows reserved files\r\nnul\r\n*/nul\r\n\r\n# Database files\r\n*.db\r\nkode.db\r\n!schema.db\r\n\r\n# Test files\r\ntest_*.py\r\n!tests/\r\n\r\n# Node modules (should be in frontend .gitignore but added here for safety)\r\nnode_modules/\r\nweb-frontend/node_modules/\r\ninteraction_state\r\n"
+        }
+    ]
+}
