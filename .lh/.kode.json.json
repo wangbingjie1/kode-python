@@ -1,0 +1,18 @@
+{
+    "sourceFile": ".kode.json",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1767768354978,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1767768354978,
+            "name": "Commit-0",
+            "content": "{\r\n  \"models\": {\r\n    \"claude-sonnet-4-5\": \"claude-sonnet-4-5\"\r\n  },\r\n  \"modelPointers\": {\r\n    \"main\": \"claude-sonnet-4-5\",\r\n    \"task\": \"claude-sonnet-4-5\",\r\n    \"quick\": \"claude-sonnet-4-5\",\r\n    \"reasoning\": \"claude-sonnet-4-5\"\r\n  },\r\n  \"apiKeys\": {\r\n    \"anthropic\": \"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\"\r\n  },\r\n  \"stripe\": {\r\n    \"secret_key\": \"sk_test_51SQTNwFTJSnBUugqaxOdnFMikLunSrolcq73TA0u9S09EzM5J1BS3Q6jGKeBIAY8c2YgirVSqBoGYPmYKXZCFAkO00FPnstDOh\"\r\n  },\r\n  \"verbose\": true,\r\n  \"maxTokens\": 4096,\r\n  \"temperature\": 0.7\r\n}"
+        }
+    ]
+}
