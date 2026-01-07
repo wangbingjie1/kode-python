@@ -102,12 +102,25 @@ class AnthropicStreamingAgent:
             }
             # Add input schema if available
             if hasattr(tool, "args_schema") and tool.args_schema:
-                schema = tool.args_schema.schema()
+                # Use model_json_schema() for Pydantic 2.x compatibility
+                if hasattr(tool.args_schema, "model_json_schema"):
+                    schema = tool.args_schema.model_json_schema()
+                else:
+                    schema = tool.args_schema.schema()
+
+                # Build input_schema, including $defs if present
                 tool_schema["input_schema"] = {
                     "type": "object",
                     "properties": schema.get("properties", {}),
                     "required": schema.get("required", []),
                 }
+
+                # Include $defs (Pydantic 2.x) or definitions (Pydantic 1.x) if present
+                # This is critical for nested models like TodoItem in TodoWriteInput
+                if "$defs" in schema:
+                    tool_schema["input_schema"]["$defs"] = schema["$defs"]
+                elif "definitions" in schema:
+                    tool_schema["input_schema"]["definitions"] = schema["definitions"]
 
             # 在最后一个 tool 上添加 cache_control，标记 tools 定义的缓存边界
             if i == total_tools - 1:
