@@ -10,7 +10,7 @@ develop-eggs/
 dist/
 downloads/
 uploads/
-
+.lh
 eggs/
 .eggs/
 lib/

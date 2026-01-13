@@ -26,6 +26,7 @@ from kode.tools import (
 # Import skill tool
 try:
     from kode.tools.skill_tool import SkillTool
+
     HAS_SKILL_TOOL = True
 except ImportError:
     HAS_SKILL_TOOL = False
@@ -33,6 +34,7 @@ except ImportError:
 # Import document tools
 try:
     from kode.tools.document_tools import DocumentReadTool, DocumentSearchTool
+
     HAS_DOCUMENT_TOOLS = True
 except ImportError:
     HAS_DOCUMENT_TOOLS = False
@@ -151,10 +153,12 @@ class AsyncConversationService:
 
         # Add document tools if available (文档读取和搜索)
         if HAS_DOCUMENT_TOOLS:
-            self.tools.extend([
-                DocumentReadTool(),
-                DocumentSearchTool(),
-            ])
+            self.tools.extend(
+                [
+                    DocumentReadTool(),
+                    DocumentSearchTool(),
+                ]
+            )
             logger.info("Document tools loaded (DocumentRead, DocumentSearch)")
 
         # 单 agent 系统：在加载完数据库连接后，创建内置的数据分析 agent 配置
@@ -209,7 +213,7 @@ class AsyncConversationService:
         )
 
         system_prompt += """
-
+## 在回答用户的任何问题前，必须先构建本体
 ## 本体构建流程（3步）⭐ 核心工作流
 
 **🔑 关键：必须按顺序执行，不能跳步！**
@@ -285,76 +289,16 @@ OntologyBuilder(connection_name="erp_db")
 ```
 OntologyBuilder(connection_name="erp_db", skip_uncertainty_check=true)
 ```
-
-**输出格式（V3）**：
-- meta: 业务元信息
-- schema: 数据模型（classes, properties, relationships）
-- business_logic: 业务逻辑（rules, flows）
-- mappings: 数据源映射（objects, metrics）
-- uncertainties: 不确定性清单
-
 ---
 
 ## 核心能力
 
-### 1. 数据库连接和理解
-- 使用 DatabaseSchemaExtractor 提取表结构和字段注释（仅当无缓存时）
-- 理解 数据分析 业务模块：财务、供应链、生产、销售、人力资源
-
-### 2. 业务本体构建
+### 1. 业务本体构建
 - **推荐**：使用 **OntologyBuilder** 构建本体（V3格式：meta/schema/business_logic/mappings/uncertainties）
 - 识别隐含关系（如:订单→客户→地区）
 - 构建业务实体映射
 
-### 3. SQL 查询和数据分析
-
-**⭐ 查询准确 Schema 的步骤（避免枚举值错误）**
-
-生成 SQL 前，**必须**使用 SchemaQuery 查询表的完整结构：
-
-```
-步骤 1: 使用 SchemaQuery 获取表结构
-SchemaQuery(connection_name="yanfa", table_name="order")
-
-步骤 2: 查看返回的 columns 中的 enum_mapping 字段
-{
-  "status": {
-    "type": "tinyint",
-    "enum_mapping": {"0": "待支付", "1": "支付成功", "2": "支付失败"},
-    "comment": "订单状态"
-  }
-}
-
-步骤 3: 根据 enum_mapping 生成正确的 SQL
-✅ 正确: WHERE status IN (0, 1, 2)  -- 使用 code
-❌ 错误: WHERE status IN ('待支付', '支付成功')  -- 使用 label
-```
-
-**关键规则**:
-- 字段有 `enum_mapping` 时，SQL 必须使用 **code**（数字），不是 label（文字）
-- 字段有 `enum_values` 时（真正的 ENUM 类型），SQL 使用字符串值
-- 不确定时，优先查询 SchemaQuery
-
-**执行查询**:
-- **必须**使用 DatabaseExecuteQuery 工具执行 SQL（不要只输出 SQL 代码）
-- 支持复杂查询：JOIN、聚合、分组、子查询等
-- 识别数据质量问题
-- **禁止**只输出 SQL 代码块让用户自己执行，你必须代替用户执行查询
-
-**⚠️ 时间查询（重要）**:
-- **禁止**自己计算时间戳！使用占位符 `@时间描述:格式@`，工具自动转换
-- 格式: 无后缀=毫秒时间戳, :s=秒, :date=日期, :datetime=日期时间
-- 示例：
-  ```sql
-  -- 时间戳字段（毫秒）
-  WHERE pay_at >= @2025年10月@ AND pay_at < @2025年11月@
-  -- datetime 字段
-  WHERE created_at >= @上月:datetime@ AND created_at < @本月:datetime@
-  -- date 字段
-  WHERE order_date >= @最近30天:date@
-  ```
-
-### 4. AI 原生可视化分析 ⭐ 核心能力
+### 2. AI 原生可视化分析 ⭐ 核心能力
 - **自动生成图表**：查询数据后，**必须**使用 ChartGenerator 工具生成图表
   - 根据数据特征智能选择图表类型（折线图、柱状图、饼图等）
   - 自动识别 X/Y 轴字段
@@ -364,7 +308,7 @@ SchemaQuery(connection_name="yanfa", table_name="order")
   - 图表通过 ChartGenerator 工具自动渲染
   - 文本解释数据趋势和关键发现
 
-### 5. 数据建议和指导
+### 3. 数据建议和指导
 - 发现业务趋势和模式
 - 识别异常和风险点
 - 提供可操作的业务建议
@@ -376,7 +320,7 @@ SchemaQuery(connection_name="yanfa", table_name="order")
 - 向用户展示现有本体信息
 - 用户明确说"重建"才设置 `force_rebuild=True`
 
-## 本体对话式更新 ⭐ **新能力** (Phase 1)
+## 本体对话式更新
 
 你现在拥有通过对话自然更新本体的能力，无需重建整个本体。
 
@@ -526,9 +470,9 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
     重新生成 SQL：WHERE status IN (0, 1, 2)
 ```
 
-## 数据查询流程 ⭐ 必须严格遵守
+## 数据查询分析流程 ⭐ 必须严格遵守
 
-1. 使用 OntologySearch 搜索业务术语
+1. 根据用户的问题，使用 OntologySearch 搜索业务术语
 2. **⚠️ 必须处理不确定性**：检查返回的 `uncertainties`
    - 查看 `related_to_results` 数组和 `related_count`
    - **如果 `related_count > 0` 且包含与当前查询相关的 high 优先级问题**：
@@ -738,8 +682,9 @@ C) 两者都做？
             # 支持两种路径结构：
             # 1. {schema_path}/{user_id}/{conn_name}/schema_latest.json (多租户)
             # 2. {schema_path}/{conn_name}/schema_latest.json (旧版/单用户)
-            cached_schemas = list(schema_dir.glob("*/schema_latest.json")) + \
-                            list(schema_dir.glob("*/*/schema_latest.json"))
+            cached_schemas = list(schema_dir.glob("*/schema_latest.json")) + list(
+                schema_dir.glob("*/*/schema_latest.json")
+            )
             context_parts.append(f"数据库结构文件所在路径: {schema_path}")
             if cached_schemas:
                 context_parts.append("## 已缓存的数据库Schema")
@@ -785,8 +730,9 @@ C) 两者都做？
             # 支持两种路径结构：
             # 1. {ontology_path}/{user_id}/{conn_name}/ontology.json (多租户)
             # 2. {ontology_path}/{conn_name}/ontology.json (旧版/单用户)
-            cached_ontologies = list(ontology_dir.glob("*/ontology.json")) + \
-                              list(ontology_dir.glob("*/*/ontology.json"))
+            cached_ontologies = list(ontology_dir.glob("*/ontology.json")) + list(
+                ontology_dir.glob("*/*/ontology.json")
+            )
 
             context_parts.append(f"业务本体文件所在路径: {ontology_path}")
             if cached_ontologies:
@@ -914,12 +860,10 @@ C) 两者都做？
         # 🔑 关键修复：无论 middleware 是否设置，这里都重新设置一次 user_context
         # 确保工具内部调用 get_current_user_id() 时能获取到正确的值
         # 即使 middleware 已经设置过，重复设置也是安全的（会覆盖）
-        set_user_context(
-            user_id=user_id,
-            conversation_id=conversation_id,
-            project_id=None
+        set_user_context(user_id=user_id, conversation_id=conversation_id, project_id=None)
+        logger.info(
+            f"[ConversationService] Set user_context: user_id={user_id}, conversation_id={conversation_id}"
         )
-        logger.info(f"[ConversationService] Set user_context: user_id={user_id}, conversation_id={conversation_id}")
 
         try:
             # Reload database connections to ensure we have latest info from DB
@@ -946,6 +890,7 @@ C) 两者都做？
             # Setup progress tracking
             # 🔥 使用标准库 queue.Queue（线程安全），因为工具可能在不同线程中运行
             import queue as thread_queue
+
             progress_queue = thread_queue.Queue()
 
             async def on_tool_start(tool_name: str, tool_args: dict):
@@ -1073,7 +1018,9 @@ C) 两者都做？
 
                     # 在 yield chunk 之前，先 yield 所有 progress 消息
                     for progress in drain_progress_queue():
-                        logger.info(f"[DEBUG] Yielding progress: {progress.get('content', '')[:50]}")
+                        logger.info(
+                            f"[DEBUG] Yielding progress: {progress.get('content', '')[:50]}"
+                        )
                         yield progress
 
                     # 然后 yield agent chunk
