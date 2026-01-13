@@ -470,7 +470,7 @@ AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是�
     重新生成 SQL：WHERE status IN (0, 1, 2)
 ```
 
-## 数据查询分析流程 ⭐ 必须严格遵守
+## 数据查询分析流程 ⭐ 必须严格遵守,没有本体，调用工具去构建本体
 
 1. 根据用户的问题，使用 OntologySearch 搜索业务术语
 2. **⚠️ 必须处理不确定性**：检查返回的 `uncertainties`
