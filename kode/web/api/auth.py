@@ -21,6 +21,9 @@ from kode.schemas.auth import (
     TokenRefresh,
     UserProfile,
     GoogleCallbackRequest,
+    EmailSendCodeRequest,
+    EmailSendCodeResponse,
+    EmailVerifyRequest,
 )
 from kode.core.security import (
     hash_password,
@@ -33,6 +36,7 @@ from kode.core.oauth import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIR
 from kode.web.dependencies import get_current_user
 from kode.utils.i18n import t
 from kode.services.billing_service import BillingService
+from kode.services.email_service import EmailService
 
 router = APIRouter()
 
@@ -378,3 +382,105 @@ async def google_callback(
     # 重定向到前端，并通过URL传递token
     frontend_url = f"http://localhost:3000/login?google_success=true&access_token={jwt_access_token}&refresh_token={jwt_refresh_token}"
     return RedirectResponse(url=frontend_url)
+
+
+@router.post("/email/send-code", response_model=EmailSendCodeResponse)
+async def send_email_verification_code(
+    request: EmailSendCodeRequest,
+):
+    """
+    发送邮箱验证码
+
+    向指定邮箱发送6位数字验证码，有效期10分钟。
+    同一邮箱60秒内只能发送一次。
+    """
+    success, message = await EmailService.send_verification_code(request.email)
+    return EmailSendCodeResponse(success=success, message=message)
+
+
+@router.post("/email/verify", response_model=TokenResponse)
+async def verify_email_code(
+    request: EmailVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    验证邮箱验证码并登录/注册
+
+    验证成功后：
+    - 如果邮箱已存在，直接登录
+    - 如果邮箱不存在，自动创建新用户并登录
+    """
+    # 1. 验证验证码
+    success, message = EmailService.verify_code(request.email, request.code)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message,
+        )
+
+    # 2. 查找或创建用户
+    email = request.email.lower().strip()
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    is_new_user = False
+    if not user:
+        # 新用户：自动创建账号
+        # 使用邮箱前缀作为用户名，确保唯一性
+        base_username = email.split("@")[0]
+        username = base_username
+        counter = 1
+
+        while True:
+            result = await db.execute(select(User).where(User.username == username))
+            if not result.scalar_one_or_none():
+                break
+            username = f"{base_username}_{counter}"
+            counter += 1
+
+        user = User(
+            id=str(uuid.uuid4()),
+            username=username,
+            email=email,
+            hashed_password=None,  # 验证码登录无密码
+            auth_provider="email",
+            is_active=True,
+        )
+        db.add(user)
+        is_new_user = True
+
+        await db.commit()
+        await db.refresh(user)
+
+        # 为新用户分配 Free 套餐
+        try:
+            free_plan_result = await db.execute(select(Plan).where(Plan.name == "free"))
+            free_plan = free_plan_result.scalar_one_or_none()
+
+            if free_plan:
+                await BillingService.create_subscription(
+                    db=db,
+                    user_id=user.id,
+                    plan_id=free_plan.id,
+                    auto_renew=False
+                )
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to create free subscription for email user {user.id}: {str(e)}")
+
+    # 3. 检查用户状态
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="用户已被禁用",
+        )
+
+    # 4. 生成JWT令牌
+    access_token = create_access_token(data={"sub": user.id})
+    refresh_token = create_refresh_token(data={"sub": user.id})
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )

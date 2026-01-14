@@ -4,16 +4,26 @@ Project API Routes
 REST endpoints for project management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+import logging
 from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from kode.database.session import get_db
 from kode.models import Project, User
+from kode.models.organization import Organization
 from kode.schemas.project import ProjectCreate, ProjectResponse
-from kode.web.dependencies import get_current_user
-import logging
+from kode.schemas.project_data_source import (
+    LinkDataSourceResponse,
+    ProjectDataSourceCreate,
+    ProjectDataSourceListResponse,
+    ProjectDataSourceResponse,
+    UnlinkDataSourceResponse,
+)
+from kode.services.project_data_source_service import ProjectDataSourceService
+from kode.web.dependencies import get_current_organization, get_current_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -148,3 +158,121 @@ async def delete_project(
 
     await db.delete(project)
     await db.commit()
+
+
+# === 数据源关联端点 ===
+
+
+@router.post(
+    "/{project_id}/data-sources",
+    response_model=LinkDataSourceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_data_source_to_project(
+    project_id: str,
+    data: ProjectDataSourceCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    organization: Organization = Depends(get_current_organization),
+):
+    """关联数据源到项目"""
+    service = ProjectDataSourceService(db)
+    success, message, assoc = await service.link_data_source(
+        project_id=project_id,
+        data_source_id=data.data_source_id,
+        organization_id=organization.id,
+    )
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)
+
+    return LinkDataSourceResponse(
+        success=True,
+        message=message,
+        prompt_merge=True,  # 提醒用户是否要融合
+    )
+
+
+@router.delete(
+    "/{project_id}/data-sources/{data_source_id}",
+    response_model=UnlinkDataSourceResponse,
+)
+async def unlink_data_source_from_project(
+    project_id: str,
+    data_source_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    organization: Organization = Depends(get_current_organization),
+):
+    """解绑数据源（已融合的需要先剥离）"""
+    service = ProjectDataSourceService(db)
+    success, message = await service.unlink_data_source(
+        project_id=project_id,
+        data_source_id=data_source_id,
+        organization_id=organization.id,
+    )
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)
+
+    return UnlinkDataSourceResponse(success=True, message=message)
+
+
+@router.post("/{project_id}/data-sources/{data_source_id}/merge")
+async def merge_data_source_to_ontology(
+    project_id: str,
+    data_source_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    organization: Organization = Depends(get_current_organization),
+):
+    """将数据源融合到项目本体"""
+    service = ProjectDataSourceService(db)
+    success, message = await service.merge_to_ontology(
+        project_id=project_id,
+        data_source_id=data_source_id,
+        organization_id=organization.id,
+    )
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)
+
+    return {"success": True, "message": message}
+
+
+@router.post("/{project_id}/data-sources/{data_source_id}/unmerge")
+async def unmerge_data_source_from_ontology(
+    project_id: str,
+    data_source_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    organization: Organization = Depends(get_current_organization),
+):
+    """从项目本体中剥离数据源"""
+    service = ProjectDataSourceService(db)
+    success, message = await service.unmerge_from_ontology(
+        project_id=project_id,
+        data_source_id=data_source_id,
+        organization_id=organization.id,
+    )
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)
+
+    return {"success": True, "message": message}
+
+
+@router.get("/{project_id}/data-sources")
+async def get_project_data_sources(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    organization: Organization = Depends(get_current_organization),
+):
+    """获取项目关联的所有数据源"""
+    service = ProjectDataSourceService(db)
+    data_sources = await service.get_project_data_sources(
+        project_id=project_id,
+        organization_id=organization.id,
+    )
+    return {"data_sources": data_sources}

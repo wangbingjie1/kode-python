@@ -16,8 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 用批判性思维思考用户的问题和自己的解决方案
 
 ## Project Overview
+现在我们的项目将由demo 阶段进入，正式研发阶段了，前后端要分离了，后续你负责生成代码和接口，前端暂时由我来完成，
 
-Kode 是一个基于 AI 的原生 数据分析开发平台，采用 LangChain 构建。项目已简化为 **Web-Only** 架构，移除了 CLI/REPL 模式，专注于提供 Web API 服务和前端界面。
 
 **核心特性：**
 - 🚀 纯 Web 服务架构，简单易用
@@ -766,12 +766,12 @@ python test/test_sqlserver_connection.py
 
 ### 功能对比
 
-| 功能 | PostgreSQL | MySQL | SQL Server |
-|------|-----------|-------|-----------|
-| Schema 批量提取 | ✅ | ✅ | ✅ |
-| 列注释提取 | ✅ | ✅ | ✅ |
-| 样例数据 | ✅ | ✅ | ✅ |
-| 异步支持 | ✅ | ✅ | ❌ |
-| 本体构建 | ✅ | ✅ | ✅ |
+| 功能            | PostgreSQL | MySQL | SQL Server |
+| --------------- | ---------- | ----- | ---------- |
+| Schema 批量提取 | ✅          | ✅     | ✅          |
+| 列注释提取      | ✅          | ✅     | ✅          |
+| 样例数据        | ✅          | ✅     | ✅          |
+| 异步支持        | ✅          | ✅     | ❌          |
+| 本体构建        | ✅          | ✅     | ✅          |
 
 详细实现见 [kode/tools/database_tools.py:851-1039](kode/tools/database_tools.py) (SQL Server Schema 提取)

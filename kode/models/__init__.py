@@ -15,6 +15,10 @@ from .usage import Usage
 from .api_call_trace import APICallTrace
 from .ontology_change import OntologyChange, ChangeType, ChangeStatus
 from .ontology_version import OntologyVersion
+from .organization import Organization
+from .data_source import DataSource, DataSourceType, DataSourceStatus
+from .project_data_source import ProjectDataSource, ProjectDataSourceStatus
+from .project_ontology import ProjectOntology
 
 __all__ = [
     "User",
@@ -31,4 +35,11 @@ __all__ = [
     "ChangeType",
     "ChangeStatus",
     "OntologyVersion",
+    "Organization",
+    "DataSource",
+    "DataSourceType",
+    "DataSourceStatus",
+    "ProjectDataSource",
+    "ProjectDataSourceStatus",
+    "ProjectOntology",
 ]

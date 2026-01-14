@@ -21,14 +21,27 @@ class Project(Base):
     name = Column(String(100), nullable=False)
     description = Column(String(500))
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id"), index=True, nullable=True
+    )
     config = Column(JSON, default=dict)  # Project-specific configuration
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="projects")
+    organization = relationship("Organization", back_populates="projects")
     conversations = relationship(
         "Conversation", back_populates="project", cascade="all, delete-orphan"
+    )
+    data_source_associations = relationship(
+        "ProjectDataSource", back_populates="project", cascade="all, delete-orphan"
+    )
+    ontology = relationship(
+        "ProjectOntology",
+        back_populates="project",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self):
