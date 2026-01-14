@@ -261,12 +261,21 @@ class EmailService:
     @staticmethod
     def _send_smtp(msg: MIMEMultipart, to_email: str):
         """Synchronous SMTP send"""
-        if SMTP_USE_SSL:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_USER, to_email, msg.as_string())
-        else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        server = None
+        try:
+            if SMTP_USE_SSL:
+                server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15)
+            else:
+                server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15)
                 server.starttls()
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_USER, to_email, msg.as_string())
+
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_USER, to_email, msg.as_string())
+            logger.info(f"Email sent successfully to {to_email}")
+        finally:
+            if server:
+                try:
+                    server.quit()
+                except Exception:
+                    # QQ邮箱关闭连接时可能返回异常响应，忽略即可
+                    pass

@@ -99,11 +99,58 @@ def kill_port_process(port: int, max_retries: int = 3) -> bool:
     print(f"警告: 端口 {port} 可能仍被占用，但将继续尝试启动...")
     return False
 
+def start_frontend():
+    """启动前端开发服务器"""
+    frontend_dir = os.path.join(os.path.dirname(__file__), "web-frontend")
+
+    if not os.path.exists(frontend_dir):
+        print("警告: web-frontend 目录不存在，跳过前端启动")
+        return None
+
+    node_modules = os.path.join(frontend_dir, "node_modules")
+    if not os.path.exists(node_modules):
+        print("警告: node_modules 不存在，请先运行 'cd web-frontend && npm install'")
+        return None
+
+    try:
+        # 在 Windows 上使用 shell=True 启动 npm
+        if sys.platform == "win32":
+            process = subprocess.Popen(
+                "npm run dev",
+                cwd=frontend_dir,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+            )
+        else:
+            process = subprocess.Popen(
+                ["npm", "run", "dev"],
+                cwd=frontend_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                preexec_fn=os.setsid if hasattr(os, 'setsid') else None
+            )
+        print(f"前端服务已启动 (PID: {process.pid})")
+        return process
+    except FileNotFoundError:
+        print("警告: npm 未找到，请确保已安装 Node.js")
+        return None
+    except Exception as e:
+        print(f"警告: 启动前端服务失败: {e}")
+        return None
+
+
 if __name__ == "__main__":
     # 修复 Windows 下 multiprocessing 的问题
     if sys.platform == "win32":
         import multiprocessing
         multiprocessing.freeze_support()
+
+    import signal
+    import atexit
+
+    frontend_process = None
 
     # ========================================
     # 修复 Python traceback 模块的 UTF-8 bug
@@ -171,24 +218,53 @@ if __name__ == "__main__":
     asyncio_logger.error = safe_error
     asyncio_logger.warning = safe_warning
 
+    def cleanup():
+        """清理前端进程"""
+        global frontend_process
+        if frontend_process and frontend_process.poll() is None:
+            print("\n正在停止前端服务...")
+            try:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        f"taskkill /F /T /PID {frontend_process.pid}",
+                        shell=True,
+                        capture_output=True
+                    )
+                else:
+                    import signal as sig
+                    os.killpg(os.getpgid(frontend_process.pid), sig.SIGTERM)
+            except Exception as e:
+                print(f"停止前端服务时出错: {e}")
+
+    atexit.register(cleanup)
+
     print("=" * 60)
     print("  Kode AI")
     print("=" * 60)
 
     # 清理端口（尝试清理，但不影响启动）
-    PORT = 8001
-    kill_port_process(PORT)
+    BACKEND_PORT = 8001
+    FRONTEND_PORT = 3000
+    kill_port_process(BACKEND_PORT)
+    kill_port_process(FRONTEND_PORT)
 
     print("\n正在启动服务...")
-    print(f"  - 后端 API: http://localhost:{PORT}")
-    print("  - 前端界面: http://localhost:3000")
-    print("\n提示: 按 Ctrl+C 停止服务\n")
 
-    # 简单启动，避免复杂配置
-    uvicorn.run(
-        "kode.web.main:app",
-        host="0.0.0.0",
-        port=PORT,
-        reload=False,
-        log_level="info",
-    )
+    # 启动前端
+    frontend_process = start_frontend()
+
+    print(f"  - 后端 API: http://localhost:{BACKEND_PORT}")
+    print(f"  - 前端界面: http://localhost:{FRONTEND_PORT}")
+    print("\n提示: 按 Ctrl+C 停止所有服务\n")
+
+    # 启动后端
+    try:
+        uvicorn.run(
+            "kode.web.main:app",
+            host="0.0.0.0",
+            port=BACKEND_PORT,
+            reload=False,
+            log_level="info",
+        )
+    finally:
+        cleanup()
