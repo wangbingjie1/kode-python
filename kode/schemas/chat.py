@@ -13,7 +13,7 @@ class ConversationCreate(BaseModel):
     """Request schema for creating conversation"""
 
     title: Optional[str] = Field(None, max_length=200)
-    project_id: str = Field(..., description="ID of the project this conversation belongs to")
+    project_id: Optional[str] = Field(None, description="ID of the project this conversation belongs to (optional, will use default project if not provided)")
 
 
 class ConversationResponse(BaseModel):
@@ -24,9 +24,21 @@ class ConversationResponse(BaseModel):
     project_id: str
     created_at: datetime
     updated_at: datetime
+    # 搜索时可能包含匹配的消息片段
+    matched_message: Optional[str] = Field(None, description="搜索匹配到的消息片段")
 
     class Config:
         from_attributes = True  # Pydantic V2 (was orm_mode in V1)
+
+
+class ConversationListResponse(BaseModel):
+    """分页列表响应"""
+
+    items: list[ConversationResponse]
+    total: int = Field(..., description="总数量")
+    limit: int
+    offset: int
+    has_more: bool = Field(..., description="是否有更多数据")
 
 
 class MessageResponse(BaseModel):

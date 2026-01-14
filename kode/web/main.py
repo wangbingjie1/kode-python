@@ -14,6 +14,7 @@ from kode.utils.logger import setup_logger
 from kode.utils.config import ConfigManager
 from kode.web.middleware.locale import LocaleMiddleware
 from kode.web.middleware.quota_check import QuotaCheckMiddleware
+from kode.web.middleware.user_context import UserContextMiddleware
 
 # Setup logger
 logger = setup_logger(__name__)
@@ -36,6 +37,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
     allow_headers=["*"],
 )
+
+# User context middleware (用户上下文自动设置) - 必须在认证后、业务逻辑前执行
+app.add_middleware(UserContextMiddleware)
 
 # Quota check middleware (配额检查)
 app.add_middleware(QuotaCheckMiddleware)
@@ -119,7 +123,7 @@ async def get_config():
 
 
 # Import routers
-from kode.web.api import chat, project, sse, database, auth, billing, uncertainty
+from kode.web.api import chat, project, sse, database, auth, billing, uncertainty, ontology, upload, data_source
 from kode.database.session import init_db, async_session_maker
 from kode.models import User, Project, Plan
 from sqlalchemy import select
@@ -132,6 +136,9 @@ app.include_router(sse.router, prefix="/api/sse", tags=["sse"])
 app.include_router(database.router, prefix="/api/database", tags=["database"])
 app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
 app.include_router(uncertainty.router, prefix="/api/uncertainty", tags=["uncertainty"])
+app.include_router(ontology.router, tags=["ontology"])
+app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
+app.include_router(data_source.router, prefix="/api/data-sources", tags=["data-sources"])
 
 
 async def create_default_data():

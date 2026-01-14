@@ -5,9 +5,9 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import type { Conversation, Message } from '@/services/api'
-import { sseService } from '@/services/sse'
+import { sseService, heartbeatService } from '@/services/sse'
 import * as api from '@/services/api'
 import { notification } from '@/composables/useNotification'
 
@@ -43,6 +43,7 @@ export interface TokenUsage {
 }
 
 export interface ConversationTokenUsage {
+  regular_input_tokens: number
   total_input_tokens: number
   total_output_tokens: number
   total_tokens: number
@@ -50,6 +51,15 @@ export interface ConversationTokenUsage {
   cache_read_input_tokens: number
   iterations: number
   tool_calls_count: number
+  cost_breakdown?: {
+    regular_input_cost?: number
+    cache_creation_cost?: number
+    cache_read_cost?: number
+    output_cost?: number
+  }
+  total_cost?: number
+  cache_savings?: number
+  savings_percentage?: number
 }
 
 export interface UserInputQuestion {
@@ -63,7 +73,7 @@ export interface UserInputQuestion {
 
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant' | 'system' | 'tool' | 'chart' | 'insight'
+  role: 'user' | 'assistant' | 'system' | 'tool' | 'chart' | 'insight' | 'progress'
   content: string
   timestamp: Date
   isStreaming?: boolean
@@ -82,14 +92,25 @@ export const useChatStore = defineStore('chat', () => {
   const isConnected = ref(false)
   const isTyping = ref(false)
   const currentStreamingMessage = ref<ChatMessage | null>(null)
+  const tokenStatsStatus = ref<'idle' | 'pending' | 'final'>('idle')
   const conversationTokenUsage = ref<ConversationTokenUsage>({
+    regular_input_tokens: 0,
     total_input_tokens: 0,
     total_output_tokens: 0,
     total_tokens: 0,
     cache_creation_input_tokens: 0,
     cache_read_input_tokens: 0,
     iterations: 0,
-    tool_calls_count: 0
+    tool_calls_count: 0,
+    cost_breakdown: {
+      regular_input_cost: 0,
+      cache_creation_cost: 0,
+      cache_read_cost: 0,
+      output_cost: 0
+    },
+    total_cost: 0,
+    cache_savings: 0,
+    savings_percentage: 0
   })
 
   // 用户输入状态
@@ -97,6 +118,38 @@ export const useChatStore = defineStore('chat', () => {
 
   // Computed
   const hasMessages = computed(() => messages.value.length > 0)
+
+  // ============================================================
+  // 心跳连接管理
+  // ============================================================
+
+  /**
+   * 启动心跳连接（登录后调用）
+   */
+  function startHeartbeat() {
+    // 先清除旧的回调,避免重复注册
+    heartbeatService.clearCallbacks()
+
+    // 注册连接状态变化回调
+    heartbeatService.onConnectionChange((connected) => {
+      isConnected.value = connected
+      console.log('[ChatStore] Heartbeat connection status:', connected)
+    })
+
+    // 启动心跳（会触发 connected 事件并调用回调）
+    heartbeatService.connect()
+    console.log('[ChatStore] Heartbeat started')
+  }
+
+  /**
+   * 停止心跳连接（登出时调用）
+   */
+  function stopHeartbeat() {
+    heartbeatService.disconnect()
+    heartbeatService.clearCallbacks()
+    isConnected.value = false
+    console.log('[ChatStore] Heartbeat stopped')
+  }
 
   // Actions
 
@@ -436,10 +489,10 @@ export const useChatStore = defineStore('chat', () => {
       sseService.clearCallbacks()
       console.log('[ChatStore] Cleared old SSE callbacks')
 
-      // Connect SSE
+      // Connect SSE (设置 conversation ID，不再设置假的 isConnected)
       sseService.connect(conversationId)
-      isConnected.value = true
-      console.log('[ChatStore] SSE connected. isConnected:', isConnected.value)
+      // 注意: isConnected 现在由 heartbeatService 管理，不在这里设置
+      console.log('[ChatStore] SSE ready for conversation. isConnected (from heartbeat):', isConnected.value)
 
       // Setup message handler
       sseService.onMessage((chunk) => {
@@ -449,14 +502,13 @@ export const useChatStore = defineStore('chat', () => {
 
       sseService.onClose(() => {
         console.log('[ChatStore] SSE stream closed (message complete)')
-        // Don't set isConnected to false - we're still connected to the conversation
-        // SSE closes after each message completion, but we remain ready to send new messages
+        // isConnected 由 heartbeat 管理，这里不需要修改
       })
 
       sseService.onError((error) => {
         console.error('[ChatStore] SSE error:', error)
         notification.error('连接错误', 'SSE 连接失败: ' + error.message)
-        isConnected.value = false // Only disconnect on error
+        // isConnected 由 heartbeat 管理，这里不需要修改
       })
 
       console.log('[ChatStore] Connection setup complete')
@@ -468,11 +520,43 @@ export const useChatStore = defineStore('chat', () => {
 
   /**
    * Send message
+   *
+   * 注意：不再依赖心跳状态来判断能否发送消息
+   * 心跳只用于 UI 显示"在线状态"，不阻止实际操作
+   * 如果 token 过期，SSE 连接会返回 401，前端会自动处理
   */
   async function sendMessage(content: string, databaseName?: string) {
-    if (!isConnected.value) {
-      throw new Error('Not connected to conversation')
+    // 检查是否有活跃的对话（只检查是否设置了 conversationId）
+    if (!sseService.isConnected()) {
+      throw new Error('No active conversation')
     }
+
+    // 🔥 发送消息前检查配额状态
+    try {
+      const { useBillingStore } = await import('@/stores/billing')
+      const billingStore = useBillingStore()
+      await billingStore.fetchUsageSummary()
+
+      if (billingStore.isQuotaExceeded) {
+        // 配额已用尽，显示友好提示而不是发送消息
+        notification.error(
+          'Token 配额不足',
+          '您的 Token 配额已用尽，请升级套餐或等待下个计费周期',
+          10000  // 显示 10 秒
+        )
+        throw new Error('TOKEN_QUOTA_EXCEEDED')
+      }
+    } catch (quotaCheckError: any) {
+      // 如果是配额不足错误，直接抛出
+      if (quotaCheckError.message === 'TOKEN_QUOTA_EXCEEDED') {
+        throw quotaCheckError
+      }
+      // 其他错误（如网络问题），记录但继续尝试发送（让后端来拒绝）
+      console.warn('[ChatStore] Failed to check quota, proceeding anyway:', quotaCheckError)
+    }
+
+    // 标记 Token 统计生成中，避免 UI 闪跳
+    tokenStatsStatus.value = 'pending'
 
     // Add user message to UI
     const userMessage: ChatMessage = {
@@ -486,10 +570,22 @@ export const useChatStore = defineStore('chat', () => {
 
     // Send via SSE
     try {
-      sseService.sendMessage(content, databaseName)
+      await sseService.sendMessage(content, databaseName)
       isTyping.value = true
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error)
+      // 🔥 处理 SSE 连接失败，可能是配额不足
+      if (error.mayBeQuotaExceeded) {
+        notification.error(
+          '发送失败',
+          '消息发送失败，可能是 Token 配额已用尽或网络问题，请检查后重试',
+          8000
+        )
+        // 移除刚添加的用户消息（因为没发送成功）
+        messages.value.pop()
+      }
+      isTyping.value = false
+      tokenStatsStatus.value = 'idle'
       throw error
     }
   }
@@ -695,7 +791,7 @@ export const useChatStore = defineStore('chat', () => {
         break
 
       case 'token_usage': {
-        // 处理每次 API 调用的 token 统计
+        // 每次 API 调用的 token 统计，前端累积，最终会被 final_token_stats 覆盖
         const usage: TokenUsage = {
           input_tokens: chunk.metadata?.input_tokens || 0,
           output_tokens: chunk.metadata?.output_tokens || 0,
@@ -705,20 +801,12 @@ export const useChatStore = defineStore('chat', () => {
           iteration: chunk.metadata?.iteration
         }
 
-        // 累加到会话总计
-        conversationTokenUsage.value.total_input_tokens += usage.input_tokens
-        conversationTokenUsage.value.total_output_tokens += usage.output_tokens
-        conversationTokenUsage.value.total_tokens += usage.total_tokens
-        conversationTokenUsage.value.cache_creation_input_tokens += usage.cache_creation_input_tokens || 0
-        conversationTokenUsage.value.cache_read_input_tokens += usage.cache_read_input_tokens || 0
-        conversationTokenUsage.value.iterations = usage.iteration || 0
-
-        console.log('[ChatStore] Token usage:', usage)
-        console.log('[ChatStore] Conversation total:', conversationTokenUsage.value)
+        // 不实时灌入 UI，等待 final_token_stats 统一覆盖，避免突变
+        console.log('[ChatStore] Token usage (streaming, not applied to UI):', usage)
         break
       }
 
-      case 'complete':
+      case 'complete': {
         // Finalize message
         if (currentStreamingMessage.value) {
           currentStreamingMessage.value.isStreaming = false
@@ -727,22 +815,34 @@ export const useChatStore = defineStore('chat', () => {
         currentStreamingMessage.value = null
         isTyping.value = false
 
-        // 从 complete 元数据中获取总计（如果有）
+        // 从 complete 元数据里获取总计（兜底校验）
         if (chunk.metadata?.token_usage) {
           const finalUsage = chunk.metadata.token_usage
+          const cacheCreation = finalUsage.cache_creation_input_tokens || 0
+          const cacheRead = finalUsage.cache_read_input_tokens || 0
+          const regularInput = finalUsage.regular_input_tokens ??
+            finalUsage.input_tokens ??
+            Math.max((finalUsage.total_input_tokens || 0) - cacheCreation - cacheRead, 0)
+          const totalInput = finalUsage.total_input_tokens ||
+            regularInput + cacheCreation + cacheRead
+          const outputTokens = finalUsage.total_output_tokens || finalUsage.output_tokens || 0
+          const totalTokens = finalUsage.total_tokens || totalInput + outputTokens
+
           conversationTokenUsage.value = {
-            total_input_tokens: finalUsage.total_input_tokens || 0,
-            total_output_tokens: finalUsage.total_output_tokens || 0,
-            total_tokens: finalUsage.total_tokens || 0,
-            cache_creation_input_tokens: finalUsage.cache_creation_input_tokens || 0,
-            cache_read_input_tokens: finalUsage.cache_read_input_tokens || 0,
+            regular_input_tokens: regularInput,
+            total_input_tokens: totalInput,
+            total_output_tokens: outputTokens,
+            total_tokens: totalTokens,
+            cache_creation_input_tokens: cacheCreation,
+            cache_read_input_tokens: cacheRead,
             iterations: chunk.metadata.iterations || 0,
             tool_calls_count: chunk.metadata.tool_calls?.length || 0
           }
           console.log('[ChatStore] Final conversation token usage:', conversationTokenUsage.value)
+          tokenStatsStatus.value = 'final'
         }
 
-        // 刷新配额信息（异步，不阻塞）
+        // 刷新计费信息（异步，不阻塞 UI）
         ;(async () => {
           try {
             const { useBillingStore } = await import('@/stores/billing')
@@ -753,6 +853,7 @@ export const useChatStore = defineStore('chat', () => {
           }
         })()
         break
+      }
 
       case 'chart': {
         // 处理图表消息
@@ -810,6 +911,35 @@ export const useChatStore = defineStore('chat', () => {
         }
         console.log('[ChatStore] Adding insight message:', insightMessage)
         messages.value.push(insightMessage)
+        break
+      }
+
+      case 'progress': {
+        // 处理进度消息（如本体构建进度）
+        // 进度消息是临时的，用于实时显示进度，不保存到数据库
+        // 我们可以选择：1) 显示在消息列表中（临时） 2) 显示在独立的进度条中
+        // 这里选择显示在消息列表中，但每次新进度会替换旧的相同阶段的进度
+        const stage = chunk.metadata?.stage || 'default'
+
+        // 查找相同 stage 的现有进度消息并移除
+        const existingProgressIndex = messages.value.findIndex(
+          msg => msg.role === 'progress' && msg.metadata?.stage === stage
+        )
+        if (existingProgressIndex !== -1) {
+          messages.value.splice(existingProgressIndex, 1)
+        }
+
+        // 添加新的进度消息
+        const progressMessage = {
+          id: `progress-${Date.now()}-${Math.random()}`,
+          role: 'progress' as const,
+          content: chunk.content,
+          timestamp: new Date(),
+          isStreaming: false,
+          metadata: chunk.metadata
+        }
+        console.log('[ChatStore] Adding/updating progress message:', progressMessage)
+        messages.value.push(progressMessage)
         break
       }
 
@@ -901,6 +1031,54 @@ export const useChatStore = defineStore('chat', () => {
         break
       }
 
+      case 'final_token_stats': {
+        // ⚠ 收到后端最终 token / 成本统计
+        const finalStats = chunk.metadata
+        console.log('[ChatStore] Final token stats received:', finalStats)
+
+        const cacheCreation = finalStats.cache_creation_tokens || 0
+        const cacheRead = finalStats.cache_read_tokens || 0
+        const totalInput = finalStats.total_input_tokens || (cacheCreation + cacheRead)
+        const regularInput = finalStats.regular_input_tokens ??
+          Math.max(totalInput - cacheCreation - cacheRead, 0)
+        const outputTokens = finalStats.total_output_tokens || 0
+        const totalTokens = finalStats.total_tokens || (totalInput + outputTokens)
+
+        const costBreakdown = finalStats.cost_breakdown || {}
+        const regularInputCost = costBreakdown.regular_input_cost ?? (regularInput * 3 / 1_000_000)
+        const cacheCreationCost = costBreakdown.cache_creation_cost ?? (cacheCreation * 3.75 / 1_000_000)
+        const cacheReadCost = costBreakdown.cache_read_cost ?? (cacheRead * 0.30 / 1_000_000)
+        const outputCost = costBreakdown.output_cost ?? (outputTokens * 15 / 1_000_000)
+        const totalCost = finalStats.total_cost ?? (regularInputCost + cacheCreationCost + cacheReadCost + outputCost)
+
+        const noCacheCost = totalInput * 3 / 1_000_000 + outputCost
+        const cacheSavings = finalStats.cache_savings ?? (noCacheCost - totalCost)
+        const savingsPct = finalStats.savings_percentage ?? (noCacheCost > 0 ? (cacheSavings / noCacheCost * 100) : 0)
+
+        conversationTokenUsage.value = {
+          regular_input_tokens: regularInput,
+          total_input_tokens: totalInput,
+          total_output_tokens: outputTokens,
+          total_tokens: totalTokens,
+          cache_creation_input_tokens: cacheCreation,
+          cache_read_input_tokens: cacheRead,
+          iterations: finalStats.iteration_count || 0,
+          tool_calls_count: conversationTokenUsage.value.tool_calls_count, // 保持之前的工具调用计数
+          cost_breakdown: {
+            regular_input_cost: regularInputCost,
+            cache_creation_cost: cacheCreationCost,
+            cache_read_cost: cacheReadCost,
+            output_cost: outputCost
+          },
+          total_cost: totalCost,
+          cache_savings: cacheSavings,
+          savings_percentage: savingsPct
+        }
+
+        console.log('[ChatStore] Updated conversation token usage:', conversationTokenUsage.value)
+        break
+      }
+
       case 'title_updated': {
         // 会话标题已更新
         console.log('[ChatStore] Title updated:', chunk.content)
@@ -930,6 +1108,7 @@ export const useChatStore = defineStore('chat', () => {
         }
         currentStreamingMessage.value = null
         isTyping.value = false
+        tokenStatsStatus.value = 'idle'
         break
     }
   }
@@ -1026,6 +1205,8 @@ export const useChatStore = defineStore('chat', () => {
 
       // 立即停止 typing 状态
       isTyping.value = false
+      tokenStatsStatus.value = 'idle'
+      tokenStatsStatus.value = 'idle'
 
       // 如果有正在流式输出的消息,标记为已完成
       if (currentStreamingMessage.value) {
@@ -1053,28 +1234,40 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /**
-   * Clear current conversation
+   * Clear current conversation (不影响心跳连接)
    */
   function clearConversation() {
-    if (isConnected.value) {
-      sseService.disconnect()
-    }
+    // 断开 SSE 聊天连接（不是心跳连接）
+    sseService.disconnect()
     sseService.clearCallbacks()
+    sseService.reset()
+
     currentConversation.value = null
     messages.value = []
-    isConnected.value = false
+    // 注意: isConnected 由 heartbeat 管理，不在这里设置
     isTyping.value = false
     currentStreamingMessage.value = null
+    tokenStatsStatus.value = 'idle'
 
     // Reset token usage
     conversationTokenUsage.value = {
+      regular_input_tokens: 0,
       total_input_tokens: 0,
       total_output_tokens: 0,
       total_tokens: 0,
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 0,
       iterations: 0,
-      tool_calls_count: 0
+      tool_calls_count: 0,
+      cost_breakdown: {
+        regular_input_cost: 0,
+        cache_creation_cost: 0,
+        cache_read_cost: 0,
+        output_cost: 0
+      },
+      total_cost: 0,
+      cache_savings: 0,
+      savings_percentage: 0
     }
   }
 
@@ -1086,14 +1279,19 @@ export const useChatStore = defineStore('chat', () => {
     isTyping,
     hasMessages,
     conversationTokenUsage,
-    pendingUserInput,  // 新增：待回答的用户输入
+    tokenStatsStatus,
+    pendingUserInput,  // 待回答的用户输入
 
     // Actions
     connectToConversation,
     sendMessage,
     createNewConversation,
     clearConversation,
-    submitUserResponse,  // 新增：提交用户响应
-    cancelStreaming  // 新增：终止 streaming
+    submitUserResponse,  // 提交用户响应
+    cancelStreaming,  // 终止 streaming
+
+    // 心跳连接管理
+    startHeartbeat,  // 启动心跳（登录后调用）
+    stopHeartbeat    // 停止心跳（登出时调用）
   }
 })

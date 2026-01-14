@@ -63,7 +63,7 @@ class APICallTrace(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     # Relationships
-    conversation = relationship("Conversation", backref="api_traces")
+    conversation = relationship("Conversation", back_populates="api_traces")
     message = relationship("Message", backref="api_traces")
     user = relationship("User", backref="api_traces")
 

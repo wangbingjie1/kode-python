@@ -2,10 +2,12 @@
 
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+import signal
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -13,6 +15,7 @@ from sqlalchemy import text
 from kode.services.database_manager import DatabaseConnection, db_manager
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
+from kode.utils.context import get_current_user_id
 from kode.utils.path_utils import get_safe_connection_path
 
 
@@ -65,7 +68,6 @@ class DatabaseSchemaExtractorInput(BaseModel):
     include_indexes: bool = Field(default=True, description="Include index information")
     include_relationships: bool = Field(default=True, description="Include foreign key relationships")
     include_statistics: bool = Field(default=False, description="Include table statistics")
-    include_sample_data: bool = Field(default=True, description="Include last 5 rows of sample data")
     sample_row_limit: int = Field(default=5, description="Number of sample rows to extract (default 5)")
     auto_save: bool = Field(default=True, description="Automatically save schema to file")
     version: str = Field(default="auto", description="Version identifier (auto = timestamp)")
@@ -83,12 +85,12 @@ class DatabaseExecuteQueryInput(BaseModel):
         description="Parameters for parameterized query (e.g., {'id': 123, 'name': 'test'})"
     )
     fetch_limit: int = Field(
-        default=100,
-        description="Maximum number of rows to fetch (for SELECT queries)"
+        default=50,
+        description="Maximum number of rows to fetch (for SELECT queries). Keep small to avoid context overflow."
     )
     timeout: int = Field(
-        default=30,
-        description="Query timeout in seconds"
+        default=300,
+        description="Query timeout in seconds (default 5 minutes). If query times out, simplify it (add WHERE, LIMIT, or use aggregation)."
     )
 
 
@@ -217,7 +219,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
     - 主键和外键约束
     - 索引信息
     - 表间关系图
-    - 可选的样例数据(每表前5行)
+    - 样例数据(每表倒数 N 行,默认 5 行,永远启用)
 
     适用场景: 数据库探索、本体构建、数据分析。"""
 
@@ -251,7 +253,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
         include_indexes: bool = True,
         include_relationships: bool = True,
         include_statistics: bool = False,
-        include_sample_data: bool = True,
         sample_row_limit: int = 5,
         auto_save: bool = True,
         version: str = "auto",
@@ -268,8 +269,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
             include_indexes: Include indexes
             include_relationships: Include relationships
             include_statistics: Include statistics
-            include_sample_data: Include sample data (last N rows)
-            sample_row_limit: Number of sample rows to extract
+            sample_row_limit: Number of sample rows to extract (always included)
 
         Returns:
             Schema metadata as JSON
@@ -312,7 +312,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 include_columns=include_columns,
                 include_constraints=include_constraints,
                 include_indexes=include_indexes,
-                include_sample_data=include_sample_data,
                 sample_row_limit=sample_row_limit,
                 max_workers=10,
                 enable_progress=enable_progress
@@ -353,22 +352,9 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 save_result = self._save_schema(schema_data, connection_name, version)
                 schema_data["storage"] = save_result
 
-            # Auto-cluster schema into domains (if enabled in config)
-            clustering_result = None
-            uncertainty_result = None
-            if auto_save and save_result and save_result.get("saved"):
-                clustering_result = self._auto_cluster_schema(
-                    connection_name=connection_name,
-                    schema_file=save_result.get("latest_file"),
-                    enable_progress=enable_progress
-                )
-                
-                # 🔥 新增: 自动分析不确定性（仅在聚类成功后）
-                if clustering_result and clustering_result.get("status") == "success":
-                    uncertainty_result = self._auto_analyze_uncertainties(
-                        connection_name=connection_name,
-                        enable_progress=enable_progress
-                    )
+            # 🔑 不再自动聚类！聚类必须在 BusinessUnderstanding 之后进行
+            # 用户的业务问答会生成 excluded_tables，聚类时需要读取这些配置
+            # 正确流程：Schema提取 → BusinessUnderstanding → 聚类 → 不确定性分析 → 本体构建
 
             # 构建概要信息(不返回完整数据,避免上下文爆炸)
             # 注意: schema_data["tables"] 是字典 {table_name: table_data}, 不是列表
@@ -412,13 +398,8 @@ class DatabaseSchemaExtractorTool(KodeTool):
             else:
                 summary["warning"] = "Schema 未保存到文件 (auto_save=False),完整数据未持久化"
 
-            # 如果执行了聚类,添加聚类结果
-            if clustering_result:
-                summary["clustering"] = clustering_result
-            
-            # 如果执行了不确定性分析,添加分析结果
-            if uncertainty_result:
-                summary["uncertainty"] = uncertainty_result
+            # 🔑 提示下一步：运行 BusinessUnderstanding
+            summary["next_step"] = f"请运行 BusinessUnderstanding(connection_name='{connection_name}') 完成业务问答，然后再构建本体"
 
             return json.dumps(summary, indent=2, ensure_ascii=False)
 
@@ -694,7 +675,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
         include_columns: bool,
         include_constraints: bool,
         include_indexes: bool,
-        include_sample_data: bool,
         sample_row_limit: int
     ) -> Dict[str, Any]:
         """
@@ -706,8 +686,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
             include_columns: Include column metadata
             include_constraints: Include constraints
             include_indexes: Include indexes
-            include_sample_data: Include sample data
-            sample_row_limit: Number of sample rows
+            sample_row_limit: Number of sample rows (always included)
 
         Returns:
             Table metadata dictionary
@@ -790,11 +769,10 @@ class DatabaseSchemaExtractorTool(KodeTool):
                     for idx in indexes
                 ]
 
-        # Sample Data
-        if include_sample_data:
-            sample_data = self._get_sample_data(connection_name, table_name, sample_row_limit)
-            if sample_data:
-                table_data["sample_data"] = sample_data
+        # Sample Data (永远启用)
+        sample_data = self._get_sample_data(connection_name, table_name, sample_row_limit)
+        if sample_data:
+            table_data["sample_data"] = sample_data
 
         return table_data
 
@@ -1077,7 +1055,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
         include_columns: bool,
         include_constraints: bool,
         include_indexes: bool,
-        include_sample_data: bool,
         sample_row_limit: int,
         max_workers: int = 10,
         enable_progress: bool = True
@@ -1095,8 +1072,7 @@ class DatabaseSchemaExtractorTool(KodeTool):
             include_columns: Include column metadata
             include_constraints: Include constraints
             include_indexes: Include indexes
-            include_sample_data: Include sample data
-            sample_row_limit: Number of sample rows
+            sample_row_limit: Number of sample rows (always included)
             max_workers: Maximum concurrent threads
             enable_progress: Enable progress callbacks
 
@@ -1120,15 +1096,14 @@ class DatabaseSchemaExtractorTool(KodeTool):
                 if enable_progress:
                     self._emit_progress("表结构提取完成，开始读取样例数据...", total_tables // 2, total_tables)
 
-                # 补充样例数据（并发读取，带进度）
-                if include_sample_data:
-                    sample_data_map = self._get_sample_data_batch_with_progress(
-                        connection_name, table_names, sample_row_limit,
-                        max_workers=max_workers, enable_progress=enable_progress
-                    )
-                    for table_name, sample_data in sample_data_map.items():
-                        if table_name in fast_results:
-                            fast_results[table_name]["sample_data"] = sample_data
+                # 补充样例数据（并发读取，带进度，永远启用）
+                sample_data_map = self._get_sample_data_batch_with_progress(
+                    connection_name, table_names, sample_row_limit,
+                    max_workers=max_workers, enable_progress=enable_progress
+                )
+                for table_name, sample_data in sample_data_map.items():
+                    if table_name in fast_results:
+                        fast_results[table_name]["sample_data"] = sample_data
 
                 return fast_results
 
@@ -1148,7 +1123,6 @@ class DatabaseSchemaExtractorTool(KodeTool):
                     include_columns,
                     include_constraints,
                     include_indexes,
-                    include_sample_data,
                     sample_row_limit
                 ): table_name
                 for table_name in table_names
@@ -1239,9 +1213,10 @@ class DatabaseSchemaExtractorTool(KodeTool):
             config = ConfigManager()
             storage_path = config.get("storage.schema_path", "./schema_store")
 
-            # Create storage directory
+            # Create storage directory with user isolation
+            user_id = get_current_user_id()
             base_dir = Path(storage_path)
-            conn_dir = base_dir / get_safe_connection_path(connection_name)
+            conn_dir = base_dir / user_id / get_safe_connection_path(connection_name)
             conn_dir.mkdir(parents=True, exist_ok=True)
 
             # Generate version
@@ -1434,31 +1409,280 @@ class DatabaseExecuteQueryTool(KodeTool):
 
     name: str = "DatabaseExecuteQuery"
     description: str = """Execute SQL queries on a database.
-    - SELECT queries: Read-only, returns results (limited by fetch_limit)
-    - INSERT/UPDATE/DELETE: Requires permission, returns affected row count
-    - Supports parameterized queries to prevent SQL injection
-    - Use :param_name syntax for parameters (e.g., 'SELECT * FROM users WHERE id = :id')"""
+
+⚠️ **查询优化要求（必读）**：
+1. **超时限制**: 默认 15 秒超时，大表查询务必添加 WHERE 条件或 LIMIT
+2. **结果行数**: 默认最多返回 50 行，结果会进入上下文，避免查询返回大量数据
+3. **避免全表扫描**: 禁止 `SELECT * FROM 大表` 无条件查询
+4. **优先聚合**: 统计类需求用 COUNT/SUM/AVG，不要返回明细
+5. **超时后策略**: 如果查询超时，请简化查询（加 WHERE、减少 JOIN、用聚合替代明细）
+
+**推荐做法**：
+```sql
+-- ✅ 好：有条件限制
+SELECT * FROM orders WHERE created_at > @最近7天@ LIMIT 20
+
+-- ✅ 好：聚合统计
+SELECT COUNT(*), SUM(amount) FROM orders WHERE status = 'paid'
+
+-- ❌ 差：无条件全表查询（会超时或返回过多数据）
+SELECT * FROM orders
+```
+
+**时间占位符（自动转换）**：
+格式: `@时间描述:格式@`，格式可选：ms(默认)、s、date、datetime
+- 绝对: @2025年10月@, @2025-10@
+- 相对: @本月@, @上月@, @今年@, @今天@, @昨天@
+- 动态: @最近7天@, @最近30天@
+
+**其他功能**：
+- SELECT: 只读查询，受 fetch_limit 和 timeout 限制
+- INSERT/UPDATE/DELETE: 需要权限确认"""
 
     args_schema: Type[BaseModel] = DatabaseExecuteQueryInput
     requires_permission: bool = False  # Will check dynamically based on query type
+
+    def _parse_time_to_datetime(self, time_desc: str) -> datetime:
+        """
+        解析时间描述，返回 datetime 对象。
+
+        Args:
+            time_desc: 时间描述，如 "2025年10月"、"上月"、"最近7天"
+
+        Returns:
+            datetime 对象
+        """
+        now = datetime.now()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        time_desc = time_desc.strip()
+
+        # 绝对月份: 2025年10月, 2025-10
+        month_match = re.match(r'(\d{4})[-年](\d{1,2})月?', time_desc)
+        if month_match:
+            year = int(month_match.group(1))
+            month = int(month_match.group(2))
+            return datetime(year, month, 1)
+
+        # 相对月份
+        if time_desc in ['本月', '这个月']:
+            return today.replace(day=1)
+
+        if time_desc in ['上月', '上个月']:
+            if now.month == 1:
+                return today.replace(year=now.year - 1, month=12, day=1)
+            else:
+                return today.replace(month=now.month - 1, day=1)
+
+        # 年份
+        if time_desc in ['今年', '本年']:
+            return today.replace(month=1, day=1)
+
+        if time_desc in ['去年', '上年']:
+            return today.replace(year=now.year - 1, month=1, day=1)
+
+        # 日期
+        if time_desc in ['今天', '今日']:
+            return today
+
+        if time_desc in ['昨天', '昨日']:
+            return today - timedelta(days=1)
+
+        if time_desc in ['本周', '这周']:
+            return today - timedelta(days=today.weekday())
+
+        if time_desc in ['上周', '上一周']:
+            return today - timedelta(days=today.weekday() + 7)
+
+        # 最近N天
+        recent_match = re.match(r'最近(\d+)天', time_desc)
+        if recent_match:
+            days = int(recent_match.group(1))
+            return today - timedelta(days=days)
+
+        # 季度: 2025年Q1, 2025Q1
+        quarter_match = re.match(r'(\d{4})年?[Qq](\d)', time_desc)
+        if quarter_match:
+            year = int(quarter_match.group(1))
+            quarter = int(quarter_match.group(2))
+            month = (quarter - 1) * 3 + 1
+            return datetime(year, month, 1)
+
+        raise ValueError(f"无法解析时间: {time_desc}")
+
+    def _format_time_value(self, dt: datetime, fmt: str) -> str:
+        """
+        将 datetime 格式化为指定格式的字符串。
+
+        Args:
+            dt: datetime 对象
+            fmt: 格式类型 (ms, s, date, datetime)
+
+        Returns:
+            格式化后的字符串
+        """
+        if fmt in ['ms', '']:
+            return str(int(dt.timestamp() * 1000))
+        elif fmt == 's':
+            return str(int(dt.timestamp()))
+        elif fmt == 'date':
+            return f"'{dt.strftime('%Y-%m-%d')}'"
+        elif fmt == 'datetime':
+            return f"'{dt.strftime('%Y-%m-%d %H:%M:%S')}'"
+        else:
+            # 默认毫秒
+            return str(int(dt.timestamp() * 1000))
+
+    def _replace_time_placeholders(self, sql: str) -> tuple[str, list[dict]]:
+        """
+        替换 SQL 中的时间占位符 @时间描述:格式@。
+
+        格式支持: ms(默认), s, date, datetime
+
+        Returns:
+            (替换后的SQL, 替换记录列表)
+        """
+        replacements = []
+        # 匹配 @时间描述@ 或 @时间描述:格式@
+        pattern = r'@([^@:]+)(?::([^@]+))?@'
+
+        def replace_match(match):
+            time_desc = match.group(1).strip()
+            fmt = (match.group(2) or 'ms').strip().lower()
+            placeholder = match.group(0)
+
+            try:
+                dt = self._parse_time_to_datetime(time_desc)
+                value = self._format_time_value(dt, fmt)
+                replacements.append({
+                    "placeholder": placeholder,
+                    "value": value,
+                    "datetime": dt.strftime('%Y-%m-%d %H:%M:%S'),
+                    "format": fmt
+                })
+                return value
+            except ValueError as e:
+                # 无法解析的占位符保持原样
+                replacements.append({
+                    "placeholder": placeholder,
+                    "error": str(e)
+                })
+                return placeholder
+
+        replaced_sql = re.sub(pattern, replace_match, sql)
+        return replaced_sql, replacements
+
+    # 结果大小限制（字符数）
+    MAX_RESULT_CHARS: ClassVar[int] = 50000  # 50KB，约 12500 个 token
+
+    def _execute_with_timeout(
+        self,
+        engine,
+        sql: str,
+        params: Optional[Dict[str, Any]],
+        timeout: int,
+        fetch_limit: int,
+        query_type: str
+    ) -> Dict[str, Any]:
+        """
+        在独立线程中执行查询，支持超时控制。
+
+        Args:
+            engine: SQLAlchemy engine
+            sql: SQL query
+            params: Query parameters
+            timeout: Timeout in seconds
+            fetch_limit: Max rows to fetch
+            query_type: Query type (SELECT, INSERT, etc.)
+
+        Returns:
+            Query result dict
+
+        Raises:
+            TimeoutError: If query exceeds timeout
+            Exception: Other query errors
+        """
+        result_container = {"result": None, "error": None}
+
+        def execute_query():
+            try:
+                with engine.connect() as conn:
+                    # Execute query
+                    if params:
+                        result = conn.execute(text(sql), params)
+                    else:
+                        result = conn.execute(text(sql))
+
+                    if query_type == "SELECT":
+                        rows = result.fetchmany(fetch_limit)
+                        columns = list(result.keys())
+                        has_more = len(rows) == fetch_limit
+                        result_container["result"] = {
+                            "rows": rows,
+                            "columns": columns,
+                            "has_more": has_more
+                        }
+                    else:
+                        conn.commit()
+                        affected_rows = result.rowcount if hasattr(result, 'rowcount') else 0
+                        result_container["result"] = {"affected_rows": affected_rows}
+            except Exception as e:
+                result_container["error"] = e
+
+        # 使用线程执行查询
+        thread = threading.Thread(target=execute_query)
+        thread.start()
+        thread.join(timeout=timeout)
+
+        if thread.is_alive():
+            # 查询超时 - 线程仍在运行
+            # 注意：Python 无法强制杀死线程，但连接会在下次请求时重置
+            raise TimeoutError(f"查询超时（{timeout}秒）。请简化查询：添加 WHERE 条件、减少 JOIN、使用 LIMIT、或改用聚合函数。")
+
+        if result_container["error"]:
+            raise result_container["error"]
+
+        return result_container["result"]
+
+    def _truncate_result(self, data: List[Dict], columns: List[str], max_chars: int) -> tuple:
+        """
+        截断结果以避免上下文爆炸。
+
+        Returns:
+            (truncated_data, was_truncated, char_count)
+        """
+        result_json = json.dumps(data, ensure_ascii=False)
+        if len(result_json) <= max_chars:
+            return data, False, len(result_json)
+
+        # 逐行截断
+        truncated = []
+        current_size = 2  # []
+        for row in data:
+            row_json = json.dumps(row, ensure_ascii=False)
+            if current_size + len(row_json) + 1 > max_chars:
+                break
+            truncated.append(row)
+            current_size += len(row_json) + 1  # +1 for comma
+
+        return truncated, True, len(result_json)
 
     def _run(
         self,
         connection_name: str,
         sql: str,
         params: Optional[Dict[str, Any]] = None,
-        fetch_limit: int = 100,
-        timeout: int = 30,
+        fetch_limit: int = 50,
+        timeout: int = 300,
     ) -> str:
         """
-        Execute SQL query.
+        Execute SQL query with timeout and result size limits.
 
         Args:
             connection_name: Connection name to execute on
             sql: SQL query to execute
             params: Parameters for parameterized query
-            fetch_limit: Max rows to fetch (SELECT only)
-            timeout: Query timeout in seconds
+            fetch_limit: Max rows to fetch (SELECT only), default 50
+            timeout: Query timeout in seconds, default 15
 
         Returns:
             Query results as JSON
@@ -1475,6 +1699,12 @@ class DatabaseExecuteQueryTool(KodeTool):
                     indent=2,
                 )
 
+            # 替换时间占位符 @xxx@
+            original_sql = sql
+            time_replacements = []
+            if '@' in sql:
+                sql, time_replacements = self._replace_time_placeholders(sql)
+
             # Determine query type
             query_type = self._get_query_type(sql)
             is_write_operation = query_type in ["INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER", "TRUNCATE"]
@@ -1484,80 +1714,98 @@ class DatabaseExecuteQueryTool(KodeTool):
                 # This will be caught by the permission system
                 pass
 
-            # Get engine and execute
+            # 限制 fetch_limit 最大值
+            fetch_limit = min(fetch_limit, 200)
+
+            # Get engine and execute with timeout
             engine = db_manager.get_engine(connection_name)
 
-            with engine.connect() as conn:
-                # Set timeout if supported
-                try:
-                    conn.execute(text(f"SET statement_timeout = {timeout * 1000}"))  # PostgreSQL
-                except Exception:
-                    pass  # Not all databases support this
+            query_result = self._execute_with_timeout(
+                engine=engine,
+                sql=sql,
+                params=params,
+                timeout=timeout,
+                fetch_limit=fetch_limit,
+                query_type=query_type
+            )
 
-                # Execute query
-                if params:
-                    result = conn.execute(text(sql), params)
-                else:
-                    result = conn.execute(text(sql))
+            # Process results based on query type
+            if query_type == "SELECT":
+                rows = query_result["rows"]
+                columns = query_result["columns"]
+                has_more = query_result["has_more"]
 
-                # Process results based on query type
-                if query_type == "SELECT":
-                    # Fetch results
-                    rows = result.fetchmany(fetch_limit)
-                    columns = list(result.keys())
+                # Convert to list of dicts
+                data = []
+                for row in rows:
+                    row_dict = {}
+                    for i, col in enumerate(columns):
+                        value = row[i]
+                        # Convert non-JSON-serializable types
+                        if isinstance(value, (datetime,)):
+                            value = value.isoformat()
+                        elif not isinstance(value, (str, int, float, bool, type(None))):
+                            value = str(value)
+                        row_dict[col] = value
+                    data.append(row_dict)
 
-                    # Convert to list of dicts
-                    data = []
-                    for row in rows:
-                        row_dict = {}
-                        for i, col in enumerate(columns):
-                            value = row[i]
-                            # Convert non-JSON-serializable types
-                            if isinstance(value, (datetime,)):
-                                value = value.isoformat()
-                            elif not isinstance(value, (str, int, float, bool, type(None))):
-                                value = str(value)
-                            row_dict[col] = value
-                        data.append(row_dict)
+                # 检查结果大小并截断
+                data, was_truncated, char_count = self._truncate_result(
+                    data, columns, self.MAX_RESULT_CHARS
+                )
 
-                    # Check if more rows available
-                    has_more = len(rows) == fetch_limit
+                message = f"查询返回 {len(data)} 行"
+                if has_more:
+                    message += f" (限制 {fetch_limit} 行，可能有更多)"
+                if was_truncated:
+                    message += f" ⚠️ 结果过大已截断（{char_count} 字符 → {self.MAX_RESULT_CHARS} 字符）"
 
-                    return json.dumps(
-                        {
-                            "status": "success",
-                            "query_type": query_type,
-                            "row_count": len(data),
-                            "has_more": has_more,
-                            "columns": columns,
-                            "data": data,
-                            "sql": sql,
-                            "connection_name": connection_name,
-                            "message": f"查询返回 {len(data)} 行" +
-                                      (f" (限制 {fetch_limit} 行，可能有更多)" if has_more else ""),
-                        },
-                        indent=2,
-                        ensure_ascii=False,
-                    )
+                result_dict = {
+                    "status": "success",
+                    "query_type": query_type,
+                    "row_count": len(data),
+                    "has_more": has_more,
+                    "was_truncated": was_truncated,
+                    "columns": columns,
+                    "data": data,
+                    "executed_sql": sql,
+                    "connection_name": connection_name,
+                    "message": message,
+                }
+                if time_replacements:
+                    result_dict["original_sql"] = original_sql
+                    result_dict["time_replacements"] = time_replacements
+                return json.dumps(result_dict, indent=2, ensure_ascii=False)
 
-                else:
-                    # Write operation - commit and return affected rows
-                    conn.commit()
-                    affected_rows = result.rowcount if hasattr(result, 'rowcount') else 0
+            else:
+                # Write operation
+                affected_rows = query_result["affected_rows"]
 
-                    return json.dumps(
-                        {
-                            "status": "success",
-                            "query_type": query_type,
-                            "affected_rows": affected_rows,
-                            "sql": sql,
-                            "connection_name": connection_name,
-                            "message": f"{query_type} 操作完成，影响 {affected_rows} 行",
-                        },
-                        indent=2,
-                        ensure_ascii=False,
-                    )
+                result_dict = {
+                    "status": "success",
+                    "query_type": query_type,
+                    "affected_rows": affected_rows,
+                    "executed_sql": sql,
+                    "connection_name": connection_name,
+                    "message": f"{query_type} 操作完成，影响 {affected_rows} 行",
+                }
+                if time_replacements:
+                    result_dict["original_sql"] = original_sql
+                    result_dict["time_replacements"] = time_replacements
+                return json.dumps(result_dict, indent=2, ensure_ascii=False)
 
+        except TimeoutError as e:
+            return json.dumps(
+                {
+                    "status": "timeout",
+                    "message": str(e),
+                    "suggestion": "简化查询策略：1) 添加 WHERE 条件限制范围 2) 使用 LIMIT 限制行数 3) 用 COUNT/SUM 聚合替代明细 4) 减少 JOIN 数量",
+                    "query_type": self._get_query_type(sql),
+                    "executed_sql": sql,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
         except Exception as e:
             error_msg = str(e)
             # Extract useful error information
@@ -1565,8 +1813,8 @@ class DatabaseExecuteQueryTool(KodeTool):
                 suggestion = "Check SQL syntax"
             elif "permission denied" in error_msg.lower() or "access denied" in error_msg.lower():
                 suggestion = "Check database permissions"
-            elif "timeout" in error_msg.lower():
-                suggestion = "Query timed out, try optimizing or increasing timeout"
+            elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+                suggestion = "查询超时，请简化查询：添加 WHERE 条件、使用 LIMIT、或改用聚合函数"
             else:
                 suggestion = "Check query and parameters"
 
@@ -1666,12 +1914,13 @@ class SchemaQueryTool(KodeTool):
             Table schema as JSON
         """
         try:
-            # Construct schema file path
+            # Construct schema file path with user isolation
             config = ConfigManager()
             storage_path = config.get("storage.schema_path", "./schema_store")
+            user_id = get_current_user_id()
             safe_conn_name = get_safe_connection_path(connection_name)
 
-            schema_file = Path(storage_path) / safe_conn_name / "schema_latest.json"
+            schema_file = Path(storage_path) / user_id / safe_conn_name / "schema_latest.json"
 
             if not schema_file.exists():
                 return json.dumps(

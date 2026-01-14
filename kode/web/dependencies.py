@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from kode.database.session import get_db
 from kode.models import User
+from kode.models.organization import Organization
 from kode.core.security import verify_token
 
 # HTTP Bearer Token认证
@@ -95,3 +96,31 @@ async def require_admin(
         )
 
     return current_user
+
+
+async def get_current_organization(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Organization:
+    """
+    获取当前用户的组织
+
+    每个用户有且只有一个组织（1:1关系）
+    如果组织不存在则自动创建
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.owner_id == current_user.id)
+    )
+    organization = result.scalar_one_or_none()
+
+    if organization is None:
+        # 自动创建默认组织
+        organization = Organization(
+            name=f"{current_user.username}的组织",
+            owner_id=current_user.id,
+        )
+        db.add(organization)
+        await db.commit()
+        await db.refresh(organization)
+
+    return organization

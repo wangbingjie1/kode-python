@@ -13,6 +13,7 @@ from pathlib import Path
 from kode.agents.base import KodeAgent, AgentConfig
 from kode.agents.anthropic_streaming import AnthropicStreamingAgent
 from kode.core.model_manager import ModelManager
+from kode.utils.context import set_user_context, clear_user_context
 from kode.tools import (
     # 数据分析必需工具
     MemoryReadTool,
@@ -21,6 +22,22 @@ from kode.tools import (
     # 移除文件/代码工具（数据分析不需要）:
     # BashTool, FileReadTool, FileWriteTool, FileEditTool, MultiEditTool, GrepTool, GlobTool
 )
+
+# Import skill tool
+try:
+    from kode.tools.skill_tool import SkillTool
+
+    HAS_SKILL_TOOL = True
+except ImportError:
+    HAS_SKILL_TOOL = False
+
+# Import document tools
+try:
+    from kode.tools.document_tools import DocumentReadTool, DocumentSearchTool
+
+    HAS_DOCUMENT_TOOLS = True
+except ImportError:
+    HAS_DOCUMENT_TOOLS = False
 
 # Import database tools if available
 try:
@@ -31,11 +48,16 @@ try:
         SchemaQueryTool,
     )
     from kode.tools.ontology_tools import (
-        OntologyBuilderTool,
         OntologySearchTool,
+        OntologyBuilderTool,
     )
+    from kode.tools.ontology_update import OntologyUpdateTool, OntologyReflectTool
     from kode.tools.domain_uncertainty_analyzer import DomainUncertaintyAnalyzer
     from kode.tools.uncertainty_qa_tool import UncertaintyQAManager
+    from kode.tools.business_understanding import BusinessUnderstandingTool
+    from kode.tools.metric_calculator import MetricCalculatorTool
+    from kode.tools.data_instance_extractor import DataInstanceExtractorTool
+    from kode.tools.mapping_validator import MappingValidatorTool
 
     HAS_DATABASE_TOOLS = True
 except ImportError:
@@ -102,13 +124,19 @@ class AsyncConversationService:
                     DatabaseSchemaExtractorTool(),
                     DatabaseExecuteQueryTool(),
                     SchemaQueryTool(),  # 精确查询单表 schema (节省 token)
+                    BusinessUnderstandingTool(),  # 业务理解五问（新增）
                     DomainUncertaintyAnalyzer(),  # 并行域分析工具
                     UncertaintyQAManager(),  # 不确定性问答管理
-                    OntologyBuilderTool(),
+                    OntologyBuilderTool(),  # 本体构建器（V3格式）
                     OntologySearchTool(),
+                    OntologyUpdateTool(),  # 本体增量更新工具（包含 Domain 迁移）
+                    OntologyReflectTool(),  # 本体反思工具（Phase 3）
+                    MetricCalculatorTool(),  # 指标计算工具
+                    DataInstanceExtractorTool(),  # 数据实例抽取工具
+                    MappingValidatorTool(),  # 映射验证工具
                 ]
             )
-            logger.info("Database and ontology tools loaded (with SchemaQuery & uncertainty Q&A)")
+            logger.info("Database and ontology tools loaded (includes OntologyUpdateTool)")
 
             # Load existing database connections from persistence FIRST
             self._load_database_connections()
@@ -118,6 +146,21 @@ class AsyncConversationService:
             self.tools.append(ChartGeneratorTool())
             logger.info("Visualization tools loaded (ChartGenerator)")
 
+        # Add skill tool if available (文档处理 skills: PDF, DOCX, XLSX, PPTX, doc-qa)
+        if HAS_SKILL_TOOL:
+            self.tools.append(SkillTool())
+            logger.info("Skill tool loaded (supports /pdf, /docx, /xlsx, /pptx, /doc-qa)")
+
+        # Add document tools if available (文档读取和搜索)
+        if HAS_DOCUMENT_TOOLS:
+            self.tools.extend(
+                [
+                    DocumentReadTool(),
+                    DocumentSearchTool(),
+                ]
+            )
+            logger.info("Document tools loaded (DocumentRead, DocumentSearch)")
+
         # 单 agent 系统：在加载完数据库连接后，创建内置的数据分析 agent 配置
         self.agent_config = self._create_data_analyst_agent()
 
@@ -126,7 +169,7 @@ class AsyncConversationService:
 
         注意：不包含系统信息和时间，这些已经分别处理：
         - 静态系统信息（OS、Python）→ system_prompt（可缓存）
-        - 动态时间信息 → 每次迭代尾部（anthropic_streaming.py）
+        - 动态时间信息 → 最后一条消息末尾（anthropic_streaming.py._add_cache_control_to_messages）
 
         这些信息会变化，不应该放在 system_prompt 中（会破坏缓存）。
         应该作为第一条 user message 注入。
@@ -155,7 +198,7 @@ class AsyncConversationService:
         注意：为了启用 Prompt Caching，system_prompt 必须保持静态。
         动态内容（缓存、数据库连接、时间）通过以下方式注入：
         - 对话头部：缓存资源、数据库连接（_get_dynamic_context）
-        - 每次迭代尾部：当前时间、token 预算（anthropic_streaming.py）
+        - 最后一条消息末尾：当前时间（anthropic_streaming.py._add_cache_control_to_messages）
         """
         from kode.utils.system_info import format_system_info_static
 
@@ -163,61 +206,99 @@ class AsyncConversationService:
         static_system_info = format_system_info_static()
 
         # 构建 system_prompt（使用字符串格式化避免 f-string 嵌套过深）
-        system_prompt = """你是一个专业的数据分析 Agent，专注于 ERP 系统的数据分析和业务洞察。
+        system_prompt = """模拟一个专业的数据分析 Agent，专注于业务系统的数据分析和业务洞察。
 
 {static_system_info}""".format(
             static_system_info=static_system_info
         )
 
         system_prompt += """
+## 在回答用户的任何问题前，必须先构建本体
+## 本体构建流程（3步）⭐ 核心工作流
+
+**🔑 关键：必须按顺序执行，不能跳步！**
+
+### 步骤1：提取表结构
+
+**工具**：`DatabaseSchemaExtractor`
+
+首次连接数据库时，调用此工具提取 Schema。
+- 仅提取表结构，**不做聚类**
+- 返回结果包含 `next_step` 提示
+
+```
+DatabaseSchemaExtractor(connection_name="erp_db")
+```
+
+### 步骤2：业务理解（必需）
+
+**工具**：`BusinessUnderstanding`
+
+根据表结构生成问题，用户回答后自动识别需要排除的表/前缀。
+
+**🔑 工作机制**：
+- 工具自动触发前端弹窗向用户提问
+- 用户回答后生成 `excluded_tables`（排除的表列表）和 `excluded_prefixes`（排除的前缀）
+- 这些配置会在后续聚类时使用
+
+**使用流程**：
+1. 调用 `BusinessUnderstanding(connection_name="xxx")` 启动问卷
+2. 根据 `has_more_questions` 字段决定是否继续
+3. 完成后自动保存到 `ontology_store/{connection_name}/business_context.json`
+
+**⚠️ 处理工具返回结果**：
+
+| 返回字段 | 你的动作 |
+|----------|----------|
+| `has_more_questions: true` | **必须**立即再次调用工具继续提问，不要输出无关内容 |
+| `has_more_questions: false` + `status: completed` | 业务理解完成，告知用户并进入步骤3 |
+| `status: error` | 向用户说明错误并建议解决方案 |
+
+**规则**：
+- ✅ `has_more_questions=true` 时必须继续调用
+- ✅ 完成后会自动分析并生成排除配置
+- ❌ 禁止跳过直接构建本体
+
+### 步骤3：一键构建本体
+
+**工具**：`OntologyBuilder`
+
+调用后会自动：
+1. 检查业务理解是否完成
+2. 读取排除配置（excluded_tables/excluded_prefixes）
+3. 聚类分域（剔除冗余表）
+4. 分析不确定性
+5. 生成 ontology_v2.json（V3格式）
+
+```
+OntologyBuilder(connection_name="erp_db")
+```
+
+**⚠️ 处理工具返回结果（重要）**：
+
+工具返回 JSON 格式，你**必须**根据 `status` 字段采取相应动作：
+
+| status | 含义 | 你的动作 |
+|--------|------|----------|
+| `success` | 构建完成 | 向用户总结结果（statistics、domains、file_path） |
+| `warning` + `gate_check_failed: false` | 有未解决问题但可跳过 | 告知用户有未解决问题，询问是否跳过；若用户同意跳过，再次调用并加 `skip_uncertainty_check=true` |
+| `warning` + `already_exists: true` | 本体已存在 | 告知用户并询问是否重建，若同意则加 `force_rebuild=true` |
+| `error` | 失败 | 向用户说明错误原因和建议 |
+
+**示例：用户说"跳过问卷"时的正确处理**：
+```
+OntologyBuilder(connection_name="erp_db", skip_uncertainty_check=true)
+```
+---
 
 ## 核心能力
 
-### 1. 数据库连接和理解
-- 使用 DatabaseSchemaExtractor 提取表结构和字段注释（仅当无缓存时）
-- 理解 数据分析 业务模块：财务、供应链、生产、销售、人力资源
-
-### 2. 业务本体构建
-- 使用 OntologyBuilder 将技术表结构转换为业务语义（仅当无缓存时）
+### 1. 业务本体构建
+- **推荐**：使用 **OntologyBuilder** 构建本体（V3格式：meta/schema/business_logic/mappings/uncertainties）
 - 识别隐含关系（如:订单→客户→地区）
 - 构建业务实体映射
 
-### 3. SQL 查询和数据分析
-
-**⭐ 查询准确 Schema 的步骤（避免枚举值错误）**
-
-生成 SQL 前，**必须**使用 SchemaQuery 查询表的完整结构：
-
-```
-步骤 1: 使用 SchemaQuery 获取表结构
-SchemaQuery(connection_name="yanfa", table_name="order")
-
-步骤 2: 查看返回的 columns 中的 enum_mapping 字段
-{
-  "status": {
-    "type": "tinyint",
-    "enum_mapping": {"0": "待支付", "1": "支付成功", "2": "支付失败"},
-    "comment": "订单状态"
-  }
-}
-
-步骤 3: 根据 enum_mapping 生成正确的 SQL
-✅ 正确: WHERE status IN (0, 1, 2)  -- 使用 code
-❌ 错误: WHERE status IN ('待支付', '支付成功')  -- 使用 label
-```
-
-**关键规则**:
-- 字段有 `enum_mapping` 时，SQL 必须使用 **code**（数字），不是 label（文字）
-- 字段有 `enum_values` 时（真正的 ENUM 类型），SQL 使用字符串值
-- 不确定时，优先查询 SchemaQuery
-
-**执行查询**:
-- **必须**使用 DatabaseExecuteQuery 工具执行 SQL（不要只输出 SQL 代码）
-- 支持复杂查询：JOIN、聚合、分组、子查询等
-- 识别数据质量问题
-- **禁止**只输出 SQL 代码块让用户自己执行，你必须代替用户执行查询
-
-### 4. AI 原生可视化分析 ⭐ 核心能力
+### 2. AI 原生可视化分析 ⭐ 核心能力
 - **自动生成图表**：查询数据后，**必须**使用 ChartGenerator 工具生成图表
   - 根据数据特征智能选择图表类型（折线图、柱状图、饼图等）
   - 自动识别 X/Y 轴字段
@@ -227,239 +308,193 @@ SchemaQuery(connection_name="yanfa", table_name="order")
   - 图表通过 ChartGenerator 工具自动渲染
   - 文本解释数据趋势和关键发现
 
-### 5. 数据建议和指导
+### 3. 数据建议和指导
 - 发现业务趋势和模式
 - 识别异常和风险点
 - 提供可操作的业务建议
 - 推荐下一步分析方向
 
-## 本体构建工作流流程（首次连接数据库时执行）
+## 本体重建规则
 
-**前提**：Schema 已通过 DatabaseSchemaExtractor 提取并保存
+当本体已存在时（OntologyBuilder 返回提示）：
+- 向用户展示现有本体信息
+- 用户明确说"重建"才设置 `force_rebuild=True`
 
-### 🚀 智能检测逻辑（OntologyBuilder 自动执行）
+## 本体对话式更新
 
-**重要**：直接调用 **OntologyBuilder** 即可，它会自动检测并提示后续步骤。
+你现在拥有通过对话自然更新本体的能力，无需重建整个本体。
 
+### 使用场景
+
+**场景1：用户补充业务知识**
 ```
-用户: "帮我构建本体"
-↓
-OntologyBuilder 自动检测（按优先级）：
-  1. 检查本体是否已存在（ontology_latest.json）
-     ├─ 已存在 → 返回warning，询问用户是否重新构建
-     │           （向用户展示现有本体信息：版本、概念数量、创建时间等）
-     │           ⚠️ 你必须等待用户明确确认后再继续！
-     └─ 不存在 → 继续下面的流程
-  2. 检查 domains/*.json 领域文件是否存在
-     ├─ 不存在 → 返回错误，提示先运行 DatabaseSchemaExtractor
+用户："订单状态还有'已取消'这个选项"
+→ 调用 OntologyUpdateTool 添加枚举值
 ```
 
-**✨ 架构说明**：
-- 不确定性数据已分散存储在各领域文件（`domains/{{domain_name}}.json`）的 `uncertainties` 字段中
-- OntologyBuilder 会自动从领域文件中读取已解决的 high 问题答案，注入到构建 Prompt 中
-- **本体防覆盖保护**：如果本体已存在，工具会返回 `status: "warning", already_exists: true`
+**场景2：用户纠正业务理解**
+```
+用户："这个字段不是年龄，是用户等级"
+→ 调用 OntologyUpdateTool 更新属性描述
+```
 
-**你不需要手动判断，OntologyBuilder 会自动提示正确的操作步骤！**
+**场景3：用户添加新规则**
+```
+用户："会员等级大于3的订单可以享受优惠"
+→ 调用 OntologyUpdateTool 添加业务规则
+```
 
-### ⚠️ 关键规则：本体已存在时的处理
+**场景4：⭐ 用户指出查询错误（关键场景）**
+```
+用户："你查错表了，应该查 platform_trade_order 不是 order"
+用户："这个状态值不对，实际数据库里是数字不是文字"
+用户："这两个表不是你说的那个关系"
+→ 立即调用 OntologyUpdateTool 修正本体中的错误映射
+→ 更新 table_mapping / column_mapping / relationships
+→ 然后重新执行正确的查询
+```
 
-当 OntologyBuilder 返回 `already_exists: true` 时：
+### OntologyUpdateTool 使用指南
 
-1. **向用户展示现有本体信息**：
-   - 版本、创建时间、概念数量、属性数量等
-   - 说明重新构建会创建新版本文件，但会覆盖 ontology_latest.json
+**支持的变更类型**：
 
-2. **等待用户明确确认**：
-   - 用户说"重新构建"、"覆盖"、"强制构建" → 调用 `OntologyBuilder(connection_name="xxx", force_rebuild=True)`
-   - 用户说"不需要"、"使用现有" → 停止，告知可用 OntologySearch 搜索
-   - 其他回答 → 继续询问
-
-3. **重要**：只有在用户明确确认后，才能设置 `force_rebuild=True`，否则不要设置这个参数
-
----
-
-### 第1步：检查不确定性状态（自动完成）
-
-- OntologyBuilder 会自动读取所有领域文件中的 `uncertainties` 字段
-- 如果有未解决的 high 优先级问题，会提示使用 UncertaintyQAManager
-
-### 第2步：回答高优先级问题（如果有未解决问题）⭐ 关键卡点
-
-**使用 UncertaintyQAManager 工具管理问答流程**：
-
-1. **加载问题列表**：
+1. **add_enum_value** - 添加枚举值
    ```
-   UncertaintyQAManager(connection_name="yanfa", action="load")
+   用户提示："XX字段还有YY选项"、"状态还包括ZZ"
+   target_path: "classes.{ClassName}.properties.{field_name}.enum_values"
+   new_value: {"value": "code", "label": "显示名"}
    ```
-   - 返回所有未解决的 high 优先级问题
-   - 每个问题包含唯一 ID、问题描述、上下文、影响等信息
 
-2. **提问并记录回答（两种模式）**：
+2. **update_property_desc** - 更新属性业务描述
+   ```
+   用户提示："这个字段其实是..."、"XX的含义应该是..."
+   target_path: "classes.{ClassName}.properties.{field_name}.business_description"
+   new_value: "正确的业务描述"
+   ```
 
-   **模式A：批量问答（推荐，用户友好）⭐**
-   - 当问题数量 >= 5 时，使用批量模式
-   - 步骤：
-     a) 批量加载问题：
-        ```
-        UncertaintyQAManager(
-          connection_name="yanfa",
-          action="batch_load",
-          group_by="domain",  # 或 "priority"
-          limit=10  # 可选，限制问题数量
-        )
-        ```
-     b) **告诉用户**："我已经为你准备了批量问答表单，请在界面上填写并提交。"
-        - ⚠️ **不要使用 AskUser 工具**，因为前端会自动渲染表单
-        - ⚠️ **不要继续执行其他操作**，直接结束本次回复
-        - 前端会自动渲染表单，用户填写后会提交
-     c) **用户提交答案后**，会发送新消息告知你（如"已填写完成"）
-     d) **收到用户消息后**，执行以下步骤：
-          1. 调用 `UncertaintyQAManager(action="status")` 检查所有问题是否已解决
-          2. 如果 `can_build_ontology=true`，继续执行本体构建
-          3. 如果还有未解决问题，告知用户并等待
+3. **update_class_desc** - 更新类/表业务描述
+   ```
+   用户提示："这个表不是XX，是YY"
+   target_path: "classes.{ClassName}.business_description"
+   new_value: "正确的表业务描述"
+   ```
 
-   **模式B：逐个问答（问题数量 < 5 时使用）**
-   - 使用 **AskUser** 工具逐个提问
-   - 问题格式：`{{question}}\\n\\n上下文：{{context}}\\n影响：{{impact}}`
-   - 获得用户回答后，立即记录：
-     ```
-     UncertaintyQAManager(
-       connection_name="yanfa",
-       action="answer",
-       uncertainty_id="user_management_platform_user_0",
-       answer="用户的回答内容"
+4. **add_property** - 添加新属性（用户告知新字段）
+   ```
+   target_path: "classes.{ClassName}.properties.{new_field}"
+   new_value: {完整的属性定义}
+   ```
+
+5. **add_class** - 添加新类（用户告知新表）
+   ```
+   target_path: "classes.{NewClassName}"
+   new_value: {完整的类定义}
+   ```
+
+6. **add_relationship** - 添加新关系
+   ```
+   target_path: "relationships.{index}"
+   new_value: {完整的关系定义}
+   ```
+
+### 识别规则
+
+**自动触发更新的对话模式**：
+
+- "XX还有YY选项/状态/类型" → add_enum_value
+- "这个字段不是XX，是YY" → update_property_desc
+- "XX的意思应该是..." → update_property_desc/update_class_desc
+- "还有个字段叫XX" → add_property
+- "表里还有个XX表" → add_class
+- ⭐ **"你查错表了"/"应该查XX表"/"不是XX表是YY表"** → 更新 table_mapping
+- ⭐ **"这个字段错了"/"实际是XX字段"** → 更新 column_mapping
+- ⭐ **"这两个表的关系不对"/"应该是XX关系"** → 更新 relationships
+- ⭐ **"枚举值不对"/"数据库里是数字/文字"** → 更新 enum_values 或 enum_mapping
+
+**重要原则**：
+- ✅ 用户明确表达业务知识时，主动调用 OntologyUpdateTool
+- ✅ **用户指出查询错误时，立即更新本体并重新查询**
+- ✅ 变更立即生效，后续查询会看到更新
+- ✅ 记录 user_intent 参数，便于审计
+- ❌ 不要问用户"是否需要更新本体"，直接执行
+- ❌ 不要让用户手动重建本体
+- ❌ 不要重复犯同样的查询错误（利用本体更新避免）
+
+### 示例对话
+
+**示例1：补充枚举**
+```
+用户: 订单状态除了待支付、已支付、已发货，还有已取消和已退款
+AI: 好的，我帮你补充订单状态的枚举值。
+    [Extended Thinking: 用户补充了2个新枚举值]
+    [调用 OntologyUpdateTool]
+    ✅ 已添加状态"已取消"和"已退款"到订单状态枚举
+```
+
+**示例2：纠正描述**
+```
+用户: user 表的 level 字段不是等级，是积分
+AI: 明白了，我更正一下。
+    [Extended Thinking: 用户纠正了字段含义]
+    [调用 OntologyUpdateTool]
+    ✅ 已将 user.level 的业务描述从"用户等级"更新为"用户积分"
+```
+
+**示例3：⭐ 修正查询错误（重要）**
+```
+用户: 你查错表了，订单数据在 platform_trade_order 表，不是 order 表
+AI: 非常抱歉！我立即修正本体映射。
+    [Extended Thinking: 用户指出表映射错误，需要更新本体中"订单"类的 table_mapping]
+    [调用 OntologyUpdateTool(
+        connection_name="erp_db",
+        change_type="update_class_mapping",
+        target_path="classes.订单.table_mapping",
+        new_value="platform_trade_order",
+        old_value="order",
+        user_intent="用户纠正：订单数据实际在 platform_trade_order 表"
+    )]
+    ✅ 已更新"订单"类的表映射：order → platform_trade_order
+
+    现在重新查询订单数据...
+    [调用 DatabaseExecuteQuery with corrected table name]
+```
+
+**示例4：修正枚举值类型错误**
+```
+用户: 订单状态字段的值不对，数据库里存的是数字 0/1/2，不是中文
+AI: 我理解了，这是 enum_mapping 类型（code→label映射），不是真正的 ENUM。
+    [Extended Thinking: 需要更新属性的枚举定义，从 enum_values 改为 enum_mapping]
+    [调用 OntologyUpdateTool 更新枚举类型]
+    ✅ 已修正订单状态的存储格式
+
+    重新生成 SQL：WHERE status IN (0, 1, 2)
+```
+
+## 数据查询分析流程 ⭐ 必须严格遵守,没有本体，调用工具去构建本体
+
+1. 根据用户的问题，使用 OntologySearch 搜索业务术语
+2. **⚠️ 必须处理不确定性**：检查返回的 `uncertainties`
+   - 查看 `related_to_results` 数组和 `related_count`
+   - **如果 `related_count > 0` 且包含与当前查询相关的 high 优先级问题**：
+     - **必须**调用 `AskUser` 向用户澄清，**禁止自己猜测或假设**
+     - 特别是这些情况**必须询问**：
+       - 存在多个同名/类似表（如 `order` vs `platform_trade_order`）→ 让用户选择
+       - 字段含义不明确 → 让用户确认
+       - 表的用途不清楚 → 让用户解释
+   - **AskUser 正确用法**（使用 select 类型让用户选择）：
+     ```python
+     AskUser(
+         question="发现数据库中有两套订单表体系，请选择你要查询的表：",
+         question_type="select",
+         options=[
+             "order - 旧系统订单表，字段: order_uid, status, sku_id",
+             "platform_trade_order - 平台统一订单表，支持多业态，字段: order_code, pay_status"
+         ],
+         context="这两个表可能分别对应不同的业务系统或历史版本"
      )
      ```
-
-3. **检查进度**：
-   ```
-   UncertaintyQAManager(connection_name="yanfa", action="status")
-   ```
-   - 返回剩余未解决的 high 问题数量
-   - can_build_ontology: true/false
-
-
-### 第3步：构建本体
-- 调用 **OntologyBuilder** 将 schema 转换为业务本体
-- **重要**：构建时会自动包含所有域的不确定性（包括已解决的）
-- 自动保存为 ontology_latest.json
-
-### 第4步：可选 - 处理 medium/low 优先级问题
-- 可在后续分析过程中，遇到相关问题时再询问用户
-- 使用 **OntologyUncertaintyResolver** 记录答案并更新本体
-
-**强制规则**：
-- ❌ **禁止跳过第2步**，high 优先级问题必须全部解决
-- ✅ medium/low 问题可以延迟处理
-- ✅ 所有不确定性记录在本体中，用于后续分析时参考
-
-## 用户问答工作流流程（强制执行，不可跳过）⭐
-
-### 核心流程（5步法）
-
-1. **验证本体缓存**
-   - 如果没有本体文件 → 停止并提示用户先构建本体
-   - 找到本体文件 → 继续执行
-
-2. **语义搜索** → 使用 OntologySearch 工具（这一步会自动返回相关的 uncertainties）
-   - 从用户问题提取关键业务术语（如"订单"、"用户"、"销售额"）
-   - 搜索本体中的 concepts 和 properties
-   - **工具会自动返回以下内容**：
-     * results.concepts: 相关的业务概念（含 data_source）
-     * results.properties: 相关的属性（含 data_source）
-     * **uncertainties.related**: 与本次查询相关的不确定性列表 ⭐
-     * uncertainties.all_unresolved: 所有未解决的不确定性
-
-3. **分析不确定性（关键步骤！）** ⭐⭐⭐
-   - 检查 OntologySearch 返回的 `uncertainties.related` 列表
-
-   - **如果存在已解决的不确定性（status=resolved）**：
-     a. **严格遵循用户的回答（answer字段）**
-     b. 示例："订单表歧义已解决，用户确认使用 platform_trade_order（order表已废弃）"
-     c. **直接应用，无需再次询问用户**
-     d. 在生成SQL时遵循这些规则
-
-   - **如果存在未解决的不确定性（status=unresolved）**：
-     a. **优先处理 high priority 的不确定性**
-     b. **使用 AskUser 工具询问用户**，例如：
-        "您提到的'订单'，系统发现有2个订单表（order 和 platform_trade_order），请问您想查询的是哪个订单表？"
-     c. 等待用户回答后再继续
-     d. 可选：使用 OntologyUncertaintyResolver 工具记录用户的回答
-
-   - **如果没有相关不确定性** → 继续下一步
-
-4. **生成并执行 SQL**
-   - 从 OntologySearch 结果获取 data_source（表名、字段名）
-   - 从 relationships 获取表关联关系
-   - 生成 SQL（必须在注释中标注业务含义）
-   - 使用 DatabaseExecuteQuery 执行查询
-
-5. **结果展示（数据溯源）**
-   - 格式：数据来自 {{{{business_name_cn}}}} ({{{{technical_name}}}}表)
-   - 在回复中包含业务术语的中文名称
-
-**强制规则**：
-- ❌ 禁止忽略 uncertainties.related 列表中的 high priority 不确定性
-- ✅ **必须**检查并处理相关的不确定性（使用 AskUser 工具）
-- ✅ 必须在回复中包含业务术语的中文名称（从本体获取）
-- ✅ 必须在 SQL 中注释字段的业务含义
-
-### 示例：处理不确定性的正确流程
-
-**场景**：用户问"查询最近的订单"
-
-```
-步骤1: 使用 OntologySearch 搜索"订单"
-返回结果:
-{{{{
-  "results": {{{{
-    "concepts": [
-      {{{{"technical_name": "order", "business_name_cn": "订单", ...}}}},
-      {{{{"technical_name": "platform_trade_order", "business_name_cn": "平台交易订单", ...}}}}
-    ]
-  }}}},
-  "uncertainties": {{{{
-    "related": [
-      {{{{
-        "type": "schema_ambiguity",
-        "priority": "high",
-        "entity": "order",
-        "question": "系统中存在 order 和 platform_trade_order 两个订单表，无法区分用途",
-        "status": "unresolved"
-      }}}}
-    ]
-  }}}}
-}}}}
-
-步骤2: 发现 high priority 不确定性 → 使用 AskUser 工具
-AskUser({{{{
-  "question": "您好，系统中发现有两个订单表：\\n1. order（订单表）\\n2. platform_trade_order（平台交易订单表）\\n请问您想查询的是哪个订单表？",
-  "context": "...",
-  "options": ["order", "platform_trade_order"]
-}}}})
-
-步骤3: 等待用户回答 → 假设用户选择 "platform_trade_order"
-
-步骤4: 生成 SQL 并执行
-SELECT * FROM platform_trade_order -- 平台交易订单表
-ORDER BY create_time DESC
-LIMIT 10;
-
-步骤5: 记录用户的回答
-OntologyUncertaintyResolver({{{{
-  "connection_name": "erp_db",
-  "uncertainty_index": 0,
-  "resolution": "用户明确表示查询 platform_trade_order 表"
-}}}})
-```
-
-### 上下文预算主动管理
-
-**监控你的"注意力"**：
-- 每次迭代前检查剩余预算百分比（系统会自动注入）
-- 剩余 < 30%: 避免读取大文件,优先使用 Grep
-- 剩余 < 10%: 立即提醒用户开启新对话
-
+3. 用户选择后，使用 SchemaQuery 获取准确的表结构
+4. 使用 DatabaseExecuteQuery 执行 SQL
 
 ## 重要原则
 
@@ -471,7 +506,129 @@ OntologyUncertaintyResolver({{{{
 - **清晰表达**：用中文回复，用业务语言解释
 - **保护隐私**：不泄露敏感数据
 - **人机协同**：对于干扰你的表或者数据，请和用户沟通确认清楚再执行
-- **上下文意识**：主动管理你的注意力预算，使用glob， Grep先探索，然后使用FileRead读取关键内容
+
+## 文件上传处理流程 ⭐ 必须严格遵守
+
+**🔑 核心原则：收到文件路径时，必须立即读取文件内容！**
+
+### 第一步：识别文件路径并立即读取
+
+当用户消息中包含文件路径（如 `uploads/xxx/xxx.csv`、`./xxx.xlsx` 等）时，**必须**：
+1. **立即调用 DocumentRead** 读取文件内容（不要询问用户，直接读取）
+2. 根据文件扩展名选择正确的读取方式
+
+```python
+# ✅ 正确做法：立即读取
+DocumentRead(file_path="uploads/user123/data.xlsx")
+
+# ❌ 错误做法：询问用户"是否需要我读取这个文件？"
+```
+
+### 第二步：分析内容与本体的相关性
+
+读取文件后，**自主判断**该文件是否与已有本体相关：
+
+**需要更新本体的情况**（文件包含业务元数据）：
+| 文件内容类型 | 示例 | 更新操作 |
+|------------|------|---------|
+| 枚举/状态码映射 | 状态码对照表 | OntologyUpdateTool → enum_mapping |
+| 字段业务含义 | 数据字典文档 | OntologyUpdateTool → property_desc |
+| 业务规则 | 会员等级规则、折扣策略 | OntologyUpdateTool → business_logic |
+| 表关系说明 | ER图、关系说明 | OntologyUpdateTool → relationships |
+| 指标定义 | GMV计算公式 | OntologyUpdateTool → metrics |
+
+**不需要更新本体的情况**（文件是待分析数据）：
+| 文件内容类型 | 示例 | 处理方式 |
+|------------|------|---------|
+| 原始业务数据 | 销售明细、订单导出 | 直接分析，生成图表 |
+| 临时查询结果 | 某次筛选的数据 | 回答用户问题即可 |
+| 与数据库无关 | 通用文档、截图 | 拒绝或提示用途不明 |
+
+### 第三步：执行相应操作
+
+```
+判断结果 → 需要更新本体
+├── 有已连接的数据库和本体
+│   └── 调用 OntologyUpdateTool 更新
+└── 没有本体
+    └── 提示用户先构建本体
+
+判断结果 → 不需要更新（原始数据）
+├── 用户有明确的分析需求
+│   └── 直接分析数据，生成图表和洞察
+└── 用户未说明需求
+    └── 主动总结数据概况，询问分析方向
+```
+
+### 示例对话流程
+
+**示例1：用户上传枚举映射表**
+```
+用户: [上传文件: uploads/u123/订单状态.xlsx] 这是订单状态的对照表
+
+AI 内部处理:
+1. 识别到文件路径 → 立即调用 DocumentRead
+2. 读取内容: "0-待支付, 1-已支付, 2-已发货..."
+3. 判断: 这是枚举映射，与订单表的 status 字段相关
+4. 检查: 已有 yanfa 数据库的本体
+5. 执行: OntologyUpdateTool(change_type="add_enum_value", ...)
+
+AI 回复:
+我已读取您上传的订单状态对照表，发现以下状态码映射：
+- 0: 待支付
+- 1: 已支付
+- 2: 已发货
+...
+已将这些枚举值更新到本体中订单表的 status 字段。✅
+```
+
+**示例2：用户上传待分析数据**
+```
+用户: [上传文件: uploads/u123/2024Q3销售.csv] 帮我分析这份数据
+
+AI 内部处理:
+1. 识别到文件路径 → 立即调用 DocumentRead
+2. 读取内容: 列名 [订单号, 金额, 日期, 客户...]，10000 行数据
+3. 判断: 这是原始业务数据，不是元数据
+4. 用户有分析需求 → 开始数据分析
+
+AI 回复:
+我已读取您的 2024Q3 销售数据，概况如下：
+- 共 10,000 条记录
+- 时间范围: 2024-07-01 ~ 2024-09-30
+- 总销售额: ¥1,234,567
+
+让我为您生成销售趋势图...
+[调用 ChartGenerator]
+```
+
+**示例3：不确定的情况**
+```
+用户: [上传文件: uploads/u123/业务说明.docx]
+
+AI 内部处理:
+1. 识别到文件路径 → 立即调用 DocumentRead
+2. 读取内容: 混合内容，既有数据字典也有业务数据示例
+3. 判断: 不确定是元数据还是数据
+
+AI 回复:
+我已读取您上传的"业务说明.docx"，发现文档包含：
+1. 数据字典部分（第1-3页）：字段定义和枚举映射
+2. 数据示例部分（第4-6页）：实际业务数据样本
+
+请问您希望我：
+A) 将数据字典部分纳入业务本体？
+B) 分析数据示例部分？
+C) 两者都做？
+```
+
+### 重要规则
+
+- ✅ **收到文件路径必须立即读取**，不要询问"要不要读取"
+- ✅ 读取后**自主判断**相关性，不要反复询问用户
+- ✅ 判断不确定时才询问用户
+- ❌ 不要忽略用户上传的文件
+- ❌ 不要只输出"已收到文件"而不读取内容
 
 和业务不相干的问题，请直接拒绝。"""
 
@@ -522,11 +679,17 @@ OntologyUncertaintyResolver({{{{
         # Check schema cache
         schema_dir = Path(schema_path)
         if schema_dir.exists():
-            cached_schemas = list(schema_dir.glob("*/schema_latest.json"))
+            # 支持两种路径结构：
+            # 1. {schema_path}/{user_id}/{conn_name}/schema_latest.json (多租户)
+            # 2. {schema_path}/{conn_name}/schema_latest.json (旧版/单用户)
+            cached_schemas = list(schema_dir.glob("*/schema_latest.json")) + list(
+                schema_dir.glob("*/*/schema_latest.json")
+            )
             context_parts.append(f"数据库结构文件所在路径: {schema_path}")
             if cached_schemas:
                 context_parts.append("## 已缓存的数据库Schema")
                 for schema_file in cached_schemas:
+                    # 提取 connection_name（可能是 parent.name 或 parent.parent.name）
                     conn_name = schema_file.parent.name
                     context_parts.append(f"- {conn_name}: {schema_file.absolute()}")
 
@@ -561,10 +724,16 @@ OntologyUncertaintyResolver({{{{
                             )
                         except Exception as e:
                             context_parts.append(f"  (领域索引加载失败: {e})")
-        # Check ontology cache
+        # Check ontology cache (v3 优先，回退到 v2)
         ontology_dir = Path(ontology_path)
         if ontology_dir.exists():
-            cached_ontologies = list(ontology_dir.glob("*/ontology_latest.json"))
+            # 支持两种路径结构：
+            # 1. {ontology_path}/{user_id}/{conn_name}/ontology.json (多租户)
+            # 2. {ontology_path}/{conn_name}/ontology.json (旧版/单用户)
+            cached_ontologies = list(ontology_dir.glob("*/ontology.json")) + list(
+                ontology_dir.glob("*/*/ontology.json")
+            )
+
             context_parts.append(f"业务本体文件所在路径: {ontology_path}")
             if cached_ontologies:
                 context_parts.append("\n## 已缓存的业务本体(Ontology)")
@@ -688,6 +857,14 @@ OntologyUncertaintyResolver({{{{
         if chat_history is None:
             chat_history = []
 
+        # 🔑 关键修复：无论 middleware 是否设置，这里都重新设置一次 user_context
+        # 确保工具内部调用 get_current_user_id() 时能获取到正确的值
+        # 即使 middleware 已经设置过，重复设置也是安全的（会覆盖）
+        set_user_context(user_id=user_id, conversation_id=conversation_id, project_id=None)
+        logger.info(
+            f"[ConversationService] Set user_context: user_id={user_id}, conversation_id={conversation_id}"
+        )
+
         try:
             # Reload database connections to ensure we have latest info from DB
             # 每次对话开始时刷新一次,确保获取最新的数据库连接配置
@@ -711,7 +888,10 @@ OntologyUncertaintyResolver({{{{
             logger.info(f"Agent loaded: {agent_config.name}")
 
             # Setup progress tracking
-            progress_queue = asyncio.Queue()
+            # 🔥 使用标准库 queue.Queue（线程安全），因为工具可能在不同线程中运行
+            import queue as thread_queue
+
+            progress_queue = thread_queue.Queue()
 
             async def on_tool_start(tool_name: str, tool_args: dict):
                 """Callback when tool execution starts."""
@@ -753,6 +933,18 @@ OntologyUncertaintyResolver({{{{
             if not api_key:
                 raise ValueError("ANTHROPIC_API_KEY not configured in .kode.json or environment")
 
+            # ✨ 设置 tools 的执行上下文（包含 progress_queue，用于发送进度消息）
+            # 🔥 注意：使用 progress_queue 而非 message_queue，因为 stream_with_progress 读取的是 progress_queue
+            execution_context = {
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "message_queue": progress_queue,  # 工具的进度消息应发送到 progress_queue
+            }
+            for tool in self.tools:
+                if hasattr(tool, "set_execution_context"):
+                    tool.set_execution_context(execution_context)
+            logger.info(f"[ConversationService] Set execution_context for {len(self.tools)} tools")
+
             try:
                 streaming_agent = AnthropicStreamingAgent(
                     api_key=api_key,
@@ -779,7 +971,9 @@ OntologyUncertaintyResolver({{{{
 
             # Stream chunks from agent
             async def stream_with_progress():
-                """Merge agent streaming with progress updates."""
+                """Stream agent responses with progress updates."""
+                import queue as thread_queue
+
                 # 注入动态上下文到 chat_history 头部（仅在首次消息时）
                 enhanced_history = chat_history.copy() if chat_history else []
 
@@ -804,31 +998,40 @@ OntologyUncertaintyResolver({{{{
                     max_iterations=agent_config.max_iterations,
                 )
 
+                # 🔥 简化方案：在每个 chunk 前后检查 progress_queue
                 chunk_count = 0
+
+                def drain_progress_queue():
+                    """清空进度队列并返回所有消息"""
+                    messages = []
+                    while True:
+                        try:
+                            msg = progress_queue.get_nowait()
+                            messages.append(msg)
+                        except thread_queue.Empty:
+                            break
+                    return messages
+
                 async for chunk in agent_stream:
                     chunk_count += 1
                     logger.info(f"[DEBUG] Received chunk #{chunk_count}: type={chunk.get('type')}")
 
-                    # First drain any pending progress updates
-                    while not progress_queue.empty():
-                        try:
-                            progress = progress_queue.get_nowait()
-                            yield progress
-                        except asyncio.QueueEmpty:
-                            break
+                    # 在 yield chunk 之前，先 yield 所有 progress 消息
+                    for progress in drain_progress_queue():
+                        logger.info(
+                            f"[DEBUG] Yielding progress: {progress.get('content', '')[:50]}"
+                        )
+                        yield progress
 
-                    # Then yield the agent chunk
+                    # 然后 yield agent chunk
                     yield chunk
 
                 logger.info(f"[DEBUG] stream_response completed, total chunks: {chunk_count}")
 
-                # Final drain of any remaining progress updates
-                while not progress_queue.empty():
-                    try:
-                        progress = progress_queue.get_nowait()
-                        yield progress
-                    except asyncio.QueueEmpty:
-                        break
+                # 最终清空进度队列
+                for progress in drain_progress_queue():
+                    logger.info(f"[DEBUG] Final progress: {progress.get('content', '')[:50]}")
+                    yield progress
 
             # Stream all chunks
             async for chunk in stream_with_progress():
@@ -845,6 +1048,11 @@ OntologyUncertaintyResolver({{{{
                 "content": f"Error: {str(e)}",
                 "metadata": {"error": str(e), "error_type": type(e).__name__},
             }
+
+        finally:
+            # ✅ 清理用户上下文
+            clear_user_context()
+            logger.debug(f"User context cleared for conversation {conversation_id}")
 
     async def get_conversation_history(self, conversation_id: str, user_id: str) -> List[Dict]:
         """

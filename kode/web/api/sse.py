@@ -55,6 +55,81 @@ def serialize_chunk(chunk: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ============================================================
+# Helper function to sanitize tool_use/tool_result pairs
+# ============================================================
+def _sanitize_tool_pairs(chat_history: list) -> list:
+    """
+    清理 chat_history 中孤立的 tool_use（没有对应 tool_result 的）。
+
+    Anthropic API 要求：每个 tool_use 块后面必须紧跟一个包含对应 tool_result 的消息。
+    此函数会遍历消息列表，移除所有没有对应 tool_result 的 tool_use 块。
+
+    Args:
+        chat_history: Anthropic API 格式的消息列表
+
+    Returns:
+        清理后的消息列表
+    """
+    if not chat_history:
+        return chat_history
+
+    logger.info(f"[Sanitize] Starting sanitization of {len(chat_history)} messages")
+
+    # 收集所有 tool_result 的 tool_use_id
+    tool_result_ids = set()
+    for msg in chat_history:
+        if msg.get("role") == "user":
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        tool_use_id = block.get("tool_use_id")
+                        if tool_use_id:
+                            tool_result_ids.add(tool_use_id)
+
+    logger.info(f"[Sanitize] Found {len(tool_result_ids)} tool_result ids: {tool_result_ids}")
+
+    # 过滤 assistant 消息中的孤立 tool_use
+    sanitized = []
+    for msg in chat_history:
+        if msg.get("role") == "assistant":
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                # 过滤掉没有对应 tool_result 的 tool_use
+                filtered_content = []
+                removed_count = 0
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        tool_use_id = block.get("id")
+                        if tool_use_id not in tool_result_ids:
+                            logger.warning(
+                                f"[Sanitize] Removing orphaned tool_use: {tool_use_id}"
+                            )
+                            removed_count += 1
+                            continue  # 跳过孤立的 tool_use
+                    filtered_content.append(block)
+
+                if removed_count > 0:
+                    logger.warning(
+                        f"[Sanitize] Removed {removed_count} orphaned tool_use blocks from assistant message"
+                    )
+
+                # 只有当过滤后还有内容时才添加消息
+                if filtered_content:
+                    sanitized.append({"role": "assistant", "content": filtered_content})
+                else:
+                    logger.warning(
+                        f"[Sanitize] Skipping empty assistant message after removing orphaned tool_uses"
+                    )
+            else:
+                sanitized.append(msg)
+        else:
+            sanitized.append(msg)
+
+    return sanitized
+
+
+# ============================================================
 # Global session manager for pending user inputs
 # ============================================================
 class UserInputSessionManager:
@@ -325,6 +400,9 @@ async def event_generator(
         all_messages = []  # List of Message objects to save (in order)
         message_sequence = user_message_sequence  # 从 user 消息的序列号开始递增
 
+        # ⚠️ 标志：消息是否已经保存到数据库（避免重复保存）
+        messages_saved = False
+
         # 将cancel_event和message_queue传递给conversation_service
         async for chunk in conversation_service.execute_task_streaming(
             task=task_content,
@@ -335,6 +413,20 @@ async def event_generator(
             cancel_event=cancel_event,  # ← 传入取消事件
             message_queue=message_queue,  # ← 传入消息队列
         ):
+            # 🛑 在 SSE 层也检查取消状态（双重保险）
+            if cancel_event.is_set():
+                logger.info(f"[SSE] Cancel detected in SSE loop, stopping stream")
+                cancel_data = json.dumps(
+                    {
+                        "type": "cancelled",
+                        "content": "用户已终止响应",
+                        "metadata": {"reason": "user_cancelled"},
+                    },
+                    ensure_ascii=False,
+                )
+                yield f"data: {cancel_data}\n\n"
+                break
+
             # Format as SSE event
             chunk_type = chunk.get("type")
             logger.info(f"[SSE] Sending chunk: type={chunk_type}")
@@ -580,6 +672,10 @@ async def event_generator(
                 except json.JSONDecodeError:
                     logger.error(f"[SSE] Chart content is string but not valid JSON")
 
+            # 📡 progress 消息：只转发到前端，不保存到数据库（临时进度提示）
+            if chunk_type == "progress":
+                logger.info(f"[SSE] Forwarding progress: {chunk.get('content', '')[:100]}")
+
             event_data = json.dumps(serialized_chunk, ensure_ascii=False)
             yield f"data: {event_data}\n\n"
 
@@ -621,28 +717,24 @@ async def event_generator(
             await db.commit()
 
             # ✨ 更新使用量统计（使用真实的 Anthropic API token 数据）
-            actual_tokens = total_input_tokens + total_output_tokens
+            # ⚠️ 关键说明：根据 Anthropic 官方文档 https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+            # input_tokens = 未被缓存的输入 tokens（cache breakpoint 之后的部分）
+            # total_input_tokens = cache_read_input_tokens + cache_creation_input_tokens + input_tokens
+            regular_input_tokens = total_input_tokens  # 未被缓存的常规输入
+            true_total_input_tokens = total_input_tokens + total_cache_creation_tokens + total_cache_read_tokens  # 真实总输入
+            actual_tokens = true_total_input_tokens + total_output_tokens
 
             # 💰 计算真实成本（Anthropic 定价，< 200K tokens）
             # 参考: https://www.anthropic.com/pricing
-            regular_input_tokens = (
-                total_input_tokens - total_cache_creation_tokens - total_cache_read_tokens
-            )
             regular_input_cost = regular_input_tokens * 3 / 1_000_000  # $3/MTok
-            cache_creation_cost = (
-                total_cache_creation_tokens * 3.75 / 1_000_000
-            )  # $3.75/MTok (1.25×)
+            cache_creation_cost = total_cache_creation_tokens * 3.75 / 1_000_000  # $3.75/MTok (1.25×)
             cache_read_cost = total_cache_read_tokens * 0.30 / 1_000_000  # $0.30/MTok (节省90%)
             output_cost = total_output_tokens * 15 / 1_000_000  # $15/MTok
 
             actual_cost = regular_input_cost + cache_creation_cost + cache_read_cost + output_cost
 
             # 计算无缓存的成本（对比）
-            no_cache_input_cost = (
-                (regular_input_tokens + total_cache_creation_tokens + total_cache_read_tokens)
-                * 3
-                / 1_000_000
-            )
+            no_cache_input_cost = true_total_input_tokens * 3 / 1_000_000
             no_cache_cost = no_cache_input_cost + output_cost
 
             # 节省的成本和百分比
@@ -650,12 +742,31 @@ async def event_generator(
             savings_percentage = (cost_savings / no_cache_cost * 100) if no_cache_cost > 0 else 0
 
             try:
+                # ✅ 验证：actual_tokens 是完整计数（常规 + 缓存 + 输出）
+                if actual_tokens == 0:
+                    logger.warning(
+                        f"[Token Billing WARNING] Billing 0 tokens! This may indicate:\n"
+                        f"  1. Stream ended before first API response (network issue)\n"
+                        f"  2. Token counting logic error\n"
+                        f"  Conversation: {conversation_id}"
+                    )
+                else:
+                    logger.info(
+                        f"[Token Billing] Billable tokens: {actual_tokens:,} "
+                        f"(regular_input={regular_input_tokens:,}, "
+                        f"cache_creation={total_cache_creation_tokens:,}, "
+                        f"cache_read={total_cache_read_tokens:,}, "
+                        f"output={total_output_tokens:,})"
+                    )
+
                 await BillingService.increment_usage(
                     db=db,
                     user_id=user_id,
-                    token_count=actual_tokens,
+                    token_count=actual_tokens,  # ✅ 完整计数
                     database_query_count=0,
                 )
+
+                logger.info(f"[Token Billing] Successfully updated usage for user {user_id}")
 
                 # 详细的开发日志（包含成本信息）
                 logger.info(
@@ -668,7 +779,7 @@ async def event_generator(
                     f"  缓存读取:   {total_cache_read_tokens:>8,} tokens × $0.30/MTok  = ${cache_read_cost:>8.6f}\n"
                     f"  输出生成:   {total_output_tokens:>8,} tokens × $15.00/MTok = ${output_cost:>8.6f}\n"
                     f"  ─────────────────────────────────────────────────────────────\n"
-                    f"  总输入:     {total_input_tokens:>8,} tokens\n"
+                    f"  总输入:     {true_total_input_tokens:>8,} tokens (常规 + 缓存创建 + 缓存读取)\n"
                     f"  总输出:     {total_output_tokens:>8,} tokens\n"
                     f"  总计:       {actual_tokens:>8,} tokens\n"
                     f"\n"
@@ -692,8 +803,67 @@ async def event_generator(
                 )
 
             except Exception as e:
-                # 使用量更新失败不应该影响主流程
-                logger.warning(f"[SSE] Failed to update usage: {e}")
+                # 使用量更新失败不应该影响主流程，但需要详细记录
+                logger.error(
+                    f"[Token Billing ERROR] Failed to update usage!\n"
+                    f"  User: {user_id}\n"
+                    f"  Conversation: {conversation_id}\n"
+                    f"  Attempted to bill: {actual_tokens:,} tokens\n"
+                    f"  Error: {str(e)}\n"
+                    f"  ⚠️ User will NOT be charged for this conversation!",
+                    exc_info=True
+                )
+
+        # 标记消息已保存
+        messages_saved = True
+
+        # ✅ 在 done 之前发送完整的 token 统计和成本分析
+        # 这样前端可以直接使用,不需要再查询数据库
+
+        # ⚠️ 关键说明：根据 Anthropic 官方文档 https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+        # input_tokens = 未被缓存的输入 tokens（cache breakpoint 之后的部分）
+        # total_input_tokens = cache_read_input_tokens + cache_creation_input_tokens + input_tokens
+        regular_input_tokens = total_input_tokens  # 未被缓存的常规输入
+        true_total_input_tokens = total_input_tokens + total_cache_creation_tokens + total_cache_read_tokens  # 真实总输入
+
+        # 成本计算（Anthropic 定价 < 200K tokens）
+        regular_input_cost = regular_input_tokens * 3 / 1_000_000  # $3/MTok
+        cache_creation_cost = total_cache_creation_tokens * 3.75 / 1_000_000  # $3.75/MTok (1.25×)
+        cache_read_cost = total_cache_read_tokens * 0.30 / 1_000_000  # $0.30/MTok (节省90%)
+        output_cost = total_output_tokens * 15 / 1_000_000  # $15/MTok
+
+        actual_cost = regular_input_cost + cache_creation_cost + cache_read_cost + output_cost
+
+        # 无缓存成本对比
+        no_cache_input_cost = true_total_input_tokens * 3 / 1_000_000
+        no_cache_cost = no_cache_input_cost + output_cost
+        cache_savings = no_cache_cost - actual_cost
+
+        final_token_stats = {
+            "type": "final_token_stats",
+            "content": "",
+            "metadata": {
+                "total_input_tokens": true_total_input_tokens,  # ✅ 真实总输入
+                "total_output_tokens": total_output_tokens,
+                "total_tokens": true_total_input_tokens + total_output_tokens,
+                "cache_creation_tokens": total_cache_creation_tokens,
+                "cache_read_tokens": total_cache_read_tokens,
+                "regular_input_tokens": regular_input_tokens,  # ✅ 常规输入（非缓存）
+                # 成本分析（USD）
+                "cost_breakdown": {
+                    "regular_input_cost": regular_input_cost,
+                    "cache_creation_cost": cache_creation_cost,
+                    "cache_read_cost": cache_read_cost,
+                    "output_cost": output_cost,
+                },
+                "total_cost": actual_cost,
+                "cache_savings": cache_savings,
+                "savings_percentage": (cache_savings / no_cache_cost * 100) if no_cache_cost > 0 else 0,
+                "iteration_count": len(api_traces),
+            }
+        }
+        yield f"data: {json.dumps(final_token_stats, ensure_ascii=False)}\n\n"
+        logger.info(f"[SSE] Sent final_token_stats to frontend: {true_total_input_tokens + total_output_tokens:,} tokens")
 
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done', 'content': '', 'metadata': {}}, ensure_ascii=False)}\n\n"
@@ -728,6 +898,59 @@ async def event_generator(
         yield f"data: {error_data}\n\n"
 
     finally:
+        # ⚠️ CRITICAL: 确保即使出错，也保存已完成的消息到数据库
+        # 这样下次对话时能看到之前的上下文，不会丢失进度
+        from kode.database.session import async_session_maker
+
+        # 检查变量是否存在（可能在初始化阶段就失败了）
+        has_messages = 'all_messages' in locals() and all_messages
+        has_tokens = 'total_input_tokens' in locals() and (total_input_tokens > 0 or total_output_tokens > 0)
+        already_saved = 'messages_saved' in locals() and messages_saved
+
+        # 只在消息未保存且有数据时才保存（避免重复保存）
+        if not already_saved and (has_messages or has_tokens):
+            try:
+                async with async_session_maker() as db:
+                    # 保存所有已收集的消息（即使流被中断）
+                    if has_messages:
+                        for msg in all_messages:
+                            db.add(msg)
+                        await db.commit()
+                        logger.info(
+                            f"[SSE Recovery] Saved {len(all_messages)} messages despite interruption"
+                        )
+
+                    # 如果有 token 统计，也保存
+                    if has_tokens:
+                        message_sequence += 1
+
+                        # 构建 metadata（安全处理可能不存在的变量）
+                        final_metadata = {"type": "final", "interrupted": True}
+                        if 'assistant_metadata' in locals():
+                            final_metadata.update(assistant_metadata)
+
+                        # ✅ 修复：所有 token 变量在顶部已初始化为 0，不需要 locals() 检查
+                        # 这样即使在首次迭代前中断，也能保存正确的 0 值而非 None
+                        final_msg = Message(
+                            conversation_id=conversation_id,
+                            role="assistant",
+                            content="",  # 内容为空，只用于记录 token 和 metadata
+                            sequence=message_sequence,
+                            message_metadata=final_metadata,
+                            input_tokens=total_input_tokens,  # 已在 L315 初始化
+                            output_tokens=total_output_tokens,  # 已在 L316 初始化
+                            cache_creation_tokens=total_cache_creation_tokens,  # 已在 L317 初始化
+                            cache_read_tokens=total_cache_read_tokens,  # 已在 L318 初始化
+                        )
+                        db.add(final_msg)
+                        await db.commit()
+                        logger.info(
+                            f"[SSE Recovery] Saved token stats despite interruption"
+                        )
+            except Exception as save_error:
+                # 保存失败不应该阻塞会话清理
+                logger.error(f"[SSE Recovery] Failed to save messages during cleanup: {save_error}")
+
         # 清理会话
         streaming_session_manager.remove_session(conversation_id)
         logger.info(f"[SSE] Removed streaming session for conversation {conversation_id}")
@@ -765,15 +988,22 @@ async def stream_chat(
     # 检查用户配额
     await check_user_quota(current_user.id, db)
 
-    # Verify conversation exists
+    # Verify conversation exists (如果不存在，自动创建)
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalar_one_or_none()
 
     if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found",
+        # 🛡️ 容错：自动创建会话（避免前端缓存导致的外键错误）
+        logger.warning(f"Conversation {conversation_id} not found, creating new one")
+        conversation = Conversation(
+            id=conversation_id,
+            title="New chat",
+            user_id=current_user.id,  # 关联当前用户
         )
+        db.add(conversation)
+        await db.commit()
+        await db.refresh(conversation)
+        logger.info(f"Auto-created conversation {conversation_id} for user {current_user.id}")
 
     if not task:
         raise HTTPException(
@@ -791,40 +1021,49 @@ async def stream_chat(
 
     # Convert to Anthropic API chat history format
     # 需要重建包含 tool_use 和 tool_result 的完整消息流
-    # Convert to Anthropic API chat history format
-    # 需要重建包含 tool_use 和 tool_result 的完整消息流
     chat_history = []
     current_assistant_content = []  # List of blocks for current assistant message
+    pending_tool_use_ids = set()  # Track tool_use IDs waiting for results
 
     for msg in messages:
         msg_type = msg.message_metadata.get("type") if msg.message_metadata else None
 
         # 1. Handle Tool Result (User Role)
         if msg_type == "tool_result":
-            # Flush pending assistant content first
+            tool_use_id = msg.message_metadata.get("tool_use_id")
+
+            # ✅ 先检查这个 tool_result 是否有对应的 tool_use
+            if not tool_use_id or not isinstance(tool_use_id, str):
+                logger.warning(
+                    f"Invalid tool_use_id in tool_result message {msg.id}: {tool_use_id}, skipping"
+                )
+                continue
+
+            if tool_use_id not in pending_tool_use_ids:
+                logger.warning(
+                    f"Orphaned tool_result (no matching tool_use): {tool_use_id}, skipping"
+                )
+                continue
+
+            # ✅ 只有当 tool_result 有效时，才 flush assistant content
             if current_assistant_content:
                 chat_history.append({"role": "assistant", "content": current_assistant_content})
                 current_assistant_content = []
 
-            # Add tool result message
-            tool_use_id = msg.message_metadata.get("tool_use_id")
-            if tool_use_id and isinstance(tool_use_id, str):
-                chat_history.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": tool_use_id,
-                                "content": msg.content or "",
-                            }
-                        ],
-                    }
-                )
-            else:
-                logger.warning(
-                    f"Invalid tool_use_id in tool_result message {msg.id}: {tool_use_id}, skipping"
-                )
+            # Add tool result message (已验证 tool_use_id 有效)
+            chat_history.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": msg.content or "",
+                        }
+                    ],
+                }
+            )
+            pending_tool_use_ids.discard(tool_use_id)  # 标记为已匹配
 
         # 2. Handle Assistant Messages (Text or Tool Use)
         elif msg.role == "assistant":
@@ -840,6 +1079,7 @@ async def stream_chat(
                             "input": msg.message_metadata.get("tool_args", {}),
                         }
                     )
+                    pending_tool_use_ids.add(tool_use_id)  # 记录等待 result
                 else:
                     logger.warning(
                         f"Invalid tool_use_id in message {msg.id}: {tool_use_id}, skipping tool_use block"
@@ -856,19 +1096,45 @@ async def stream_chat(
         elif msg.role == "user":
             # Flush pending assistant content first
             if current_assistant_content:
-                chat_history.append({"role": "assistant", "content": current_assistant_content})
-                current_assistant_content = []
+                # ✅ 验证：如果有未匹配的 tool_use，不能 flush（会导致 API 错误）
+                if pending_tool_use_ids:
+                    logger.warning(
+                        f"Skipping assistant message with unmatched tool_uses: {pending_tool_use_ids}"
+                    )
+                    current_assistant_content = []
+                    pending_tool_use_ids.clear()
+                else:
+                    chat_history.append({"role": "assistant", "content": current_assistant_content})
+                    current_assistant_content = []
 
             if msg.content:
                 chat_history.append({"role": "user", "content": msg.content})
 
-    # Flush remaining assistant content
+    # Flush remaining assistant content (仅在没有孤立 tool_use 时)
     if current_assistant_content:
-        chat_history.append({"role": "assistant", "content": current_assistant_content})
+        if pending_tool_use_ids:
+            logger.warning(
+                f"Discarding final assistant message with unmatched tool_uses: {pending_tool_use_ids}"
+            )
+        else:
+            chat_history.append({"role": "assistant", "content": current_assistant_content})
 
+    # ✅ 最终验证：清理所有孤立的 tool_use（强制保证 API 格式正确）
+    chat_history = _sanitize_tool_pairs(chat_history)
+
+    # 🔍 调试日志：打印完整的消息历史结构
     logger.info(
         f"Loaded {len(messages)} raw messages, converted to {len(chat_history)} Anthropic API messages"
     )
+    for i, msg in enumerate(chat_history):
+        role = msg.get("role")
+        content = msg.get("content", [])
+        if isinstance(content, list):
+            types = [b.get("type") if isinstance(b, dict) else "text" for b in content]
+            ids = [b.get("id") or b.get("tool_use_id") for b in content if isinstance(b, dict)]
+            logger.info(f"  [{i}] {role}: types={types}, ids={ids}")
+        else:
+            logger.info(f"  [{i}] {role}: content='{str(content)[:50]}...'")
 
     # Create conversation service
     conversation_service = AsyncConversationService()
@@ -941,15 +1207,22 @@ async def send_message_sse(
 
     Returns SSE stream same as GET endpoint.
     """
-    # Verify conversation exists
+    # Verify conversation exists (如果不存在，自动创建)
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalar_one_or_none()
 
     if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversation {conversation_id} not found",
+        # 🛡️ 容错：自动创建会话（避免前端缓存导致的外键错误）
+        logger.warning(f"Conversation {conversation_id} not found, creating new one (POST)")
+        conversation = Conversation(
+            id=conversation_id,
+            title="New chat",
+            user_id=current_user.id,  # 关联当前用户
         )
+        db.add(conversation)
+        await db.commit()
+        await db.refresh(conversation)
+        logger.info(f"Auto-created conversation {conversation_id} for user {current_user.id} (POST)")
 
     if not task:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task is required")
@@ -959,7 +1232,12 @@ async def send_message_sse(
 
     # Return SSE stream
     return StreamingResponse(
-        event_generator(conversation_id, task, conversation_service),
+        event_generator(
+            conversation_id,
+            task,
+            conversation_service,
+            current_user.id,  # 🔑 修复：传入用户ID
+        ),
         media_type="text/event-stream; charset=utf-8",
         headers={
             "Cache-Control": "no-cache",
@@ -973,8 +1251,8 @@ async def send_message_sse(
 async def submit_user_response(
     conversation_id: str,
     response: UserInputResponse = Body(...),
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     接收用户对交互式提问的响应。
@@ -1018,6 +1296,8 @@ async def submit_user_response(
         )
 
     # TODO: Verify user owns this conversation (add owner_id to Conversation model)
+
+    # ✅ user_id 上下文由 UserContextMiddleware 自动设置（无需手动调用 set_user_context）
 
     # Submit response to session manager
     logger.info(f"[User Response] Received for conversation {conversation_id}: {response.dict()}")
@@ -1163,3 +1443,180 @@ async def append_message_to_stream(
         "message": "消息已追加到streaming会话",
         "conversation_id": conversation_id,
     }
+
+
+# ============================================================
+# SSE Heartbeat Endpoint (保持连接状态)
+# ============================================================
+
+# 全局心跳会话管理
+class HeartbeatSessionManager:
+    """
+    管理 SSE 心跳连接。
+
+    支持同一用户多端同时连接（多标签页/多设备）：
+    1. 验证连接是否存活
+    2. 防止代理/负载均衡器断开空闲连接
+    3. 前端据此显示"已连接"状态
+    """
+
+    def __init__(self):
+        # user_id -> List[session_id -> cancel_event]
+        # 支持同一用户多个并发连接
+        self._sessions: Dict[str, Dict[str, asyncio.Event]] = {}
+
+    def register(self, user_id: str, session_id: str) -> asyncio.Event:
+        """注册心跳会话，返回取消事件（支持多端）"""
+        if user_id not in self._sessions:
+            self._sessions[user_id] = {}
+
+        cancel_event = asyncio.Event()
+        self._sessions[user_id][session_id] = cancel_event
+        logger.info(f"[Heartbeat] Registered session {session_id} for user {user_id} (total: {len(self._sessions[user_id])})")
+        return cancel_event
+
+    def cancel(self, user_id: str, session_id: str):
+        """取消用户的特定心跳会话"""
+        if user_id in self._sessions and session_id in self._sessions[user_id]:
+            self._sessions[user_id][session_id].set()
+            del self._sessions[user_id][session_id]
+            logger.info(f"[Heartbeat] Cancelled session {session_id} for user {user_id} (remaining: {len(self._sessions.get(user_id, {}))})")
+
+            # 如果该用户没有剩余连接，清理用户条目
+            if not self._sessions[user_id]:
+                del self._sessions[user_id]
+
+    def is_connected(self, user_id: str) -> bool:
+        """检查用户是否有活跃的心跳连接"""
+        if user_id not in self._sessions:
+            return False
+        # 至少有一个未取消的连接
+        return any(not event.is_set() for event in self._sessions[user_id].values())
+
+
+heartbeat_session_manager = HeartbeatSessionManager()
+
+
+async def heartbeat_generator(
+    user_id: str,
+    session_id: str,
+    cancel_event: asyncio.Event,
+    interval: int = 30,
+) -> AsyncGenerator[str, None]:
+    """
+    生成心跳事件流。
+
+    每 interval 秒发送一次心跳，保持连接存活。
+    """
+    import time
+    from kode.core.security import create_access_token
+    from datetime import timedelta
+
+    try:
+        # 发送初始连接成功事件
+        connect_data = json.dumps({
+            "type": "connected",
+            "content": "",
+            "metadata": {
+                "user_id": user_id,
+                "session_id": session_id,
+                "timestamp": time.time()
+            }
+        }, ensure_ascii=False)
+        yield f"data: {connect_data}\n\n"
+        logger.info(f"[Heartbeat] Started session {session_id} for user {user_id}")
+
+        while not cancel_event.is_set():
+            # 等待 interval 秒或被取消
+            try:
+                await asyncio.wait_for(cancel_event.wait(), timeout=interval)
+                # 如果 wait 返回（被取消），退出循环
+                break
+            except asyncio.TimeoutError:
+                # 超时说明没被取消，发送心跳（带新 token）
+                # 生成新的 access token（延长有效期）
+                new_token = create_access_token(
+                    data={"sub": user_id},
+                    expires_delta=timedelta(hours=2)  # 心跳期间延长到 2 小时
+                )
+
+                heartbeat_data = json.dumps({
+                    "type": "heartbeat",
+                    "content": "",
+                    "metadata": {
+                        "session_id": session_id,
+                        "timestamp": time.time(),
+                        "new_token": new_token  # 前端应更新 token
+                    }
+                }, ensure_ascii=False)
+                yield f"data: {heartbeat_data}\n\n"
+
+    except asyncio.CancelledError:
+        logger.info(f"[Heartbeat] Cancelled session {session_id} for user {user_id}")
+    except Exception as e:
+        logger.error(f"[Heartbeat] Error in session {session_id} for user {user_id}: {e}")
+    finally:
+        heartbeat_session_manager.cancel(user_id, session_id)
+        # 发送断开事件
+        disconnect_data = json.dumps({
+            "type": "disconnected",
+            "content": "",
+            "metadata": {
+                "user_id": user_id,
+                "session_id": session_id
+            }
+        }, ensure_ascii=False)
+        yield f"data: {disconnect_data}\n\n"
+        logger.info(f"[Heartbeat] Ended session {session_id} for user {user_id}")
+
+
+@router.get("/heartbeat")
+async def sse_heartbeat(
+    current_user: User = Depends(get_user_from_token_or_header),
+):
+    """
+    SSE 心跳端点 - 维持长连接状态（支持多端同时连接）。
+
+    前端应在登录后立即建立此连接，用于：
+    1. 显示"已连接"状态
+    2. 每 30 秒接收心跳，保持连接存活
+    3. 检测网络断开
+
+    **支持多端登录**:
+    - 同一账号可以从多个标签页/设备同时连接
+    - 每个连接都有独立的 session_id
+    - 关闭一个标签不影响其他标签
+
+    **Usage:**
+    ```javascript
+    const eventSource = new EventSource('/api/sse/heartbeat?token=xxx')
+    eventSource.onmessage = (e) => {
+      const data = JSON.parse(e.data)
+      if (data.type === 'heartbeat') {
+        // 更新最后心跳时间
+      }
+    }
+    ```
+
+    **Events:**
+    - `connected`: 连接建立成功（包含 session_id）
+    - `heartbeat`: 每 30 秒一次（包含新 token）
+    - `disconnected`: 连接断开
+    """
+    import uuid
+
+    # 生成唯一 session_id（用于区分多端连接）
+    session_id = str(uuid.uuid4())
+
+    # 注册心跳会话（支持同一用户多个并发连接）
+    cancel_event = heartbeat_session_manager.register(current_user.id, session_id)
+
+    return StreamingResponse(
+        heartbeat_generator(current_user.id, session_id, cancel_event),
+        media_type="text/event-stream; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

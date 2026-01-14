@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
+from kode.utils.context import get_current_user_id
 from kode.utils.logger import setup_logger
 from kode.exceptions import UserInputRequired
 from kode.utils.path_utils import get_safe_connection_path
@@ -116,9 +117,23 @@ class UncertaintyQAManager(KodeTool):
         logger.info("[UncertaintyQAManager] Waiting for user to submit batch answers...")
         await self._batch_response_event.wait()
 
+        # 🔥 检查用户是否选择了"稍后回答"
+        answer_data = self._batch_response_data.get("answer", {})
+        if isinstance(answer_data, dict) and answer_data.get("deferred"):
+            logger.info("[UncertaintyQAManager] User chose to defer answering questions")
+            return json.dumps(
+                {
+                    "status": "deferred",
+                    "message": "用户选择稍后回答这些问题。您可以继续其他操作，稍后再调用此工具让用户回答。",
+                    "remaining_high_priority": len(answer_data.get("question_ids", [])),
+                    "can_build_ontology": False,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+
         # 🔥 修复：从 response_data 中正确提取 answers
         # response_data 格式: {"answer": {"connection_name": "...", "answers": {...}}, "question_type": "batch_form"}
-        answer_data = self._batch_response_data.get("answer", {})
         if isinstance(answer_data, dict):
             answers = answer_data.get("answers", {})
         else:
@@ -254,11 +269,12 @@ class UncertaintyQAManager(KodeTool):
             )
 
     def _get_domains_dir(self, connection_name: str) -> Path:
-        """获取领域文件所在目录"""
+        """获取领域文件所在目录 (with user isolation)"""
         config = ConfigManager()
         schema_path = config.get("storage.schema_path", "./schema_store")
+        user_id = get_current_user_id()
         safe_conn_name = get_safe_connection_path(connection_name)
-        return Path(schema_path) / safe_conn_name / "domains"
+        return Path(schema_path) / user_id / safe_conn_name / "domains"
 
     def _load_all_domain_files(self, domains_dir: Path) -> List[Dict[str, Any]]:
         """加载所有领域文件的数据"""
@@ -587,6 +603,7 @@ class UncertaintyQAManager(KodeTool):
             options=grouped_result,  # 将分组后的问题列表传递给前端
             context=f"共 {len(high_uncertainties)} 个高优先级问题需要回答",
             tool_instance=self,  # 传递工具实例引用
+            allow_defer=True,  # 允许用户选择"稍后回答"
         )
 
     def _batch_record_answers(self, domains_dir: Path, batch_answers: Dict[str, str]) -> str:

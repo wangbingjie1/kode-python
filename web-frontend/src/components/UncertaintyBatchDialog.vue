@@ -172,7 +172,7 @@ watch(() => props.visible, (newVal) => {
   }
 })
 
-function handleClose() {
+async function handleClose() {
   if (isSubmitting.value) {
     notification.warning('提示', '正在提交中，请稍候...')
     return
@@ -182,6 +182,28 @@ function handleClose() {
     if (!confirm(`你已经回答了 ${answeredCount.value} 个问题，确定要关闭吗？已填写的内容将丢失。`)) {
       return
     }
+  }
+
+  // 收集所有问题的 ID
+  const questionIds: string[] = []
+  props.data?.groups?.forEach((group) => {
+    group.questions?.forEach((q) => {
+      questionIds.push(q.id)
+    })
+  })
+
+  // 提交 deferred 状态，让 Agent 知道用户选择稍后回答
+  try {
+    console.log('[UncertaintyBatchDialog] User chose to defer, submitting deferred status')
+    await chatStore.submitUserResponse({
+      deferred: true,
+      question_ids: questionIds,
+      connection_name: props.data?.connection_name || props.connectionName
+    })
+    notification.info('已延后', '您可以稍后再回答这些问题')
+  } catch (error: any) {
+    console.error('[UncertaintyBatchDialog] Failed to submit deferred status:', error)
+    // 即使提交失败也关闭对话框
   }
 
   emit('update:visible', false)
@@ -209,15 +231,15 @@ async function handleSubmit() {
   })
 
   const unansweredCount = allQuestions.filter(q => !answers.value[q.id]?.trim()).length
-  
+
   // 移除 confirm 确认框，直接提交
   // 用户点击提交按钮即表示确认提交当前已填写的内容
-  
+
   isSubmitting.value = true
 
   try {
     console.log('[UncertaintyBatchDialog] Submitting answers:', answers.value)
-    
+
     // 使用 chatStore 的 submitUserResponse 方法
     // 传递 connection_name 和 answers
     await chatStore.submitUserResponse({

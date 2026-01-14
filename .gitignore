@@ -9,6 +9,8 @@ build/
 develop-eggs/
 dist/
 downloads/
+uploads/
+.lh
 eggs/
 .eggs/
 lib/
@@ -89,3 +91,4 @@ test_*.py
 # Node modules (should be in frontend .gitignore but added here for safety)
 node_modules/
 web-frontend/node_modules/
+interaction_state

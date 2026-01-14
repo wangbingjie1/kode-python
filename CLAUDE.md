@@ -1,14 +1,23 @@
 # CLAUDE.md
-必须中文回复和思考，第一性原理解决根本问题，像一个老程序员一样写代码，比如Linux，只给最靠谱的建议和方案，不确定不推荐，不要说废话，不要生成说明文档，我不会看你文档的。生成的脚本和代码，要自己先测试通过，再告诉用户，用户有选择困难症，你可以向他提问，但不要给他选项，我不要你的速度，我要你的质量
-doc目录 存放你生成的说明文档
-test目录 存放你生成的测试代码
-永远不要写降级方案
-要用批判性思维思考用户的问题和自己的解决方案
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Development Philosophy
 
-Kode 是一个基于 AI 的原生 数据分析开发平台，采用 LangChain 构建。项目已简化为 **Web-Only** 架构，移除了 CLI/REPL 模式，专注于提供 Web API 服务和前端界面。
+**必须遵守的原则：**
+- 必须中文回复和思考
+- 第一性原理解决根本问题，像老程序员一样写代码（参考 Linux 风格）
+- 只给最靠谱的建议和方案，不确定不推荐
+- 不要说废话
+- 生成的脚本和代码必须先自己测试通过再告诉用户
+- 用户有选择困难症：可以提问但不要给选项
+- 质量优先于速度
+- 永远不要写降级方案
+- 用批判性思维思考用户的问题和自己的解决方案
+
+## Project Overview
+现在我们的项目将由demo 阶段进入，正式研发阶段了，前后端要分离了，后续你负责生成代码和接口，前端暂时由我来完成，
+
 
 **核心特性：**
 - 🚀 纯 Web 服务架构，简单易用
@@ -77,7 +86,7 @@ The codebase follows a modular architecture with clear separation of concerns:
    - Database: SQLite (default) with SQLAlchemy ORM + Alembic migrations
    - Models: User, Project, Conversation, Message, DatabaseConnection, Plan, Subscription, Usage
 
-**Frontend Layer** (位于 `../web-frontend/`,父目录)
+**Frontend Layer** (位于 `./web-frontend/`, 同级目录)
    - Vue 3 + TypeScript + Vite
    - `src/components/`: Reusable UI components
      - `NotificationContainer.vue`: Toast notification system
@@ -185,8 +194,8 @@ poetry install
 # 后端服务 (自动清理端口、启动在 http://localhost:8001)
 python run.py
 
-# 前端服务 (在另一个终端，从父目录运行)
-cd ../web-frontend
+# 前端服务 (在另一个终端运行)
+cd web-frontend
 npm run dev
 ```
 
@@ -197,7 +206,7 @@ npm run dev
 python -m kode.web.main
 
 # 前端 (port 3000)
-cd ../web-frontend
+cd web-frontend
 npm run dev
 ```
 
@@ -399,7 +408,7 @@ Agent 启动时会自动获取并注入宿主机系统信息到提示词中：
 - 正确处理文件路径
 - 理解平台特定的限制
 
-详见 [doc/SYSTEM_INFO_FEATURE.md](doc/SYSTEM_INFO_FEATURE.md)
+详细实现见 [kode/services/conversation.py:163-211](kode/services/conversation.py)
 
 ### Subscription & Billing System
 
@@ -435,22 +444,42 @@ Agent 启动时会自动获取并注入宿主机系统信息到提示词中：
 - Webhook 处理支付事件
 - 自动创建/更新/取消订阅
 
-详见 `BILLING_MODULE_README.md` 和 `STRIPE_SETUP_COMPLETE.md`。
+详见 [kode/web/api/billing.py](kode/web/api/billing.py) 和 [kode/services/stripe_service.py](kode/services/stripe_service.py)。
 
 ## Important Notes
 
-- **Virtual Environment**: Prefer using `.venv` directly over Poetry for running services. Startup scripts auto-detect the environment.
-- **LangChain Compatibility**: Project uses LangChain 1.0+ with simplified agent implementation (no AgentExecutor)
-- **Claude Code Compatibility**: Directory structure supports both `.claude/` and `.kode/` for interoperability
-- **API Keys**: Store in `.kode.json` (git-ignored) or `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` environment variables
-- **Chinese Support**: Example agents provided in Chinese ([examples/agents/](examples/agents/))
-- **Permission System**: Tools can require user permission before execution
-- **SSE Communication**: Frontend uses SSE (Server-Sent Events) for streaming responses with automatic reconnection
-- **Port Configuration**: Backend uses 8001, frontend development server uses 3000 (proxied to backend)
-- **Authentication**: OAuth 2.0 with Google login (configured via .env)
-- **Billing System**: Stripe integration for subscription management (Free/Pro/Enterprise plans)
-- **Quota Enforcement**: Middleware enforces token/message limits based on user plan
-- **Database Migrations**: Alembic for schema versioning (migrations/ directory)
+**环境和运行：**
+- **Virtual Environment**: 优先使用 `.venv`，启动脚本会自动检测环境
+- **启动方式**: 推荐使用 `python run.py`，会自动清理端口和处理编码问题
+- **Port Configuration**: 后端 8001，前端开发服务器 3000 (通过 Vite proxy 转发到后端)
+
+**架构和兼容性：**
+- **Single Agent**: 只使用内置的 `data-analyst` agent，移除了多 Agent 加载系统
+- **LangChain**: 使用 LangChain 1.0+，简化的 agent 实现（无 AgentExecutor）
+- **Claude Code Compatibility**: 目录结构同时支持 `.claude/` 和 `.kode/`
+
+**配置和安全：**
+- **API Keys**: 存储在 `.kode.json` (git-ignored) 或使用环境变量 `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`
+- **Environment Variables**: 必需配置在 `.env` 中（OAuth、Stripe、数据库）
+- **Authentication**: OAuth 2.0 Google 登录
+- **Billing**: Stripe 集成，三层订阅计划（Free/Pro/Enterprise）
+- **Quota Enforcement**: QuotaCheckMiddleware 强制执行 token/消息配额
+
+**数据库和缓存：**
+- **Database Migrations**: 使用 Alembic 进行 schema 版本管理（migrations/ 目录）
+- **Schema Cache**: 数据库 schema 自动缓存到 `schema_store/`
+- **Ontology Cache**: 业务本体缓存到 `ontology_store/`
+- **Connection Pool**: DatabaseManager 自动管理连接池
+
+**通信协议：**
+- **SSE (Server-Sent Events)**: 前端使用 SSE 实现流式响应，支持自动重连
+- **Message Types**: `thinking`, `chunk`, `complete`, `error`, `tool_call`, `done`
+- **Permission System**: 工具可以要求用户授权后执行
+
+**中文支持：**
+- 必须使用中文回复和思考
+- 示例 agents 提供中文版本
+- i18n 支持通过 LocaleMiddleware
 
 ## File Structure Overview
 
@@ -497,7 +526,7 @@ kode-python/
 │   │   ├── logger.py
 │   │   └── i18n.py            # 国际化
 │   └── locales/               # i18n 翻译文件
-├── ../web-frontend/           # Vue 前端 (父目录)
+├── web-frontend/              # Vue 前端 (同级目录)
 │   ├── src/
 │   │   ├── components/
 │   │   ├── views/
@@ -611,13 +640,12 @@ Add to `.kode.json`:
 }
 ```
 
-### Documentation
+### Key Implementation Files
 
-- **[Database Tools Guide](docs/DATABASE_TOOLS_GUIDE.md)**: Complete usage guide with examples
-- **[Database Tools Design](docs/database_tools_design.md)**: Architecture and design decisions
-- **[COMMENT Extraction Guide](docs/COMMENT_EXTRACTION.md)**: ✨ NEW - How to extract and use database field comments
-- **[Sample Data Feature](SAMPLE_DATA_FEATURE.md)**: ✨ NEW - Schema 样例数据提取功能详解
-- **[Test Suite](tests/test_database_tools.py)**: Comprehensive tests for all database tools
+- **Database Tools**: [kode/tools/database_tools.py](kode/tools/database_tools.py) - 完整的数据库连接、Schema 提取、查询执行工具
+- **Ontology Tools**: [kode/tools/ontology_tools.py](kode/tools/ontology_tools.py) - 本体构建、存储和搜索
+- **Database Manager**: [kode/services/database_manager.py](kode/services/database_manager.py) - 数据库连接池管理
+- **Test Suite**: [tests/test_database_tools.py](tests/test_database_tools.py) - 数据库工具综合测试
 
 ### Use Cases
 
@@ -634,8 +662,8 @@ Add to `.kode.json`:
 1. 在 `kode/web/api/` 创建或编辑路由文件
 2. 在 `kode/schemas/` 添加 Pydantic request/response schemas
 3. 在 `kode/services/` 实现业务逻辑
-4. 在 `kode/web/main.py` 注册路由
-5. 测试端点并更新文档
+4. 在 `kode/web/main.py` 注册路由 (参考已有的 `app.include_router()` 调用)
+5. 重启服务测试端点 (`python run.py`)
 
 ### 添加新的数据库模型
 
@@ -648,10 +676,10 @@ Add to `.kode.json`:
 ### 添加新的 Tool
 
 1. 在 `kode/tools/` 创建工具文件，继承 `KodeTool`
-2. 定义 Pydantic input schema
-3. 实现 `_run()` 方法
-4. 在 `kode/services/conversation.py` 的 `__init__` 中注册工具
-5. 测试工具执行
+2. 定义 Pydantic input schema (继承自 `BaseModel`)
+3. 实现 `_run()` 方法 (核心逻辑)
+4. 在 `kode/services/conversation.py` 的 `__init__` 中注册工具到 `self.tools` 列表
+5. 重启服务并通过对话测试工具执行
 
 ### 调试 SSE 流式响应
 
@@ -671,13 +699,17 @@ stripe listen --forward-to localhost:8001/api/billing/webhook
 
 ## Test Files & Scripts
 
-- `run.py`: 主启动脚本（推荐）
+**启动脚本：**
+- `run.py`: 主启动脚本（推荐使用，自动处理端口清理和环境设置）
+
+**测试文件：**
 - `test_run.py`: 快速组件验证（无 API 调用）
 - `test_real_api.py`: 完整集成测试（需要 API key）
-- `tests/test_database_tools.py`: 数据库和本体工具测试
-- `test/test_sqlserver_simple.py`: SQL Server 简单连接测试（检查驱动）
-- `test/test_sqlserver_connection.py`: SQL Server 完整功能测试
-- `scripts/`: 辅助脚本（数据初始化、迁移等）
+- `tests/`: pytest 测试目录
+  - `test_database_tools.py`: 数据库和本体工具测试
+
+**辅助脚本：**
+- `scripts/`: 数据初始化、迁移等辅助脚本
 
 ## SQL Server Support Details **[2025-11-21 新增]**
 
@@ -734,12 +766,12 @@ python test/test_sqlserver_connection.py
 
 ### 功能对比
 
-| 功能 | PostgreSQL | MySQL | SQL Server |
-|------|-----------|-------|-----------|
-| Schema 批量提取 | ✅ | ✅ | ✅ |
-| 列注释提取 | ✅ | ✅ | ✅ |
-| 样例数据 | ✅ | ✅ | ✅ |
-| 异步支持 | ✅ | ✅ | ❌ |
-| 本体构建 | ✅ | ✅ | ✅ |
+| 功能            | PostgreSQL | MySQL | SQL Server |
+| --------------- | ---------- | ----- | ---------- |
+| Schema 批量提取 | ✅          | ✅     | ✅          |
+| 列注释提取      | ✅          | ✅     | ✅          |
+| 样例数据        | ✅          | ✅     | ✅          |
+| 异步支持        | ✅          | ✅     | ❌          |
+| 本体构建        | ✅          | ✅     | ✅          |
 
-详细文档: [doc/SQLSERVER_SUPPORT.md](doc/SQLSERVER_SUPPORT.md)
+详细实现见 [kode/tools/database_tools.py:851-1039](kode/tools/database_tools.py) (SQL Server Schema 提取)

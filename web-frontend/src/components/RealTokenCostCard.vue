@@ -6,6 +6,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <span class="title">真实成本分析</span>
+        <span v-if="isLoading" class="badge badge-loading">统计中…</span>
       </div>
       <button
         type="button"
@@ -26,35 +27,26 @@
       </button>
     </div>
 
-    <div v-if="loading" class="loading-state">
-      <div class="spinner"></div>
-      <span>加载成本数据...</span>
-    </div>
-
-    <div v-else-if="error" class="error-state">
-      <p>{{ error }}</p>
-    </div>
-
-    <div v-else-if="!isCollapsed && costData" class="card-body">
+    <div v-if="!isCollapsed" class="card-body">
       <!-- 总览统计 -->
       <div class="section summary">
         <div class="stats-grid">
           <div class="stat-item">
-            <div class="stat-label">API 调用次数</div>
-            <div class="stat-value">{{ costData.summary.total_calls }}</div>
+            <div class="stat-label">迭代次数</div>
+            <div class="stat-value">{{ stats.iterations }}</div>
           </div>
           <div class="stat-item">
             <div class="stat-label">总 Tokens</div>
-            <div class="stat-value">{{ formatNumber(costData.summary.total_tokens) }}</div>
+            <div class="stat-value">{{ formatNumber(stats.total) }}</div>
           </div>
           <div class="stat-item highlight">
             <div class="stat-label">总成本</div>
-            <div class="stat-value cost">${{ costData.summary.total_cost_usd.toFixed(6) }}</div>
-            <div class="stat-sublabel">¥{{ (costData.summary.total_cost_usd * 7.3).toFixed(4) }}</div>
+            <div class="stat-value cost">${{ stats.totalCost.toFixed(6) }}</div>
+            <div class="stat-sublabel">¥{{ (stats.totalCost * 7.3).toFixed(4) }}</div>
           </div>
-          <div class="stat-item savings" v-if="costData.summary.total_savings_usd > 0">
+          <div class="stat-item savings" v-if="stats.totalSavings > 0">
             <div class="stat-label">缓存节省</div>
-            <div class="stat-value success">${{ costData.summary.total_savings_usd.toFixed(6) }}</div>
+            <div class="stat-value success">${{ stats.totalSavings.toFixed(6) }}</div>
             <div class="stat-sublabel">约 {{ savingsPercentage }}% 成本</div>
           </div>
         </div>
@@ -75,65 +67,40 @@
           <tbody>
             <tr>
               <td>常规输入</td>
-              <td>{{ formatNumber(regularInputTokens) }}</td>
+              <td>{{ formatNumber(stats.regularInput) }}</td>
               <td>$3.00/MTok</td>
-              <td>${{ regularInputCost.toFixed(6) }}</td>
+              <td>${{ stats.regularInputCost.toFixed(6) }}</td>
             </tr>
             <tr class="cache-creation">
               <td>缓存创建</td>
-              <td>{{ formatNumber(costData.summary.total_cache_creation_tokens) }}</td>
+              <td>{{ formatNumber(stats.cacheCreation) }}</td>
               <td>$3.75/MTok (1.25×)</td>
-              <td>${{ cacheCreationCost.toFixed(6) }}</td>
+              <td>${{ stats.cacheCreationCost.toFixed(6) }}</td>
             </tr>
             <tr class="cache-read">
               <td>缓存读取</td>
-              <td>{{ formatNumber(costData.summary.total_cache_read_tokens) }}</td>
+              <td>{{ formatNumber(stats.cacheRead) }}</td>
               <td>$0.30/MTok (节省90%)</td>
-              <td>${{ cacheReadCost.toFixed(6) }}</td>
+              <td>${{ stats.cacheReadCost.toFixed(6) }}</td>
             </tr>
             <tr class="output">
               <td>输出生成</td>
-              <td>{{ formatNumber(costData.summary.total_output_tokens) }}</td>
+              <td>{{ formatNumber(stats.output) }}</td>
               <td>$15.00/MTok</td>
-              <td>${{ outputCost.toFixed(6) }}</td>
+              <td>${{ stats.outputCost.toFixed(6) }}</td>
             </tr>
           </tbody>
         </table>
-      </div>
-
-      <!-- API 调用明细 (可选展开) -->
-      <div class="section" v-if="showDetails">
-        <h4 class="section-title">
-          API 调用明细
-          <button @click="showTraceDetails = !showTraceDetails" class="toggle-details-btn">
-            {{ showTraceDetails ? '收起' : '展开' }}
-          </button>
-        </h4>
-        <div v-if="showTraceDetails" class="traces-list">
-          <div v-for="trace in costData.traces" :key="trace.id" class="trace-item">
-            <div class="trace-header">
-              <span class="trace-iteration">迭代 #{{ trace.iteration }}</span>
-              <span class="trace-model">{{ trace.model_name }}</span>
-              <span class="trace-cost">${{ trace.costs.total.toFixed(6) }}</span>
-            </div>
-            <div class="trace-stats">
-              <span>输入: {{ formatNumber(trace.tokens.input) }}</span>
-              <span>输出: {{ formatNumber(trace.tokens.output) }}</span>
-              <span v-if="trace.tokens.cache_read > 0">缓存: {{ formatNumber(trace.tokens.cache_read) }}</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import api from '@/services/api'
+import { ref, computed } from 'vue'
+import { useChatStore } from '@/stores/chat'
 
 interface Props {
-  conversationId: string
   showDetails?: boolean
 }
 
@@ -141,72 +108,68 @@ const props = withDefaults(defineProps<Props>(), {
   showDetails: false
 })
 
+const chatStore = useChatStore()
+
 const isCollapsed = ref(false)
-const showTraceDetails = ref(false)
-const loading = ref(false)
-const error = ref<string | null>(null)
-const costData = ref<any>(null)
 
-const showCost = computed(() => !!props.conversationId)
+// ✅ 直接使用 chat store 的实时数据（来自 SSE 流）
+const tokenUsage = computed(() => chatStore.conversationTokenUsage)
+const showCost = computed(() =>
+  tokenUsage.value.total_tokens > 0 ||
+  tokenUsage.value.total_input_tokens > 0
+)
 
-// 计算各类 token 成本
-const regularInputTokens = computed(() => {
-  if (!costData.value) return 0
-  return costData.value.summary.total_input_tokens -
-         costData.value.summary.total_cache_creation_tokens -
-         costData.value.summary.total_cache_read_tokens
-})
+// ✅ 使用 SSE 实时数据计算统计
+const stats = computed(() => {
+  const usage = tokenUsage.value
 
-const regularInputCost = computed(() => regularInputTokens.value * 3 / 1_000_000)
-const cacheCreationCost = computed(() => {
-  if (!costData.value) return 0
-  return costData.value.summary.total_cache_creation_tokens * 3.75 / 1_000_000
-})
-const cacheReadCost = computed(() => {
-  if (!costData.value) return 0
-  return costData.value.summary.total_cache_read_tokens * 0.30 / 1_000_000
-})
-const outputCost = computed(() => {
-  if (!costData.value) return 0
-  return costData.value.summary.total_output_tokens * 15 / 1_000_000
+  const cacheCreation = usage.cache_creation_input_tokens || 0
+  const cacheRead = usage.cache_read_input_tokens || 0
+  const regularInput = usage.regular_input_tokens ??
+    Math.max((usage.total_input_tokens || 0) - cacheCreation - cacheRead, 0)
+  const totalInput = usage.total_input_tokens || (regularInput + cacheCreation + cacheRead)
+  const output = usage.total_output_tokens || 0
+  const totalTokens = usage.total_tokens || (totalInput + output)
+
+  const regularInputCost = usage.cost_breakdown?.regular_input_cost ?? (regularInput * 3 / 1_000_000)
+  const cacheCreationCost = usage.cost_breakdown?.cache_creation_cost ?? (cacheCreation * 3.75 / 1_000_000)
+  const cacheReadCost = usage.cost_breakdown?.cache_read_cost ?? (cacheRead * 0.30 / 1_000_000)
+  const outputCost = usage.cost_breakdown?.output_cost ?? (output * 15 / 1_000_000)
+  const totalCost = usage.total_cost ?? (regularInputCost + cacheCreationCost + cacheReadCost + outputCost)
+
+  const noCacheCost = totalInput * 3 / 1_000_000 + outputCost
+  const totalSavings = usage.cache_savings ?? (noCacheCost - totalCost)
+  const savingsPercentage = usage.savings_percentage ?? (noCacheCost === 0 ? 0 : (totalSavings / noCacheCost) * 100)
+
+  return {
+    regularInput,
+    cacheCreation,
+    cacheRead,
+    output,
+    totalInput,
+    totalOutput: output,
+    total: totalTokens,
+    regularInputCost,
+    cacheCreationCost,
+    cacheReadCost,
+    outputCost,
+    totalCost,
+    totalSavings,
+    noCacheCost,
+    iterations: usage.iterations || 0,
+    savingsPercentage
+  }
 })
 
 const savingsPercentage = computed(() => {
-  if (!costData.value || costData.value.summary.total_cost_usd === 0) return '0.0'
-  const noCacheCost = costData.value.summary.total_cost_usd + costData.value.summary.total_savings_usd
-  const percentage = (costData.value.summary.total_savings_usd / noCacheCost) * 100
-  return percentage.toFixed(1)
+  return stats.value.savingsPercentage?.toFixed
+    ? stats.value.savingsPercentage.toFixed(1)
+    : '0.0'
 })
 
 const formatNumber = (num: number): string => {
   return num.toLocaleString('zh-CN')
 }
-
-const fetchCostData = async () => {
-  if (!props.conversationId) return
-
-  loading.value = true
-  error.value = null
-
-  try {
-    const response = await api.get(`/chat/conversations/${props.conversationId}/api_traces`)
-    costData.value = response.data
-  } catch (err: any) {
-    console.error('Failed to fetch cost data:', err)
-    error.value = err.response?.data?.detail || '加载成本数据失败'
-  } finally {
-    loading.value = false
-  }
-}
-
-// 监听会话 ID 变化
-watch(() => props.conversationId, () => {
-  fetchCostData()
-}, { immediate: true })
-
-onMounted(() => {
-  fetchCostData()
-})
 </script>
 
 <style scoped>
@@ -233,6 +196,29 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.badge-loading::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  border-top-color: transparent;
+  border-radius: 999px;
+  display: inline-block;
+  animation: spin 0.6s linear infinite;
 }
 
 .icon {

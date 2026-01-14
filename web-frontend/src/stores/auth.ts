@@ -5,6 +5,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '@/config/constants'
+import { heartbeatService } from '@/services/sse'
 
 interface User {
   id: string
@@ -56,6 +57,10 @@ export const useAuthStore = defineStore('auth', () => {
 
       // 获取用户信息
       await fetchUserProfile()
+
+      // 启动心跳连接
+      heartbeatService.connect()
+      console.log('[Auth] Heartbeat started after login')
 
       return true
     } catch (err: any) {
@@ -141,6 +146,10 @@ export const useAuthStore = defineStore('auth', () => {
       // 获取用户信息
       await fetchUserProfile()
 
+      // 启动心跳连接
+      heartbeatService.connect()
+      console.log('[Auth] Heartbeat started after Google login')
+
       return true
     } catch (err: any) {
       error.value = err.response?.data?.detail || '谷歌登录失败'
@@ -160,7 +169,57 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function sendEmailCode(email: string): Promise<{ success: boolean; message: string }> {
+    isLoading.value = true
+    error.value = null
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/email/send-code`, { email })
+      return response.data
+    } catch (err: any) {
+      const message = err.response?.data?.detail || '发送验证码失败'
+      error.value = message
+      return { success: false, message }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function verifyEmailCode(email: string, code: string) {
+    isLoading.value = true
+    error.value = null
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/email/verify`, { email, code })
+      const { access_token, refresh_token } = response.data
+
+      // 存储令牌
+      accessToken.value = access_token
+      refreshToken.value = refresh_token
+      localStorage.setItem('access_token', access_token)
+      localStorage.setItem('refresh_token', refresh_token)
+
+      // 获取用户信息
+      await fetchUserProfile()
+
+      // 启动心跳连接
+      heartbeatService.connect()
+      console.log('[Auth] Heartbeat started after email login')
+
+      return true
+    } catch (err: any) {
+      error.value = err.response?.data?.detail || '验证码验证失败'
+      throw error.value
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   function logout() {
+    // 停止心跳连接
+    heartbeatService.disconnect()
+    console.log('[Auth] Heartbeat stopped on logout')
+
     user.value = null
     accessToken.value = null
     refreshToken.value = null
@@ -168,9 +227,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('refresh_token')
   }
 
-  // 初始化时尝试获取用户信息
+  // 初始化时尝试获取用户信息并启动心跳
   if (accessToken.value) {
     fetchUserProfile()
+    // 页面刷新后重新启动心跳
+    heartbeatService.connect()
+    console.log('[Auth] Heartbeat started on page load (token exists)')
   }
 
   return {
@@ -190,6 +252,8 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     loginWithGoogle,
     getGoogleAuthUrl,
+    sendEmailCode,
+    verifyEmailCode,
     fetchUserProfile,
     refreshAccessToken,
     logout

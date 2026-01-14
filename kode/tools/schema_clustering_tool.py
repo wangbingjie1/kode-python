@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from kode.core.model_manager import ModelManager
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
+from kode.utils.context import get_current_user_id
 from kode.utils.path_utils import get_safe_connection_path
 
 
@@ -100,10 +101,33 @@ class DatabaseSchemaClusterer(KodeTool):
         Returns:
             Clustering result as JSON
         """
+        from kode.utils.logger import setup_logger
+        logger = setup_logger(__name__)
+
         try:
             # 1. Load raw schema
             schema_data = self._load_schema(schema_file)
             tables = schema_data["schema"]["tables"]
+            original_table_count = len(tables)
+
+            # 🔑 1.5 读取 business_context.json 中的排除配置
+            exclusion_config = self._load_exclusion_config(connection_name)
+            excluded_tables = exclusion_config.get("tables", [])
+            excluded_prefixes = exclusion_config.get("prefixes", [])
+
+            if excluded_tables:
+                # 过滤掉排除的表
+                tables = {k: v for k, v in tables.items() if k not in excluded_tables}
+                logger.info(
+                    f"[SchemaClusterer] 排除了 {len(excluded_tables)} 个冗余表"
+                    + (f": {excluded_tables[:10]}..." if len(excluded_tables) > 10 else f": {excluded_tables}")
+                )
+                # 更新 schema_data 中的 tables
+                schema_data["schema"]["tables"] = tables
+
+            if excluded_prefixes:
+                logger.info(f"[SchemaClusterer] 排除前缀: {excluded_prefixes}")
+
             total_tables = len(tables)
 
             # 2. Extract table features for AI analysis
@@ -122,6 +146,7 @@ class DatabaseSchemaClusterer(KodeTool):
                 target_tables_per_domain=target_tables_per_domain,
                 llm_model=llm_model,
                 output_language=output_language,
+                excluded_prefixes=excluded_prefixes,  # 🔑 新增：传递排除前缀
             )
 
             # 5. Validate and adjust clustering result
@@ -139,6 +164,10 @@ class DatabaseSchemaClusterer(KodeTool):
                 "status": "success",
                 "connection_name": connection_name,
                 "clustering_summary": {
+                    "original_table_count": original_table_count,
+                    "excluded_table_count": len(excluded_tables) if excluded_tables else 0,
+                    "excluded_tables": excluded_tables[:20] if excluded_tables else [],  # 最多显示20个
+                    "excluded_prefixes": excluded_prefixes,  # 🔑 新增：显示排除前缀
                     "total_tables": total_tables,
                     "total_domains": len(domains),
                     "avg_tables_per_domain": total_tables / len(domains) if domains else 0,
@@ -152,7 +181,10 @@ class DatabaseSchemaClusterer(KodeTool):
                     ],
                 },
                 "storage": storage_result,
-                "message": f"Successfully clustered {total_tables} tables into {len(domains)} domains",
+                "message": (
+                    f"Successfully clustered {total_tables} tables into {len(domains)} domains"
+                    + (f" (excluded {len(excluded_tables)} tables with prefixes: {excluded_prefixes})" if excluded_tables else "")
+                ),
             }
 
             return json.dumps(summary, indent=2, ensure_ascii=False)
@@ -174,6 +206,43 @@ class DatabaseSchemaClusterer(KodeTool):
 
         with open(schema_path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    def _load_exclusion_config(self, connection_name: str) -> Dict[str, Any]:
+        """
+        从 business_context.json 读取排除配置。
+
+        Args:
+            connection_name: 数据库连接名
+
+        Returns:
+            排除配置字典：
+            {
+                "tables": ["table1", "table2", ...],
+                "prefixes": ["ao_", "candy_chat_", ...],
+                "reasons": {"ao_*": "用户说 AO 开头是已下线功能", ...}
+            }
+        """
+        config = ConfigManager()
+        ontology_path = config.get("storage.ontology_path", "./ontology_store")
+        # 🔑 修复：添加 user_id 隔离
+        from kode.utils.context import get_current_user_id
+        user_id = get_current_user_id()
+        safe_conn_name = get_safe_connection_path(connection_name)
+        context_file = Path(ontology_path) / user_id / safe_conn_name / "business_context.json"
+
+        if not context_file.exists():
+            return {"tables": [], "prefixes": [], "reasons": {}}
+
+        try:
+            with open(context_file, "r", encoding="utf-8") as f:
+                context_data = json.load(f)
+            return {
+                "tables": context_data.get("excluded_tables", []),
+                "prefixes": context_data.get("excluded_prefixes", []),
+                "reasons": context_data.get("exclusion_reasons", {}),
+            }
+        except Exception:
+            return {"tables": [], "prefixes": [], "reasons": {}}
 
     def _extract_table_features(
         self, tables: Dict[str, Any], max_columns: Optional[int] = None
@@ -231,6 +300,7 @@ class DatabaseSchemaClusterer(KodeTool):
         target_tables_per_domain: int,
         llm_model: str,
         output_language: str,
+        excluded_prefixes: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Use AI to cluster tables into business domains.
@@ -241,6 +311,7 @@ class DatabaseSchemaClusterer(KodeTool):
             target_tables_per_domain: Target tables per domain
             llm_model: Model pointer to use
             output_language: Output language code
+            excluded_prefixes: 已排除的表前缀列表（这些表已被过滤，不需要分析）
 
         Returns:
             List of domain definitions
@@ -252,10 +323,19 @@ class DatabaseSchemaClusterer(KodeTool):
             else "领域名称必须使用中文（如：用户管理、订单系统、数据分析）"
         )
 
+        # 🔑 如果有排除前缀，添加提示信息
+        exclusion_note = ""
+        if excluded_prefixes:
+            exclusion_note = f"""
+Note: The following table prefixes have been excluded from this analysis (they represent offline/deprecated systems):
+- {', '.join(excluded_prefixes)}
+These tables are already filtered out. Focus on grouping the remaining active tables.
+"""
+
         prompt = f"""You are a database architect analyzing a database schema with {len(table_features)} tables.
 
 Your task: Group these tables into approximately {estimated_domains} business domains based on semantic relationships.
-
+{exclusion_note}
 Guidelines:
 1. Aim for {target_tables_per_domain} tables per domain (flexible, not a hard limit)
 2. Group tables by business function (e.g., user management, order processing, analytics)
@@ -403,9 +483,10 @@ IMPORTANT: Ensure ALL {len(table_features)} tables are assigned to exactly one d
         try:
             config = ConfigManager()
             storage_path = config.get("storage.schema_path", "./schema_store")
+            user_id = get_current_user_id()
 
             safe_conn_name = get_safe_connection_path(connection_name)
-            base_dir = Path(storage_path) / safe_conn_name
+            base_dir = Path(storage_path) / user_id / safe_conn_name
             domains_dir = base_dir / "domains"
             domains_dir.mkdir(parents=True, exist_ok=True)
 

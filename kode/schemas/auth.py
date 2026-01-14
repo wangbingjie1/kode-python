@@ -56,3 +56,23 @@ class GoogleCallbackRequest(BaseModel):
     """谷歌OAuth2回调请求"""
 
     code: str = Field(..., description="授权码")
+
+
+class EmailSendCodeRequest(BaseModel):
+    """发送邮箱验证码请求"""
+
+    email: EmailStr = Field(..., description="邮箱地址")
+
+
+class EmailSendCodeResponse(BaseModel):
+    """发送邮箱验证码响应"""
+
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(..., description="提示消息")
+
+
+class EmailVerifyRequest(BaseModel):
+    """邮箱验证码验证请求"""
+
+    email: EmailStr = Field(..., description="邮箱地址")
+    code: str = Field(..., min_length=6, max_length=6, description="6位验证码")

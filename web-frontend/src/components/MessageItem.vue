@@ -30,6 +30,16 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-9 9-4-4-6 6" />
         </svg>
         <svg
+          v-else-if="isProgress"
+          class="h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        <svg
           v-else
           class="h-4 w-4"
           viewBox="0 0 24 24"
@@ -80,6 +90,38 @@
           v-if="message.insights && message.insights.length > 0"
           :insights="message.insights"
         />
+      </div>
+
+      <!-- Progress message (e.g., ontology building) -->
+      <div v-else-if="isProgress" class="w-full">
+        <div class="flex items-start gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3">
+          <svg
+            class="h-5 w-5 flex-shrink-0 text-indigo-600 mt-0.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-indigo-900">{{ message.content }}</div>
+            <div v-if="message.metadata?.percent !== undefined" class="mt-2">
+              <div class="flex items-center gap-2">
+                <div class="flex-1 h-2 bg-indigo-200 rounded-full overflow-hidden">
+                  <div
+                    class="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                    :style="{ width: `${message.metadata.percent}%` }"
+                  ></div>
+                </div>
+                <span class="text-xs font-medium text-indigo-700">{{ message.metadata.percent }}%</span>
+              </div>
+            </div>
+            <div v-if="message.metadata?.current && message.metadata?.total" class="mt-1 text-xs text-indigo-600">
+              {{ message.metadata.current }} / {{ message.metadata.total }}
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Assistant thinking (Extended Thinking) -->
@@ -176,6 +218,7 @@ const isAssistant = computed(() => props.message.role === 'assistant')
 const isTool = computed(() => props.message.role === 'tool')
 const isChart = computed(() => props.message.role === 'chart')
 const isInsight = computed(() => props.message.role === 'insight')
+const isProgress = computed(() => props.message.role === 'progress')
 const isThinkingMessage = computed(() => props.message.isStreaming && props.message.metadata?.isThinking === true)
 
 const showAvatar = computed(() => !isSystem.value)
@@ -189,6 +232,8 @@ const avatarClass = computed(() =>
       ? 'bg-purple-500 text-white'
     : isInsight.value
       ? 'bg-amber-500 text-white'
+    : isProgress.value
+      ? 'bg-indigo-500 text-white'
       : 'bg-gray-200 text-gray-700',
 )
 

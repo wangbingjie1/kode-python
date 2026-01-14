@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from kode.core.model_manager import ModelManager
 from kode.tools.base import KodeTool
 from kode.utils.config import ConfigManager
+from kode.utils.context import get_current_user_id
 from kode.utils.logger import setup_logger
 from kode.utils.path_utils import get_safe_connection_path
 
@@ -23,8 +24,7 @@ class DomainUncertaintyAnalyzerInput(BaseModel):
     connection_name: str = Field(description="Database connection name")
     llm_model: str = Field(default="main", description="LLM model to use (main/task/quick)")
     max_concurrent_domains: int = Field(
-        default=5,
-        description="Maximum concurrent domain analyses (to avoid API rate limits)"
+        default=5, description="Maximum concurrent domain analyses (to avoid API rate limits)"
     )
 
 
@@ -60,20 +60,18 @@ class DomainUncertaintyAnalyzer(KodeTool):
     requires_permission: bool = False
 
     def _run(
-        self,
-        connection_name: str,
-        llm_model: str = "main",
-        max_concurrent_domains: int = 5
+        self, connection_name: str, llm_model: str = "main", max_concurrent_domains: int = 5
     ) -> str:
         """并行分析所有域的不确定性"""
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         try:
-            # 加载配置和域索引
+            # 加载配置和域索引 (with user isolation)
             config = ConfigManager()
             schema_path = config.get("storage.schema_path", "./schema_store")
+            user_id = get_current_user_id()
             safe_conn_name = get_safe_connection_path(connection_name)
-            domain_index_file = Path(schema_path) / safe_conn_name / "domain_index.json"
+            domain_index_file = Path(schema_path) / user_id / safe_conn_name / "domain_index.json"
 
             if not domain_index_file.exists():
                 raise FileNotFoundError(f"Domain index not found: {domain_index_file}")
@@ -84,16 +82,35 @@ class DomainUncertaintyAnalyzer(KodeTool):
             if not domains:
                 raise ValueError("No domains found")
 
+            # 🔑 加载排除配置
+            exclusion_config = self._load_exclusion_config(connection_name)
+            excluded_tables = set(exclusion_config.get("tables", []))
+            excluded_prefixes = exclusion_config.get("prefixes", [])
+
+            # 🔑 过滤掉已排除前缀对应的域
+            original_domain_count = len(domains)
+            if excluded_prefixes:
+                domains = [
+                    d
+                    for d in domains
+                    if not any(
+                        d["name"].startswith(prefix.rstrip("_")) for prefix in excluded_prefixes
+                    )
+                ]
+                skipped_count = original_domain_count - len(domains)
+                if skipped_count > 0:
+                    logger.info(f"[UncertaintyAnalyzer] 跳过 {skipped_count} 个已排除前缀的域")
+
             # 初始化模型
             model_manager = ModelManager(config.get_all())
             model = model_manager.get_model(llm_model)
             model.temperature = 0.0
             model.max_tokens = 16000
 
-            # 单域分析函数
+            # 单域分析函数 (with user isolation)
             def analyze_domain(domain: Dict[str, Any]) -> Dict[str, Any]:
                 domain_name = domain["name"]
-                domain_file = Path(schema_path) / safe_conn_name / domain["file_path"]
+                domain_file = Path(schema_path) / user_id / safe_conn_name / domain["file_path"]
 
                 logger.info(f"分析域: {domain_name} ({domain['table_count']} 个表)")
 
@@ -102,13 +119,25 @@ class DomainUncertaintyAnalyzer(KodeTool):
 
                 uncertainties = self._analyze_domain(domain_name, domain_schema, model)
 
+                # 🔑 过滤掉已排除表相关的 uncertainties
+                if excluded_tables:
+                    original_count = len(uncertainties)
+                    uncertainties = [
+                        u for u in uncertainties if u.get("entity") not in excluded_tables
+                    ]
+                    filtered_count = original_count - len(uncertainties)
+                    if filtered_count > 0:
+                        logger.info(
+                            f"域 {domain_name}: 过滤了 {filtered_count} 个已排除表相关的不确定性"
+                        )
+
                 logger.info(f"域 {domain_name}: 识别到 {len(uncertainties)} 个不确定性")
 
                 return {
                     "domain_name": domain_name,
                     "table_count": domain["table_count"],
                     "uncertainty_count": len(uncertainties),
-                    "uncertainties": uncertainties
+                    "uncertainties": uncertainties,
                 }
 
             # 线程池并行执行
@@ -131,10 +160,11 @@ class DomainUncertaintyAnalyzer(KodeTool):
 
             # 🔥 新逻辑：将不确定性直接保存到各个领域 JSON 文件中
             save_result = self._save_uncertainties_to_domains(
-                connection_name,
-                domain_results_full,  # 🔥 传递完整数据
-                schema_path
+                connection_name, domain_results_full, schema_path  # 🔥 传递完整数据
             )
+
+            # 🔑 计算跳过的域数量
+            skipped_domains = original_domain_count - len(domains)
 
             # Return lightweight summary (save tokens)
             summary = {
@@ -143,13 +173,16 @@ class DomainUncertaintyAnalyzer(KodeTool):
                 "storage_strategy": save_result.get("storage_strategy"),
                 "updated_domains": save_result.get("updated_domains"),
                 "statistics": {
-                    "total_domains": len(domains),
+                    "original_domains": original_domain_count,
+                    "skipped_domains": skipped_domains,
+                    "analyzed_domains": len(domains),
+                    "excluded_prefixes": excluded_prefixes,
                     "total_uncertainties": len(all_uncertainties),
-                    "high_priority": len(grouped['high']),
-                    "medium_priority": len(grouped['medium']),
-                    "low_priority": len(grouped['low'])
+                    "high_priority": len(grouped["high"]),
+                    "medium_priority": len(grouped["medium"]),
+                    "low_priority": len(grouped["low"]),
                 },
-                "next_step": f"请先回答 {len(grouped['high'])} 个高优先级问题。使用 UncertaintyQAManager 工具。"
+                "next_step": f"请先回答 {len(grouped['high'])} 个高优先级问题。使用 UncertaintyQAManager 工具。",
             }
 
             return json.dumps(summary, indent=2, ensure_ascii=False)
@@ -159,17 +192,14 @@ class DomainUncertaintyAnalyzer(KodeTool):
             return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
     def _analyze_domain(
-        self,
-        domain_name: str,
-        domain_schema: Dict[str, Any],
-        model
+        self, domain_name: str, domain_schema: Dict[str, Any], model
     ) -> List[Dict[str, Any]]:
         """分析单个域的不确定性"""
         from langchain_core.messages import HumanMessage
 
         schema_text = self._prepare_domain_schema_text(domain_schema)
-# 2. 缺失约束 (missing_constraint) - 缺少外键/唯一/非空约束
-# 5. 数据质量担忧 (data_quality_concern) - 数据一致性问题
+        # 2. 缺失约束 (missing_constraint) - 缺少外键/唯一/非空约束
+        # 5. 数据质量担忧 (data_quality_concern) - 数据一致性问题
         prompt = f"""你是数据架构师，分析以下业务域的 schema，识别不确定性。
 
 # 业务域: {domain_name}
@@ -179,8 +209,7 @@ class DomainUncertaintyAnalyzer(KodeTool):
 # 任务
 识别以下类型的不确定性：
 1. Schema 模糊性 (schema_ambiguity) - 表/字段含义不清晰
-2. 命名混淆 (naming_confusion) - 命名不一致或缩写不明
-3. 业务逻辑不清晰 (business_logic_unclear) - 业务流程无法推断
+2. 业务逻辑不清晰 (business_logic_unclear) - 业务流程无法推断
 
 
 # 输出格式
@@ -265,11 +294,11 @@ priority: high/medium/low
             pass
 
         # 策略2：查找数组边界 [ ]
-        start_idx = text.find('[')
-        end_idx = text.rfind(']')
+        start_idx = text.find("[")
+        end_idx = text.rfind("]")
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
             try:
-                potential_json = text[start_idx:end_idx+1]
+                potential_json = text[start_idx : end_idx + 1]
                 return json.loads(potential_json)
             except json.JSONDecodeError:
                 pass
@@ -291,15 +320,10 @@ priority: high/medium/low
         return None
 
     def _group_by_priority(
-        self,
-        uncertainties: List[Dict[str, Any]]
+        self, uncertainties: List[Dict[str, Any]]
     ) -> Dict[str, List[Dict[str, Any]]]:
         """按优先级分组"""
-        grouped = {
-            "high": [],
-            "medium": [],
-            "low": []
-        }
+        grouped = {"high": [], "medium": [], "low": []}
 
         for idx, u in enumerate(uncertainties):
             priority = u.get("priority", "medium").lower()
@@ -316,10 +340,7 @@ priority: high/medium/low
         return grouped
 
     def _save_uncertainties_to_domains(
-        self,
-        connection_name: str,
-        domain_results: List[Dict[str, Any]],
-        schema_path: str
+        self, connection_name: str, domain_results: List[Dict[str, Any]], schema_path: str
     ) -> Dict[str, Any]:
         """
         将不确定性直接保存到各个领域的 JSON 文件中（高内聚设计）。
@@ -328,7 +349,8 @@ priority: high/medium/low
         """
         try:
             safe_conn_name = get_safe_connection_path(connection_name)
-            base_dir = Path(schema_path) / safe_conn_name / "domains"
+            user_id = get_current_user_id()
+            base_dir = Path(schema_path) / user_id / safe_conn_name / "domains"
             updated_count = 0
 
             for domain_result in domain_results:
@@ -357,17 +379,50 @@ priority: high/medium/low
                         json.dump(domain_data, f, indent=2, ensure_ascii=False)
 
                     updated_count += 1
-                    logger.info(f"✅ {domain_name}: 已保存 {len(domain_uncertainties)} 个不确定性到领域文件")
+                    logger.info(
+                        f"✅ {domain_name}: 已保存 {len(domain_uncertainties)} 个不确定性到领域文件"
+                    )
 
             return {
                 "saved": True,
                 "updated_domains": updated_count,
-                "storage_strategy": "embedded_in_domain_files"
+                "storage_strategy": "embedded_in_domain_files",
             }
 
         except Exception as e:
             logger.error(f"Failed to save uncertainties to domains: {str(e)}")
-            return {
-                "saved": False,
-                "error": str(e)
+            return {"saved": False, "error": str(e)}
+
+    def _load_exclusion_config(self, connection_name: str) -> Dict[str, Any]:
+        """
+        从 business_context.json 读取排除配置。
+
+        Args:
+            connection_name: 数据库连接名
+
+        Returns:
+            排除配置字典：
+            {
+                "tables": ["table1", "table2", ...],
+                "prefixes": ["ao_", "candy_chat_", ...],
+                "reasons": {"ao_*": "用户说 AO 开头是已下线功能", ...}
             }
+        """
+        config = ConfigManager()
+        ontology_path = config.get("storage.ontology_path", "./ontology_store")
+        safe_conn_name = get_safe_connection_path(connection_name)
+        context_file = Path(ontology_path) / safe_conn_name / "business_context.json"
+
+        if not context_file.exists():
+            return {"tables": [], "prefixes": [], "reasons": {}}
+
+        try:
+            with open(context_file, "r", encoding="utf-8") as f:
+                context_data = json.load(f)
+            return {
+                "tables": context_data.get("excluded_tables", []),
+                "prefixes": context_data.get("excluded_prefixes", []),
+                "reasons": context_data.get("exclusion_reasons", {}),
+            }
+        except Exception:
+            return {"tables": [], "prefixes": [], "reasons": {}}

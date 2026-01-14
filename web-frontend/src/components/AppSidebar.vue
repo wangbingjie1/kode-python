@@ -80,8 +80,63 @@
       <div class="sidebar-content">
         <!-- Chats Tab -->
         <div v-if="activeTab === 'chats'" class="content-section">
-          <h3 class="section-title">最近对话</h3>
-          <div v-if="conversations.length" class="conversations-list">
+          <!-- 搜索框 -->
+          <div class="search-box">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              v-model="searchKeyword"
+              type="text"
+              class="search-input"
+              placeholder="搜索对话..."
+              @input="handleSearch"
+              @keydown.enter="handleSearch"
+            />
+            <button
+              v-if="searchKeyword"
+              class="clear-search-btn"
+              @click="clearSearch"
+            >
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- 搜索选项 -->
+          <div v-if="searchKeyword" class="search-options">
+            <label class="search-option">
+              <input
+                type="checkbox"
+                v-model="searchContent"
+                @change="toggleSearchContent"
+              />
+              <span>搜索消息内容</span>
+            </label>
+          </div>
+
+          <div class="section-header">
+            <h3 class="section-title">{{ searchKeyword ? '搜索结果' : '最近对话' }}</h3>
+            <span v-if="totalConversations !== undefined" class="total-count">
+              {{ totalConversations }} 个对话
+            </span>
+          </div>
+
+          <!-- 搜索中提示 -->
+          <div v-if="isSearching" class="loading-state">
+            <svg class="loading-icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <span>搜索中...</span>
+          </div>
+
+          <div
+            v-else-if="conversations.length"
+            ref="conversationsListRef"
+            class="conversations-list"
+            @scroll="handleScroll"
+          >
             <div
               v-for="conv in conversations"
               :key="conv.id"
@@ -94,20 +149,47 @@
               </svg>
               <div class="conv-info">
                 <div class="conv-title">{{ conv.title }}</div>
-                <div class="conv-time">{{ formatTime(conv.created_at) }}</div>
+                <div v-if="conv.matched_message" class="conv-match">
+                  <svg class="match-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  <span>{{ conv.matched_message }}</span>
+                </div>
+                <div v-else class="conv-time">{{ formatTime(conv.created_at) }}</div>
               </div>
-              <button class="delete-btn" @click.stop="$emit('delete-conversation', conv.id)">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <button
+                class="delete-btn"
+                :disabled="deletingIds?.has(conv.id)"
+                @click.stop="$emit('delete-conversation', conv.id)"
+              >
+                <svg v-if="!deletingIds?.has(conv.id)" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-1 12a2 2 0 01-2 2H8a2 2 0 01-2-2L5 7m4 4v6m4-6v6M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-9 0h12" />
+                </svg>
+                <svg v-else class="icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
               </button>
             </div>
+
+            <!-- 加载更多指示器 -->
+            <div v-if="isLoadingMore" class="load-more-indicator">
+              <svg class="loading-icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span>加载更多...</span>
+            </div>
+
+            <!-- 没有更多数据 -->
+            <div v-else-if="!hasMore && conversations.length > 0" class="no-more-indicator">
+              <span>没有更多对话了</span>
+            </div>
           </div>
+
           <div v-else class="empty-state">
             <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
               <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.26-.95L3 20l1.4-3.72A6.96 6.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <p>暂无对话</p>
+            <p>{{ searchKeyword ? '未找到匹配的对话' : '暂无对话' }}</p>
           </div>
         </div>
 
@@ -183,20 +265,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useBillingStore } from '@/stores/billing'
 import { notification } from '@/composables/useNotification'
 import LanguageSwitcher from './LanguageSwitcher.vue'
-import { listDatabaseConnections, type DatabaseConnection } from '@/services/api'
-
-interface Conversation {
-  id: string
-  title: string
-  created_at: string
-}
+import { listDatabaseConnections, type DatabaseConnection, type Conversation } from '@/services/api'
 
 type TabId = 'chats' | 'database' | 'billing' | 'settings'
 
@@ -205,15 +281,24 @@ const props = defineProps<{
   activeTab: TabId
   conversations: Conversation[]
   activeConversationId?: string
+  deletingIds?: Set<string>
+  // 分页相关
+  hasMore?: boolean
+  isLoadingMore?: boolean
+  isSearching?: boolean
+  totalConversations?: number
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   'toggle-collapse': []
   'change-tab': [id: TabId]
   'new-conversation': []
   'select-conversation': [id: string]
   'delete-conversation': [id: string]
   'close-mobile': []
+  'load-more': []
+  'search': [keyword: string, searchContent: boolean]
+  'clear-search': []
 }>()
 
 const router = useRouter()
@@ -223,6 +308,10 @@ const billingStore = useBillingStore()
 
 const isUserMenuOpen = ref(false)
 const databaseConnections = ref<DatabaseConnection[]>([])
+const searchKeyword = ref('')
+const searchContent = ref(false)  // 是否搜索消息内容
+const conversationsListRef = ref<HTMLElement | null>(null)
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const tabs = [
   {
@@ -232,7 +321,7 @@ const tabs = [
   },
   {
     id: 'database' as TabId,
-    label: '数据库',
+    label: '数据库本体',
     icon: 'M4 6c0-1.657 3.582-3 8-3s8 1.343 8 3M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3M4 18c0 1.657 3.582 3 8 3s8-1.343 8-3M4 6v12c0 1.657 3.582 3 8 3s8-1.343 8-3V6'
   },
   {
@@ -256,6 +345,43 @@ const currentPlan = computed(() => billingStore.currentPlan)
 
 function toggleUserMenu() {
   isUserMenuOpen.value = !isUserMenuOpen.value
+}
+
+function handleSearch() {
+  // 搜索时防抖处理
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  searchDebounceTimer = setTimeout(() => {
+    emit('search', searchKeyword.value.trim(), searchContent.value)
+  }, 300)
+}
+
+function toggleSearchContent() {
+  // v-model 已经更新了 searchContent，不需要手动反转
+  if (searchKeyword.value.trim()) {
+    emit('search', searchKeyword.value.trim(), searchContent.value)
+  }
+}
+
+function clearSearch() {
+  searchKeyword.value = ''
+  searchContent.value = false
+  emit('clear-search')
+}
+
+// 无限滚动：监测滚动到底部
+function handleScroll(e: Event) {
+  const target = e.target as HTMLElement
+  if (!target) return
+
+  const { scrollTop, scrollHeight, clientHeight } = target
+  // 距离底部 100px 时触发加载
+  if (scrollHeight - scrollTop - clientHeight < 100) {
+    if (props.hasMore && !props.isLoadingMore && !props.isSearching) {
+      emit('load-more')
+    }
+  }
 }
 
 async function handleLogout() {
@@ -596,6 +722,77 @@ if (typeof document !== 'undefined') {
   gap: 1rem;
 }
 
+/* Search Box */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  width: 1rem;
+  height: 1rem;
+  color: #8c7763;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.625rem 2rem 0.625rem 2.25rem;
+  border: 1px solid #eadfd3;
+  border-radius: 0.5rem;
+  background: white;
+  font-size: 0.875rem;
+  color: #322d29;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input::placeholder {
+  color: #b49f8d;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #c58d63;
+  box-shadow: 0 0 0 3px rgba(197, 141, 99, 0.1);
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 0.5rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: #8c7763;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: color 0.2s;
+}
+
+.clear-search-btn:hover {
+  color: #322d29;
+}
+
+.clear-search-btn .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* Section Header */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .section-title {
   font-size: 0.75rem;
   font-weight: 600;
@@ -605,9 +802,56 @@ if (typeof document !== 'undefined') {
   margin: 0;
 }
 
+.total-count {
+  font-size: 0.75rem;
+  color: #8c7763;
+}
+
+/* Search Options */
+.search-options {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.search-option {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #6d5f52;
+  cursor: pointer;
+}
+
+.search-option input[type="checkbox"] {
+  width: 0.875rem;
+  height: 0.875rem;
+  accent-color: #c58d63;
+  cursor: pointer;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  color: #8c7763;
+  font-size: 0.875rem;
+}
+
+.loading-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
 /* Conversations List */
 .conversations-list {
   display: flex;
+  max-height: calc(100vh - 380px);
+  overflow-y: auto;
   flex-direction: column;
   gap: 0.5rem;
 }
@@ -661,6 +905,32 @@ if (typeof document !== 'undefined') {
   margin-top: 0.25rem;
 }
 
+.conv-match {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #6d5f52;
+  line-height: 1.4;
+}
+
+.conv-match .match-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  color: #c58d63;
+  margin-top: 0.1rem;
+}
+
+.conv-match span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .delete-btn {
   width: 1.5rem;
   height: 1.5rem;
@@ -688,6 +958,42 @@ if (typeof document !== 'undefined') {
 .delete-btn .icon {
   width: 1rem;
   height: 1rem;
+}
+
+.delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.delete-btn .icon.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Load More Indicator */
+.load-more-indicator,
+.no-more-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  color: #8c7763;
+}
+
+.load-more-indicator .loading-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.no-more-indicator {
+  color: #b49f8d;
+  font-style: italic;
 }
 
 /* Database List */

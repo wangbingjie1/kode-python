@@ -87,76 +87,198 @@ class AnthropicStreamingAgent:
         self.anthropic_tools = self._prepare_tools()
 
     def _prepare_tools(self) -> List[Dict]:
-        """Convert Kode tools to Anthropic tool format."""
+        """Convert Kode tools to Anthropic tool format.
+
+        按照 Anthropic Prompt Caching 最佳实践，在最后一个 tool 上添加 cache_control。
+        缓存层级顺序: tools → system → messages
+        参考: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+        """
         anthropic_tools = []
-        for tool in self.tools:
+        total_tools = len(self.tools)
+        for i, tool in enumerate(self.tools):
             tool_schema = {
                 "name": tool.name,
                 "description": tool.description,
             }
             # Add input schema if available
             if hasattr(tool, "args_schema") and tool.args_schema:
-                schema = tool.args_schema.schema()
+                # Use model_json_schema() for Pydantic 2.x compatibility
+                if hasattr(tool.args_schema, "model_json_schema"):
+                    schema = tool.args_schema.model_json_schema()
+                else:
+                    schema = tool.args_schema.schema()
+
+                # Build input_schema, including $defs if present
                 tool_schema["input_schema"] = {
                     "type": "object",
                     "properties": schema.get("properties", {}),
                     "required": schema.get("required", []),
                 }
+
+                # Include $defs (Pydantic 2.x) or definitions (Pydantic 1.x) if present
+                # This is critical for nested models like TodoItem in TodoWriteInput
+                if "$defs" in schema:
+                    tool_schema["input_schema"]["$defs"] = schema["$defs"]
+                elif "definitions" in schema:
+                    tool_schema["input_schema"]["definitions"] = schema["definitions"]
+
+            # 在最后一个 tool 上添加 cache_control，标记 tools 定义的缓存边界
+            if i == total_tools - 1:
+                tool_schema["cache_control"] = {"type": "ephemeral"}
+
             anthropic_tools.append(tool_schema)
 
         return anthropic_tools
 
-    def _build_context_budget_info(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        cache_creation_tokens: int,
-        cache_read_tokens: int,
-        iteration: int,
-    ) -> str:
-        """
-        Build context budget information for the agent.
+    def _add_cache_control_to_messages(
+        self, messages: List[Dict], inject_date: bool = False
+    ) -> List[Dict]:
+        """在最后一条用户消息的最后一个 content block 上添加 cache_control。
 
-        This provides the agent with awareness of its token usage and remaining capacity.
-        Also includes current time (dynamic info that should not be cached).
+        Prompt Caching 优化策略（基于 Anthropic 官方 cookbook）：
+        1. 找到最后一条 role="user" 的消息
+        2. 在该消息的最后一个 content block 上添加 cache_control
+        3. 可选地在第一次调用时注入当前日期（仅日期，不含时分秒）
+        4. 同一天内的所有请求会有相同的日期信息，缓存可以复用
+
+        缓存层级（从外到内）：
+        - tools 定义（在 _prepare_tools 中标记最后一个 tool）
+        - system prompt（在 stream_response 中标记）
+        - 历史消息（在这里标记最后一条用户消息）
+
+        这样可以最大化 Prompt Caching 的效果，确保工具调用循环中的历史消息可以命中缓存。
+
+        参考：https://github.com/anthropics/anthropic-cookbook/blob/main/misc/prompt_caching.ipynb
 
         Args:
-            input_tokens: Total input tokens used so far
-            output_tokens: Total output tokens used so far
-            cache_creation_tokens: Total cache creation tokens
-            cache_read_tokens: Total cache read tokens
-            iteration: Current iteration number
+            messages: 原始消息列表
+            inject_date: 是否注入当前日期（仅在第一次迭代时为 True）
 
         Returns:
-            Formatted budget information string (including time)
+            添加了 cache_control 的消息列表（深拷贝）
         """
-        from kode.utils.system_info import format_system_info_dynamic
+        if not messages:
+            return messages
 
-        # Get current time (dynamic info)
-        time_info = format_system_info_dynamic()
+        # 深拷贝避免修改原始数据
+        import copy
 
-        # Calculate totals
-        total_tokens_used = input_tokens + output_tokens
-        context_limit = 2000000  # Anthropic's context window for Claude Sonnet 4.5
-        remaining_tokens = context_limit - total_tokens_used
+        messages_copy = copy.deepcopy(messages)
 
-        # Calculate percentage used
-        usage_percentage = (total_tokens_used / context_limit) * 100 if context_limit > 0 else 0
+        # 获取当前日期（仅在需要时）
+        date_info = ""
+        if inject_date:
+            from kode.utils.system_info import format_system_info_dynamic
 
-        # Build budget info message
-        budget_lines = [time_info, "", f"## 🔋你的剩余注意力百分比：{100 - usage_percentage:.1f}%"]
+            date_info = format_system_info_dynamic()
 
-        # Add warnings based on usage
-        if usage_percentage >= 70:
-            budget_lines.append("⚠️ **注意**: 注意力上下文使用已超过70%，你的注意力已经开始涣散。")
+        # 🔥 关键修改：找到最后一条 role="user" 的消息（而不是最后一条消息）
+        last_user_msg = None
+        last_user_idx = -1
+        for i in range(len(messages_copy) - 1, -1, -1):
+            if messages_copy[i].get("role") == "user":
+                last_user_msg = messages_copy[i]
+                last_user_idx = i
+                break
 
-        budget_lines.append("")
-        budget_lines.append("**重要**: 你需要自主管理自己的上下文使用情况，并在必要时采取措施：")
-        budget_lines.append("- 剩余30%时候，调用上下文工具压缩上下文")
-        budget_lines.append("- 剩余10%时候，提醒用户开启新对话")
-        budget_lines.append("")
+        if not last_user_msg:
+            # 没有用户消息，直接返回
+            return messages_copy
 
-        return "\n".join(budget_lines)
+        content = last_user_msg.get("content")
+
+        # 处理不同的 content 类型
+        if isinstance(content, str):
+            # 字符串类型 → 转换为 content block 格式并添加 cache_control
+            text_content = content
+            if inject_date:
+                text_content = f"{content}\n\n<current_date>{date_info}</current_date>"
+            last_user_msg["content"] = [
+                {
+                    "type": "text",
+                    "text": text_content,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
+        elif isinstance(content, list) and len(content) > 0:
+            # 列表类型 → 在最后一个 content block 上添加 cache_control
+            last_block = content[-1]
+            if isinstance(last_block, dict):
+                # 如果需要注入日期，且最后一个是 text 类型
+                if inject_date and last_block.get("type") == "text":
+                    last_block["text"] = (
+                        f"{last_block.get('text', '')}\n\n<current_date>{date_info}</current_date>"
+                    )
+                elif inject_date:
+                    # 不是 text 类型（如 tool_result），追加一个新的 text block
+                    content.append(
+                        {
+                            "type": "text",
+                            "text": f"<current_date>{date_info}</current_date>",
+                        }
+                    )
+                    last_block = content[-1]
+                # 在最后一个 block 上添加 cache_control
+                last_block["cache_control"] = {"type": "ephemeral"}
+
+        return messages_copy
+
+    def _compress_tool_result(self, msg: Dict, max_chars: int = 2000) -> Dict:
+        """
+        压缩 tool_result 消息内容，避免因跳过导致死循环。
+
+        Args:
+            msg: 包含 tool_result 的消息
+            max_chars: 最大字符数
+
+        Returns:
+            压缩后的消息
+        """
+        import copy
+        import json
+
+        compressed = copy.deepcopy(msg)
+        content = compressed.get("content", [])
+
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "tool_result":
+                    result_text = item.get("content", "")
+                    if len(result_text) > max_chars:
+                        # 尝试解析 JSON 并提取摘要
+                        try:
+                            result_data = json.loads(result_text)
+                            if isinstance(result_data, dict):
+                                # 创建摘要
+                                summary = {
+                                    "status": "compressed",
+                                    "original_length": len(result_text),
+                                    "message": "工具结果已压缩以节省上下文空间",
+                                }
+                                # 保留部分关键字段
+                                for key in ["success", "error", "count", "total", "message"]:
+                                    if key in result_data:
+                                        summary[key] = result_data[key]
+                                item["content"] = json.dumps(summary, ensure_ascii=False)
+                            else:
+                                # 不是字典，简单截断
+                                item["content"] = (
+                                    result_text[:max_chars // 2]
+                                    + "\n...[内容已压缩]...\n"
+                                    + result_text[-max_chars // 4:]
+                                )
+                        except (json.JSONDecodeError, Exception):
+                            # 非 JSON，简单截断
+                            item["content"] = (
+                                result_text[:max_chars // 2]
+                                + "\n...[内容已压缩]...\n"
+                                + result_text[-max_chars // 4:]
+                            )
+                        logger.info(
+                            f"Compressed tool_result: {len(result_text)} -> {len(item['content'])} chars"
+                        )
+
+        return compressed
 
     def _trim_messages_for_context(
         self, messages: List[Dict], max_context_tokens: int = 150000
@@ -202,18 +324,29 @@ class AnthropicStreamingAgent:
             """Check if message contains tool_use blocks."""
             content = msg.get("content", "")
             if isinstance(content, list):
-                return any(
-                    isinstance(item, dict) and item.get("type") == "tool_use" for item in content
-                )
+                for item in content:
+                    # 检查字典格式
+                    if isinstance(item, dict) and item.get("type") == "tool_use":
+                        return True
+                    # 检查 Anthropic SDK 的 ToolUseBlock 对象
+                    if isinstance(item, ToolUseBlock):
+                        return True
+                    # 检查有 type 属性的对象
+                    if hasattr(item, "type") and getattr(item, "type", None) == "tool_use":
+                        return True
             return False
 
         def has_tool_result(msg: Dict) -> bool:
             """Check if message contains tool_result blocks."""
             content = msg.get("content", "")
             if isinstance(content, list):
-                return any(
-                    isinstance(item, dict) and item.get("type") == "tool_result" for item in content
-                )
+                for item in content:
+                    # 检查字典格式
+                    if isinstance(item, dict) and item.get("type") == "tool_result":
+                        return True
+                    # 检查有 type 属性的对象
+                    if hasattr(item, "type") and getattr(item, "type", None) == "tool_result":
+                        return True
             return False
 
         # Calculate total tokens
@@ -232,14 +365,32 @@ class AnthropicStreamingAgent:
         skip_next_tool_result = False
 
         # Process messages in reverse (keep most recent)
+        skip_next_tool_use = False  # 用于跳过与被跳过的 tool_result 对应的 tool_use
+        first_message_processed = False  # 单独追踪是否处理过第一条消息
+
         for i, msg in enumerate(reversed(messages)):
             msg_tokens = estimate_message_tokens(msg)
 
-            # Always keep the last user message
-            if not trimmed:
-                # If it's a tool_result without corresponding tool_use, we need to skip it
+            # Check if this is a tool_use that should be skipped (because its tool_result was skipped)
+            # ✅ 这个检查必须在 "first message" 检查之前，因为 tool_use 可能是倒序第二条
+            if skip_next_tool_use and has_tool_use(msg):
+                logger.info(f"Skipping tool_use message (its tool_result was skipped)")
+                skip_next_tool_use = False
+                continue
+
+            # Handle the first (most recent) message
+            if not first_message_processed:
+                first_message_processed = True
+                # 🔥 修复死循环：如果最后一条消息是 tool_result，压缩它而不是跳过
+                # 跳过会导致模型看不到工具结果，从而重复调用工具
                 if has_tool_result(msg):
-                    logger.warning("Last message contains tool_result without tool_use, skipping")
+                    compressed_msg = self._compress_tool_result(msg)
+                    compressed_tokens = estimate_message_tokens(compressed_msg)
+                    logger.warning(
+                        f"Last message is tool_result, compressing: {msg_tokens} -> {compressed_tokens} tokens"
+                    )
+                    trimmed.append(compressed_msg)
+                    current_tokens += compressed_tokens
                     continue
                 trimmed.append(msg)
                 current_tokens += msg_tokens
@@ -439,15 +590,32 @@ class AnthropicStreamingAgent:
             if self.message_queue and not self.message_queue.empty():
                 try:
                     appended_msg = self.message_queue.get_nowait()
-                    messages.append(appended_msg)
-                    logger.info(
-                        f"[Append] Appended user message: {appended_msg.get('content', '')[:50]}..."
-                    )
-                    yield {
-                        "type": "message_appended",
-                        "content": appended_msg.get("content", ""),
-                        "metadata": {"iteration": iteration},
-                    }
+
+                    # 区分进度消息和对话消息
+                    msg_type = appended_msg.get("type")
+
+                    if msg_type == "progress":
+                        # 进度消息：直接转发给前端，不添加到对话历史
+                        logger.info(
+                            f"[Progress] Forwarding progress message: {appended_msg.get('content', '')[:50]}..."
+                        )
+                        yield appended_msg
+                    elif appended_msg.get("role") == "user":
+                        # 用户消息：添加到对话历史并通知前端
+                        messages.append(appended_msg)
+                        logger.info(
+                            f"[Append] Appended user message: {appended_msg.get('content', '')[:50]}..."
+                        )
+                        yield {
+                            "type": "message_appended",
+                            "content": appended_msg.get("content", ""),
+                            "metadata": {"iteration": iteration},
+                        }
+                    else:
+                        # 其他消息类型：记录警告
+                        logger.warning(
+                            f"[Append] Ignored message with unknown type/role: {msg_type}, role={appended_msg.get('role')}"
+                        )
                 except asyncio.QueueEmpty:
                     pass
 
@@ -465,29 +633,12 @@ class AnthropicStreamingAgent:
                 else:
                     self.on_iteration(iteration)
 
-            # Calculate and inject context budget information
-            # ⚠️ IMPORTANT: 不要修改 system prompt，否则会破坏缓存
-            # 将 budget info 作为独立的 user message 注入
-            context_budget_info = self._build_context_budget_info(
-                total_input_tokens,
-                total_output_tokens,
-                total_cache_creation_tokens,
-                total_cache_read_tokens,
-                iteration,
-            )
-
-            # 在对话历史的最后插入 budget info（作为 user message）
-            if context_budget_info.strip():
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"<system_info>\n{context_budget_info}\n</system_info>",
-                    }
-                )
-
             # ===== Prompt Caching Support =====
             # 使用 Anthropic 的 Prompt Caching 功能来缓存系统提示词和工具定义
             # 参考: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+            #
+            # 缓存层级顺序: tools → system → messages
+            # 最佳实践: "Always set an explicit cache breakpoint at the end of your conversation"
 
             # 将 system prompt 转换为支持缓存的格式（保持静态）
             system_with_cache = [
@@ -497,6 +648,12 @@ class AnthropicStreamingAgent:
                     "cache_control": {"type": "ephemeral"},  # 标记为可缓存
                 }
             ]
+
+            # 在每次迭代时都在最后一条消息上添加 cache_control（实现增量缓存）
+            # 但只在第一次迭代时注入日期，后续迭代不注入（确保消息内容一致，可以命中缓存）
+            messages_with_cache = self._add_cache_control_to_messages(
+                messages, inject_date=(iteration == 1)
+            )
 
             # Stream response from Anthropic (with retry for network errors)
             full_text = ""
@@ -559,7 +716,7 @@ class AnthropicStreamingAgent:
                         max_tokens=output_tokens,
                         temperature=1.0,  # Required for Extended Thinking
                         system=system_with_cache,  # ← 使用缓存优化的系统提示词
-                        messages=messages,
+                        messages=messages_with_cache,  # ← 使用添加了 cache_control 的消息
                         tools=self.anthropic_tools if self.anthropic_tools else anthropic.NOT_GIVEN,
                         thinking={"type": "enabled", "budget_tokens": thinking_budget},
                     ) as stream:
@@ -634,31 +791,50 @@ class AnthropicStreamingAgent:
                             logger.info(f"{'='*80}")
 
                             # 本次调用
+                            # 根据 Anthropic 官方文档：input_tokens 本身就是未被缓存的部分
+                            # total_input = cache_read + cache_creation + input_tokens
+                            total_input = cache_read + cache_creation + input_tokens
                             logger.info(f"\n本次 API 调用:")
-                            logger.info(f"  输入 tokens:  {input_tokens:,}")
+                            logger.info(f"  总输入 tokens: {total_input:,}")
+                            if cache_read > 0:
+                                logger.info(f"    ├─ 缓存读取: {cache_read:,} tokens (节省 90%!)")
                             if cache_creation > 0:
                                 logger.info(
                                     f"    ├─ 缓存创建: {cache_creation:,} tokens (首次，1.25× 价格)"
                                 )
-                            if cache_read > 0:
-                                logger.info(f"    ├─ 缓存读取: {cache_read:,} tokens (节省 90%!)")
-                            regular_input = input_tokens - cache_creation - cache_read
-                            if regular_input > 0:
-                                logger.info(f"    └─ 常规输入: {regular_input:,} tokens")
+                            if input_tokens > 0:
+                                logger.info(f"    └─ 常规输入: {input_tokens:,} tokens")
                             logger.info(f"  输出 tokens:  {output_tokens:,}")
-                            logger.info(f"  本次总计:     {input_tokens + output_tokens:,} tokens")
+                            logger.info(f"  本次总计:     {total_input + output_tokens:,} tokens")
 
                             # 累计统计
+                            # total_input_tokens 是常规输入累计，需要加上缓存 tokens 才是真实总输入
+                            cumulative_total_input = (
+                                total_input_tokens
+                                + total_cache_creation_tokens
+                                + total_cache_read_tokens
+                            )
                             logger.info(f"\n对话累计:")
-                            logger.info(f"  累计输入:  {total_input_tokens:,} tokens")
-                            logger.info(f"  累计输出:  {total_output_tokens:,} tokens")
+                            logger.info(f"  累计常规输入: {total_input_tokens:,} tokens")
+                            if total_cache_creation_tokens > 0:
+                                logger.info(
+                                    f"  累计缓存创建: {total_cache_creation_tokens:,} tokens"
+                                )
+                            if total_cache_read_tokens > 0:
+                                logger.info(f"  累计缓存读取: {total_cache_read_tokens:,} tokens")
+                            logger.info(f"  累计总输入:   {cumulative_total_input:,} tokens")
+                            logger.info(f"  累计输出:     {total_output_tokens:,} tokens")
                             logger.info(
-                                f"  总计:      {total_input_tokens + total_output_tokens:,} tokens"
+                                f"  总计:         {cumulative_total_input + total_output_tokens:,} tokens"
                             )
 
                             # 缓存效果
                             if cache_read > 0:
-                                savings_pct = (cache_read / input_tokens) * 90  # 90% 节省
+                                # 使用 total_input_tokens 避免除零错误
+                                total_for_calc = (
+                                    total_input_tokens if total_input_tokens > 0 else cache_read
+                                )
+                                savings_pct = (cache_read / total_for_calc) * 90  # 90% 节省
                                 logger.info(
                                     f"\n缓存节省: ~{savings_pct:.1f}% (读取了 {cache_read:,} tokens)"
                                 )
@@ -747,24 +923,107 @@ class AnthropicStreamingAgent:
                         yield {
                             "type": "error",
                             "content": f"网络连接失败（已重试 {max_retries} 次）: {error_message}",
-                            "metadata": {"error": error_message, "retries": max_retries},
+                            "metadata": {
+                                "error": error_message,
+                                "retries": max_retries,
+                                "error_type": "network_error",
+                            },
                         }
                         return
 
                 except Exception as e:
-                    # 其他非网络错误，直接失败不重试
+                    # 识别 Anthropic API 特定错误类型
+                    from anthropic import (
+                        AuthenticationError,
+                        PermissionDeniedError,
+                        RateLimitError,
+                        BadRequestError,
+                        APIError,
+                    )
                     from kode.utils.logger import safe_log_exception
 
                     error_message = str(e)
-                    safe_log_exception(
-                        logger, f"Error streaming from Anthropic: {error_message}", e
-                    )
-                    yield {
-                        "type": "error",
-                        "content": f"Error: {error_message}",
-                        "metadata": {"error": error_message},
-                    }
-                    return
+                    error_type = type(e).__name__
+
+                    # 区分不同错误类型，提供清晰提示
+                    if isinstance(e, AuthenticationError):
+                        # ⚠️ Token 无效或过期，不重试
+                        safe_log_exception(
+                            logger, f"[认证失败] API Token 无效或已过期: {error_message}", e
+                        )
+                        yield {
+                            "type": "error",
+                            "content": f"认证失败：API Token 无效或已过期。请检查 .kode.json 中的 apiKeys.anthropic 配置或 ANTHROPIC_API_KEY 环境变量。\n\n错误详情: {error_message}",
+                            "metadata": {
+                                "error": error_message,
+                                "error_type": "authentication_error",
+                                "suggestion": "请更新您的 API Token 并重新启动服务",
+                            },
+                        }
+                        return
+
+                    elif isinstance(e, RateLimitError):
+                        # ⚠️ 超出速率限制，建议稍后重试
+                        safe_log_exception(
+                            logger, f"[速率限制] API 请求频率过高: {error_message}", e
+                        )
+                        yield {
+                            "type": "error",
+                            "content": f"速率限制：API 请求频率过高，请稍后再试。\n\n错误详情: {error_message}",
+                            "metadata": {
+                                "error": error_message,
+                                "error_type": "rate_limit_error",
+                                "suggestion": "请等待几分钟后重新发送消息",
+                            },
+                        }
+                        return
+
+                    elif isinstance(e, PermissionDeniedError):
+                        # ⚠️ 权限不足
+                        safe_log_exception(
+                            logger, f"[权限不足] API Token 权限不足: {error_message}", e
+                        )
+                        yield {
+                            "type": "error",
+                            "content": f"权限不足：当前 API Token 无权访问该资源。\n\n错误详情: {error_message}",
+                            "metadata": {
+                                "error": error_message,
+                                "error_type": "permission_denied",
+                                "suggestion": "请检查 API Token 的权限设置",
+                            },
+                        }
+                        return
+
+                    elif isinstance(e, BadRequestError):
+                        # ⚠️ 请求参数错误
+                        safe_log_exception(
+                            logger, f"[请求错误] API 请求参数有误: {error_message}", e
+                        )
+                        yield {
+                            "type": "error",
+                            "content": f"请求错误：发送给 AI 的请求格式有误，这可能是系统配置问题。\n\n错误详情: {error_message}",
+                            "metadata": {
+                                "error": error_message,
+                                "error_type": "bad_request",
+                                "suggestion": "请联系技术支持并提供此错误信息",
+                            },
+                        }
+                        return
+
+                    else:
+                        # 其他未知错误
+                        safe_log_exception(
+                            logger, f"Error streaming from Anthropic: {error_message}", e
+                        )
+                        yield {
+                            "type": "error",
+                            "content": f"系统错误: {error_message}",
+                            "metadata": {
+                                "error": error_message,
+                                "error_type": error_type,
+                            },
+                        }
+                        return
 
             # Add assistant message to history
             messages.append({"role": "assistant", "content": content_blocks})
@@ -817,7 +1076,38 @@ class AnthropicStreamingAgent:
 
             # Execute tools
             tool_results = []
+            all_new_messages = []  # 收集所有工具返回的 new_messages（对齐官网实现）
             for tool_use in tool_uses:
+                # 🛑 在每个工具执行前检查取消状态
+                if self.cancel_event and self.cancel_event.is_set():
+                    logger.info(f"[Cancel] Stream cancelled before tool execution")
+
+                    # ✅ 为所有未执行的工具生成 cancelled 状态的 tool_result
+                    # 这样数据库中不会有孤立的 tool_use
+                    for remaining_tool in tool_uses:
+                        yield {
+                            "type": "tool_result",
+                            "content": "工具执行被用户取消",
+                            "metadata": {
+                                "tool_name": remaining_tool.name,
+                                "tool_use_id": remaining_tool.id,
+                                "status": "cancelled",
+                            },
+                        }
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": remaining_tool.id,
+                            "content": "工具执行被用户取消",
+                            "is_error": True,
+                        })
+
+                    yield {
+                        "type": "cancelled",
+                        "content": "用户取消了请求",
+                        "metadata": {"cancelled_at": "before_tool_execution"},
+                    }
+                    return
+
                 tool_name = tool_use.name
                 tool_args = tool_use.input
                 tool_use_id = tool_use.id
@@ -841,42 +1131,108 @@ class AnthropicStreamingAgent:
                     try:
                         tool = self.tool_map[tool_name]
 
-                        # Execute tool (async if available)
-                        if hasattr(tool, "ainvoke"):
-                            result = await tool.ainvoke(tool_args)
-                        else:
-                            result = tool.invoke(tool_args)
+                        # Execute tool
+                        # 🔥 使用 ThreadPoolExecutor + 进度轮询模式，同时传递 user_context
+                        import concurrent.futures
+                        import queue as thread_queue
+                        from kode.utils.context import get_current_user_id, get_current_conversation_id, set_user_context
+
+                        # 获取工具的 execution_context 中的 progress_queue
+                        progress_queue = None
+                        if hasattr(tool, "_execution_context") and tool._execution_context:
+                            progress_queue = tool._execution_context.get("message_queue")
+                            logger.info(f"[Tool Execution] Tool {tool_name} has progress_queue: {progress_queue is not None}")
+
+                        # 🔑 提前获取当前的 user_context（ContextVar 不会自动跨线程传递）
+                        current_user_id = None
+                        current_conversation_id = None
+                        try:
+                            current_user_id = get_current_user_id()
+                            current_conversation_id = get_current_conversation_id()
+                        except RuntimeError:
+                            logger.warning(f"[Tool Execution] No user context available")
+
+                        def invoke_with_context():
+                            """在新线程中执行工具，并恢复 user_context"""
+                            if current_user_id:
+                                set_user_context(
+                                    user_id=current_user_id,
+                                    conversation_id=current_conversation_id
+                                )
+                            return tool.invoke(tool_args)
+
+                        # 在线程池中执行工具
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                            future = executor.submit(invoke_with_context)
+
+                            # 周期性检查进度队列，直到工具执行完成
+                            while not future.done():
+                                # 检查 progress_queue 并 yield 进度消息
+                                if progress_queue:
+                                    while True:
+                                        try:
+                                            progress_msg = progress_queue.get_nowait()
+                                            logger.info(f"[Tool Execution] Yielding progress: {progress_msg.get('content', '')[:50]}")
+                                            yield progress_msg
+                                        except thread_queue.Empty:
+                                            break
+
+                                # 等待一小段时间再检查
+                                await asyncio.sleep(0.2)
+
+                            # 获取工具执行结果
+                            result = future.result()
+
+                            # 最终清空 progress_queue
+                            if progress_queue:
+                                while True:
+                                    try:
+                                        progress_msg = progress_queue.get_nowait()
+                                        logger.info(f"[Tool Execution] Final progress: {progress_msg.get('content', '')[:50]}")
+                                        yield progress_msg
+                                    except thread_queue.Empty:
+                                        break
 
                         if self.verbose:
                             logger.info(f"Tool result: {str(result)[:200]}")
 
-                        # Check if tool requires user input
+                        # Check if tool requires user input or has new_messages
                         requires_user_input = False
                         result_data = None
+                        tool_result_content = str(result)  # 默认使用完整结果
                         try:
                             import json
 
                             result_data = json.loads(str(result))
-                            if isinstance(result_data, dict) and result_data.get(
-                                "requires_user_input"
-                            ):
-                                requires_user_input = True
-                                logger.info(
-                                    f"[Tool '{tool_name}'] Requires user input - Agent will pause after this iteration"
-                                )
+                            if isinstance(result_data, dict):
+                                if result_data.get("requires_user_input"):
+                                    requires_user_input = True
+                                    logger.info(
+                                        f"[Tool '{tool_name}'] Requires user input - Agent will pause after this iteration"
+                                    )
+
+                                # 🔥 对齐官网实现：收集 new_messages（Skill 工具特有）
+                                new_messages = result_data.get("new_messages")
+                                if new_messages and isinstance(new_messages, list):
+                                    all_new_messages.extend(new_messages)
+                                    logger.info(
+                                        f"[Tool '{tool_name}'] Collected {len(new_messages)} new_messages"
+                                    )
+                                    # 使用简短的 output 作为 tool_result 内容
+                                    tool_result_content = result_data.get("output", str(result))
                         except (json.JSONDecodeError, ValueError):
                             pass  # Result is not JSON, continue normally
 
                         # Yield tool_result event immediately
                         yield {
                             "type": "tool_result",
-                            "content": str(result),
+                            "content": tool_result_content,
                             "metadata": {
                                 "tool_name": tool_name,
                                 "tool_use_id": tool_use_id,  # ← 必须包含以便前端配对
                                 "status": "completed",
                                 "tool_args": tool_args,
-                                "result": str(result),
+                                "result": tool_result_content,
                                 "requires_user_input": requires_user_input,  # Pass to frontend
                             },
                         }
@@ -928,12 +1284,12 @@ class AnthropicStreamingAgent:
                             else:
                                 self.on_tool_end(tool_name, tool_args, result)
 
-                        # Add tool result
+                        # Add tool result (使用 tool_result_content，可能是简短版本)
                         tool_results.append(
                             {
                                 "type": "tool_result",
                                 "tool_use_id": tool_use_id,
-                                "content": str(result),
+                                "content": tool_result_content,
                             }
                         )
 
@@ -942,9 +1298,40 @@ class AnthropicStreamingAgent:
                             {
                                 "name": tool_name,
                                 "args": tool_args,
-                                "result": str(result)[:500],
+                                "result": tool_result_content[:500],
                             }
                         )
+
+                        # 🛑 工具执行完成后检查取消状态（不执行后续工具）
+                        if self.cancel_event and self.cancel_event.is_set():
+                            logger.info(f"[Cancel] Stream cancelled after tool '{tool_name}' execution")
+
+                            # ✅ 为剩余未执行的工具生成 cancelled 状态的 tool_result
+                            current_tool_index = tool_uses.index(tool_use)
+                            remaining_tools = tool_uses[current_tool_index + 1:]
+                            for remaining_tool in remaining_tools:
+                                yield {
+                                    "type": "tool_result",
+                                    "content": "工具执行被用户取消",
+                                    "metadata": {
+                                        "tool_name": remaining_tool.name,
+                                        "tool_use_id": remaining_tool.id,
+                                        "status": "cancelled",
+                                    },
+                                }
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": remaining_tool.id,
+                                    "content": "工具执行被用户取消",
+                                    "is_error": True,
+                                })
+
+                            yield {
+                                "type": "cancelled",
+                                "content": "用户取消了请求",
+                                "metadata": {"cancelled_at": "after_tool_execution", "last_tool": tool_name},
+                            }
+                            return
 
                     except Exception as e:
                         # Special handling for UserInputRequired exception
@@ -1116,8 +1503,18 @@ class AnthropicStreamingAgent:
                         }
                     )
 
-            # Add tool results to messages
-            messages.append({"role": "user", "content": tool_results})
+            # Add tool results to messages (only if not empty)
+            if tool_results:
+                messages.append({"role": "user", "content": tool_results})
+            else:
+                logger.warning("[Tool Loop] No tool results to append, skipping message append")
+
+            # 🔥 对齐官网实现：在 tool_result 之后添加 new_messages（Skill 工具特有）
+            # 这样 skill 的完整内容会作为独立的 user 消息传递给模型
+            if all_new_messages:
+                for new_msg in all_new_messages:
+                    messages.append(new_msg)
+                    logger.info(f"[Skill] Added new_message to context: {str(new_msg)[:100]}...")
 
             # 🔥 不需要检查 requires_user_input，让工具循环继续
             # Agent 会自动等待用户提交答案（前端会发送新消息）

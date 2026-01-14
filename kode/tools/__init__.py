@@ -14,11 +14,12 @@ from .database_tools import (
     DatabaseExecuteQueryTool,
 )
 from .ontology_tools import (
-    OntologyBuilderTool,
     OntologySearchTool,
 )
 from .interaction_tools import AskUserTool
 from .visualization_tools import ChartGeneratorTool
+from .skill_tool import SkillTool
+from .document_tools import DocumentReadTool, DocumentSearchTool
 
 __all__ = [
     # Base
@@ -42,10 +43,14 @@ __all__ = [
     "DatabaseSchemaExtractorTool",
     "DatabaseExecuteQueryTool",
     # Ontology
-    "OntologyBuilderTool",
     "OntologySearchTool",
     # Interaction
     "AskUserTool",
     # Visualization
     "ChartGeneratorTool",
+    # Skills
+    "SkillTool",
+    # Document
+    "DocumentReadTool",
+    "DocumentSearchTool",
 ]
