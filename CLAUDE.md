@@ -16,7 +16,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 用批判性思维思考用户的问题和自己的解决方案
 
 ## Project Overview
-现在我们的项目将由demo 阶段进入，正式研发阶段了，前后端要分离了，后续你负责生成代码和接口，前端暂时由我来完成，
 
 
 **核心特性：**
