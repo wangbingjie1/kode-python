@@ -4,7 +4,7 @@ Project Model
 Database model for user projects.
 """
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, DateTime, ForeignKey, JSON, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -27,6 +27,14 @@ class Project(Base):
     config = Column(JSON, default=dict)  # Project-specific configuration
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # UI 相关字段
+    icon = Column(String(10), default="📊")  # 项目图标（emoji）
+    business_type = Column(String(50), nullable=True)  # 业务类型：ecommerce, finance, hr 等
+    status = Column(String(20), default="active")  # 状态：active, archived, deleted
+    is_pinned = Column(Boolean, default=False)  # 是否置顶
+    needs_etl = Column(Boolean, default=True)  # 是否需要 ETL 处理
+    ontology_built = Column(Boolean, default=False)  # 本体是否已构建
 
     # Relationships
     user = relationship("User", back_populates="projects")
