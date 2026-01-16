@@ -27,7 +27,7 @@ app = FastAPI(
 )
 
 # CORS middleware - 使用环境变量配置允许的源
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002").split(",")
 logger.info(f"CORS allowed origins: {CORS_ORIGINS}")
 
 app.add_middleware(
@@ -123,7 +123,7 @@ async def get_config():
 
 
 # Import routers
-from kode.web.api import chat, project, sse, database, auth, billing, uncertainty, ontology, upload, data_source
+from kode.web.api import chat, project, sse, database, auth, billing, uncertainty, ontology, upload, data_source, ontology_visualization
 from kode.database.session import init_db, async_session_maker
 from kode.models import User, Project, Plan
 from sqlalchemy import select
@@ -139,6 +139,7 @@ app.include_router(uncertainty.router, prefix="/api/uncertainty", tags=["uncerta
 app.include_router(ontology.router, tags=["ontology"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(data_source.router, prefix="/api/data-sources", tags=["data-sources"])
+app.include_router(ontology_visualization.router, tags=["ontology-visualization"])
 
 
 async def create_default_data():
