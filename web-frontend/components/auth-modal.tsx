@@ -27,11 +27,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setError("")
     try {
       await signInWithGoogle()
-      onClose()
-      resetForm()
+      // 注意：signInWithGoogle 会触发页面跳转到 Google，所以不会执行到这里
     } catch (err) {
-      setError("Failed to sign in with Google")
-    } finally {
+      setError("Google 登录失败，请稍后重试")
       setIsLoading(false)
     }
   }
@@ -41,10 +39,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setIsLoading(true)
     setError("")
     try {
-      await sendVerificationCode(email)
-      setStep("code_entry")
+      const result = await sendVerificationCode(email)
+      if (result.success) {
+        setStep("code_entry")
+      } else {
+        setError(result.message || "发送验证码失败，请稍后重试")
+      }
     } catch (err) {
-      setError("Failed to send verification code")
+      setError("发送验证码失败，请检查网络连接")
     } finally {
       setIsLoading(false)
     }
@@ -56,14 +58,17 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setError("")
     try {
       const isNewUser = await verifyCodeAndLogin(email, code)
+      // 验证成功后会自动跳转到 dashboard，所以只需要关闭模态框
       onClose()
       resetForm()
 
       if (isNewUser) {
-        console.log("[v0] New user registered and logged in")
+        console.log("[Auth] New user registered and logged in")
       }
-    } catch (err) {
-      setError("Invalid verification code")
+    } catch (err: unknown) {
+      // 从 auth-context 的 error 状态获取详细错误信息
+      const errorMessage = err instanceof Error ? err.message : "验证码无效或已过期"
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }

@@ -34,6 +34,10 @@ from kode.core.security import (
 )
 from kode.core.oauth import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
 from kode.web.dependencies import get_current_user
+import os
+
+# 前端 URL（OAuth 回调重定向用）
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 from kode.utils.i18n import t
 from kode.services.billing_service import BillingService
 from kode.services.email_service import EmailService
@@ -380,8 +384,8 @@ async def google_callback(
     jwt_refresh_token = create_refresh_token(data={"sub": user.id})
 
     # 重定向到前端，并通过URL传递token
-    frontend_url = f"http://localhost:3000/login?google_success=true&access_token={jwt_access_token}&refresh_token={jwt_refresh_token}"
-    return RedirectResponse(url=frontend_url)
+    redirect_url = f"{FRONTEND_URL}/?google_success=true&access_token={jwt_access_token}&refresh_token={jwt_refresh_token}"
+    return RedirectResponse(url=redirect_url)
 
 
 @router.post("/email/send-code", response_model=EmailSendCodeResponse)

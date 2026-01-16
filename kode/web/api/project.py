@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from kode.database.session import get_db
 from kode.models import Project, User
 from kode.models.organization import Organization
-from kode.schemas.project import ProjectCreate, ProjectResponse
+from kode.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 from kode.schemas.project_data_source import (
     LinkDataSourceResponse,
     ProjectDataSourceCreate,
@@ -79,6 +79,44 @@ async def get_project(
             detail=f"Project {project_id} not found",
         )
 
+    return project
+
+
+@router.patch("/projects/{project_id}", response_model=ProjectResponse)
+async def update_project(
+    project_id: str,
+    project_update: ProjectUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update a project"""
+    result = await db.execute(
+        select(Project).where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    # Verify user has permission
+    if project.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to update this project",
+        )
+
+    # Update fields
+    update_data = project_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(project, field, value)
+
+    await db.commit()
+    await db.refresh(project)
+
+    logger.info(f"Updated project {project_id}: {update_data}")
     return project
 
 

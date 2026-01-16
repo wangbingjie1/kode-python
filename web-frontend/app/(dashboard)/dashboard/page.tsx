@@ -1,10 +1,22 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import type { Card, Message } from "@/types/knowledge-universe"
-import type { ObjectType, RelationType } from "@/types/ontology"
+import type { ObjectType, RelationType, OntologyNode, OntologyRelation } from "@/types/ontology"
 import { cardsData } from "@/lib/knowledge-universe-data"
-import { ontologyNodes, ontologyRelations } from "@/lib/ontology-data"
+import { ontologyNodes as mockOntologyNodes, ontologyRelations as mockOntologyRelations } from "@/lib/ontology-data"
+import { ontologyApi, chatApi, getErrorMessage } from "@/lib/api"
+import {
+  sendChatMessage,
+  createMessageAccumulator,
+  SSEClient,
+  ChunkMessage,
+  CompleteMessage,
+  ErrorMessage,
+  ToolCallMessage,
+  ThinkingMessage,
+  DoneMessage,
+} from "@/lib/sse"
 import { OntologyCanvas } from "@/components/knowledge-universe/OntologyCanvas"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { useRouter } from "next/navigation"
@@ -175,8 +187,13 @@ function ViewModal({
 
 export default function KnowledgeUniversePage() {
   const router = useRouter()
-  const { currentProject, markOntologyComplete } = useProjectStore()
-  
+  const { currentProject, markOntologyComplete, loadProjectsFromApi } = useProjectStore()
+
+  // 组件挂载时从 API 加载项目列表
+  useEffect(() => {
+    loadProjectsFromApi()
+  }, [loadProjectsFromApi])
+
   // Dashboard mode: 'building' or 'result'
   const [dashboardMode, setDashboardMode] = useState<'building' | 'result'>('result')
   const [buildingStage, setBuildingStage] = useState<'etl' | 'questions' | 'ontology' | 'complete'>('etl')
@@ -187,6 +204,10 @@ export default function KnowledgeUniversePage() {
   const [selectedCard, setSelectedCard] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const sseClientRef = useRef<SSEClient | null>(null)
+  const accumulatorRef = useRef(createMessageAccumulator())
   const [showViewModal, setShowViewModal] = useState(false)
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [showQuickNoteModal, setShowQuickNoteModal] = useState(false)
@@ -230,7 +251,101 @@ export default function KnowledgeUniversePage() {
     "AFFECTS_CAMPAIGN",
   ])
 
+  // Ontology data state (from API or mock)
+  const [ontologyNodes, setOntologyNodes] = useState<OntologyNode[]>(mockOntologyNodes)
+  const [ontologyRelations, setOntologyRelations] = useState<OntologyRelation[]>(mockOntologyRelations)
+  const [isOntologyLoading, setIsOntologyLoading] = useState(false)
+  const [ontologyError, setOntologyError] = useState<string | null>(null)
+  const ontologyLoadedRef = useRef(false)
+
   const currentVersion = versions.find((v) => v.isCurrent)
+
+  // Load ontology data from API
+  const loadOntologyData = useCallback(async () => {
+    if (!currentProject?.id) {
+      // 没有项目，使用 mock 数据
+      return
+    }
+
+    // 避免重复加载
+    if (ontologyLoadedRef.current) return
+    ontologyLoadedRef.current = true
+
+    setIsOntologyLoading(true)
+    setOntologyError(null)
+
+    // 转换 API 响应为前端格式的辅助函数
+    const convertResponse = (response: Awaited<ReturnType<typeof ontologyApi.getVisualization>>) => {
+      const nodes: OntologyNode[] = response.nodes.map(node => ({
+        id: node.id,
+        label: node.label,
+        type: node.type as ObjectType,
+        domain: node.domain,
+        properties: node.properties as Record<string, string | number | boolean | string[] | undefined>,
+      }))
+
+      const relations: OntologyRelation[] = response.relations.map(rel => ({
+        id: rel.id,
+        source: rel.source,
+        target: rel.target,
+        type: rel.type as RelationType,
+        properties: rel.properties as Record<string, string | number | boolean | undefined> | undefined,
+      }))
+
+      return { nodes, relations }
+    }
+
+    try {
+      // 首先尝试通过项目 ID 加载本体
+      const response = await ontologyApi.getVisualization(currentProject.id, {
+        maxNodes: 500,
+        includeRules: true,
+        includeMetrics: true,
+      })
+
+      const { nodes, relations } = convertResponse(response)
+      setOntologyNodes(nodes)
+      setOntologyRelations(relations)
+      console.log(`[Ontology] Loaded ${nodes.length} nodes and ${relations.length} relations from project API`)
+    } catch (error) {
+      // 主 API 失败时，尝试通过 by-connection API 加载（使用已知的连接名）
+      console.warn('[Ontology] Project API failed, trying by-connection API:', getErrorMessage(error))
+
+      try {
+        // 尝试加载已知的本体数据（连接名为 "yanfa"）
+        const response = await ontologyApi.getVisualizationByConnection(currentProject.id, 'yanfa', {
+          maxNodes: 500,
+          includeRules: true,
+          includeMetrics: true,
+        })
+
+        const { nodes, relations } = convertResponse(response)
+        setOntologyNodes(nodes)
+        setOntologyRelations(relations)
+        console.log(`[Ontology] Loaded ${nodes.length} nodes and ${relations.length} relations from by-connection API`)
+      } catch (fallbackError) {
+        console.warn('[Ontology] by-connection API also failed, using mock data:', getErrorMessage(fallbackError))
+        setOntologyError(getErrorMessage(error))
+        // 两个 API 都失败时保留 mock 数据
+      }
+    } finally {
+      setIsOntologyLoading(false)
+    }
+  }, [currentProject?.id])
+
+  // Load ontology when project changes - 总是尝试加载本体
+  useEffect(() => {
+    if (currentProject?.id) {
+      // 重置加载状态，允许重新加载
+      ontologyLoadedRef.current = false
+      loadOntologyData()
+    } else {
+      // 没有项目时使用 mock 数据
+      ontologyLoadedRef.current = false
+      setOntologyNodes(mockOntologyNodes)
+      setOntologyRelations(mockOntologyRelations)
+    }
+  }, [currentProject?.id, loadOntologyData])
 
   // Check if we need to enter building mode
   useEffect(() => {
@@ -430,30 +545,149 @@ export default function KnowledgeUniversePage() {
 
   const etlQuestionnaireRef = useRef<any>(null)
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return
-    
+  // 清理 SSE 连接
+  useEffect(() => {
+    return () => {
+      sseClientRef.current?.close()
+    }
+  }, [])
+
+  // 确保有对话 ID
+  const ensureConversation = async (): Promise<string | null> => {
+    if (conversationId) return conversationId
+
+    if (!currentProject?.id) {
+      console.error("No project selected")
+      return null
+    }
+
+    try {
+      const conversation = await chatApi.createConversation({ project_id: currentProject.id })
+      setConversationId(conversation.id)
+      console.log(`[Chat] Created conversation: ${conversation.id}`)
+      return conversation.id
+    } catch (err) {
+      console.error("Failed to create conversation:", err)
+      addMessage("assistant", `创建对话失败: ${getErrorMessage(err)}`)
+      return null
+    }
+  }
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isStreaming) return
+
     // If in questions stage, treat input as answer
     if (dashboardMode === 'building' && buildingStage === 'questions' && currentETLQuestion) {
       handleETLAnswer(inputValue)
       setInputValue("")
       return
     }
-    
-    addMessage("user", inputValue)
+
+    const userInput = inputValue.trim()
     setInputValue("")
 
-    setTimeout(() => {
-      setIsProcessing(true)
-      setTimeout(() => {
+    // 确保有对话 ID
+    const activeConversationId = await ensureConversation()
+    if (!activeConversationId) {
+      addMessage("assistant", "无法创建对话，请确保已选择项目")
+      return
+    }
+
+    // 添加用户消息
+    addMessage("user", userInput)
+
+    // 添加 AI 消息占位（流式显示）
+    const aiMessageIndex = messages.length + 1
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: "",
+        time: "",
+      },
+    ])
+
+    setIsStreaming(true)
+    setIsProcessing(true)
+    accumulatorRef.current.reset()
+
+    // 关闭之前的连接
+    sseClientRef.current?.close()
+
+    // 发送 SSE 请求
+    sseClientRef.current = sendChatMessage(activeConversationId, userInput, {
+      onThinking: (msg: ThinkingMessage) => {
+        console.log("Thinking:", msg.content)
+      },
+      onChunk: (msg: ChunkMessage) => {
+        accumulatorRef.current.handlers.onChunk(msg)
+        setMessages((prev) => {
+          const updated = [...prev]
+          if (updated[aiMessageIndex]) {
+            updated[aiMessageIndex] = {
+              ...updated[aiMessageIndex],
+              content: accumulatorRef.current.getContent(),
+            }
+          }
+          return updated
+        })
+      },
+      onToolCall: (msg: ToolCallMessage) => {
+        console.log("Tool call:", msg.metadata.tool_name)
+        accumulatorRef.current.handlers.onToolCall(msg)
+      },
+      onComplete: (msg: CompleteMessage) => {
+        setMessages((prev) => {
+          const updated = [...prev]
+          if (updated[aiMessageIndex]) {
+            updated[aiMessageIndex] = {
+              ...updated[aiMessageIndex],
+              content: msg.content,
+              time: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+            }
+          }
+          return updated
+        })
+        setIsStreaming(false)
         setIsProcessing(false)
-        addMessage(
-          "assistant",
-          `Based on your data, I notice that the current node layout has 23% overlapping connections, which may reduce readability. Optimizing the layout will improve clarity and make data patterns more visible.`,
-          "##SUGGEST_OPTIMIZE##",
-        )
-      }, 1500)
-    }, 300)
+      },
+      onError: (msg: ErrorMessage) => {
+        console.error("SSE error:", msg)
+        setMessages((prev) => {
+          const updated = [...prev]
+          if (updated[aiMessageIndex]) {
+            updated[aiMessageIndex] = {
+              ...updated[aiMessageIndex],
+              content: `错误: ${msg.content}`,
+              time: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+            }
+          }
+          return updated
+        })
+        setIsStreaming(false)
+        setIsProcessing(false)
+      },
+      onDone: (_msg: DoneMessage) => {
+        setIsStreaming(false)
+        setIsProcessing(false)
+      },
+      onConnectionError: (event: Event) => {
+        console.error("Connection error:", event)
+        setMessages((prev) => {
+          const updated = [...prev]
+          if (updated[aiMessageIndex]) {
+            updated[aiMessageIndex] = {
+              ...updated[aiMessageIndex],
+              content: "连接失败，请检查网络后重试",
+              time: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+            }
+          }
+          return updated
+        })
+        setIsStreaming(false)
+        setIsProcessing(false)
+      },
+    })
   }
 
   const handleETLAnswer = (answer: string) => {
